@@ -1,0 +1,22 @@
+name: Pregar
+options:
+  bundleIdPrefix: br.caminhoanglicano
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+targets:
+  Pregar:
+    type: application
+    platform: macOS
+    sources:
+      - path: Pregar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: br.caminhoanglicano.pregar
+        PRODUCT_NAME: Pregar
+        INFOPLIST_KEY_CFBundleDisplayName: Pregar
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        SWIFT_VERSION: "5.0"
+        ENABLE_APP_SANDBOX: NO

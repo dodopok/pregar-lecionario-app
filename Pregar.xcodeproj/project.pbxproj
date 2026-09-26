@@ -1,0 +1,314 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */; };
+		39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */; };
+		515BA5D71E86AA58E543FE54 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */; };
+		68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */; };
+		99645F1CBB2F74C88E281950 /* PregarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478AAAADD24805C4AAF1C997 /* PregarApp.swift */; };
+		AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D8516E9667268B7075CEB2 /* APISettings.swift */; };
+		FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
+		478AAAADD24805C4AAF1C997 /* PregarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PregarApp.swift; sourceTree = "<group>"; };
+		4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonDraft.swift; sourceTree = "<group>"; };
+		547C3A36015E310F5E8EDD26 /* Pregar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pregar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettingsView.swift; sourceTree = "<group>"; };
+		74D8516E9667268B7075CEB2 /* APISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettings.swift; sourceTree = "<group>"; };
+		9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparationWorkspace.swift; sourceTree = "<group>"; };
+		A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiturgicalAPI.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		76AF61C6A03EED84A2320524 = {
+			isa = PBXGroup;
+			children = (
+				D40AA52FAFDBBB3B027F142C /* Pregar */,
+				BE0FA0055539043501F7D832 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BE0FA0055539043501F7D832 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				547C3A36015E310F5E8EDD26 /* Pregar.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D40AA52FAFDBBB3B027F142C /* Pregar */ = {
+			isa = PBXGroup;
+			children = (
+				74D8516E9667268B7075CEB2 /* APISettings.swift */,
+				62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */,
+				A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */,
+				478AAAADD24805C4AAF1C997 /* PregarApp.swift */,
+				9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */,
+				0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */,
+				4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */,
+			);
+			path = Pregar;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B87ECA0DD05097023864D227 /* Pregar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 25A4289B444B987B7A697873 /* Build configuration list for PBXNativeTarget "Pregar" */;
+			buildPhases = (
+				F1173DCFD6D1976A12C76223 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Pregar;
+			packageProductDependencies = (
+			);
+			productName = Pregar;
+			productReference = 547C3A36015E310F5E8EDD26 /* Pregar.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BAC51AF7D9491FFADF966DDC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = F46BCBC3F166AB2A30D9F4A4 /* Build configuration list for PBXProject "Pregar" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 76AF61C6A03EED84A2320524;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = BE0FA0055539043501F7D832 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B87ECA0DD05097023864D227 /* Pregar */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F1173DCFD6D1976A12C76223 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */,
+				39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */,
+				00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */,
+				99645F1CBB2F74C88E281950 /* PregarApp.swift in Sources */,
+				FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */,
+				515BA5D71E86AA58E543FE54 /* RichTextEditor.swift in Sources */,
+				68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		114C3DEF18E524B756683018 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Pregar;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = br.caminhoanglicano.pregar;
+				PRODUCT_NAME = Pregar;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		6DFDCD7774B8998EE92F9118 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Pregar;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = br.caminhoanglicano.pregar;
+				PRODUCT_NAME = Pregar;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		9D4E9131ED37F84F9A8E6384 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A28F403BDE88FB4525ACFD5B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		25A4289B444B987B7A697873 /* Build configuration list for PBXNativeTarget "Pregar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6DFDCD7774B8998EE92F9118 /* Debug */,
+				114C3DEF18E524B756683018 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F46BCBC3F166AB2A30D9F4A4 /* Build configuration list for PBXProject "Pregar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A28F403BDE88FB4525ACFD5B /* Debug */,
+				9D4E9131ED37F84F9A8E6384 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = BAC51AF7D9491FFADF966DDC /* Project object */;
+}
