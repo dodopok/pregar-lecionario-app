@@ -132,6 +132,13 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - Um teste separado simula uma edição remota entre sincronizações: a revisão divergente produz conflito depois da leitura da revisão atual e nenhum pedido de escrita é enviado. O botão de sobrescrever continua explícito.
 - A suíte completa passou com 65 testes e nenhuma falha em macOS 26.6.2. `codesign` confirma a build com `Apple Development: DOUGLAS DE ARAUJO SILVA`, `TeamIdentifier=R573HPN65Q`. As rotas Drive estão cobertas de forma local/simulada; login Google, sincronização real e leitura no Android/iPad permanecem pendentes.
 
+## Limites da revisão por IA
+
+- O prompt proíbe exemplos, paráfrases, reformulações e frases-modelo. A validação local agora rejeita linguagem de sugestão explícita ou indireta em português e inglês, e rejeita citações inseridas na observação que não existam literalmente no manuscrito.
+- Perguntas de emergência também são verificadas contra os assuntos e lemas de conteúdo presentes no manuscrito usando `NaturalLanguage` local do macOS; perguntas que introduzem temas como esperança, aplicação ou interpretação sem âncora são ocultadas. Vocabulário metalinguístico de pergunta e estrutura continua permitido.
+- Testes sintéticos cobrem imperativos e redação indireta, citações inventadas versus trechos literais existentes, pergunta de aplicação e novo conceito, além de uma pergunta válida de esclarecimento. Nenhum manuscrito real foi enviado a um provedor.
+- A suíte completa passou com 69 testes e zero falhas em macOS 26.6.2; `codesign` confirma a assinatura Apple Development do Team `R573HPN65Q`. A checagem lexical é uma barreira determinística conservadora, não uma garantia de equivalência semântica; avaliação de respostas reais/modelos continua pendente de autorização do usuário.
+
 ## Performance
 
 - Uma amostra de 8 segundos do processo aberto encontrou a thread principal aguardando eventos do AppKit, sem loop ativo durante o intervalo ocioso. O footprint era 68,2 MB naquele instante e o pico desde a abertura era 224,3 MB; é uma fotografia pontual, não um benchmark de rolagem ou troca de abas.

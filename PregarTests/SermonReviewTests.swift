@@ -105,7 +105,8 @@ final class SermonReviewTests: XCTestCase {
     func testFiltersFindingsWithUnverifiableQuotesOrSuggestionLanguage() async throws {
         let cases = [
             #"{"findings":[{"criterion":"fidelity","severity":"attention","manuscript_quote":"frase inventada","observation":"A afirmação não aparece no trecho.","correction":"","classification":"unsupported","evidence_source_id":"bible:nvt","evidence_quote":"Jesus chorou."}]}"#,
-            #"{"findings":[{"criterion":"structure","severity":"attention","manuscript_quote":"MANUSCRITO_PRIVADO","observation":"Sugiro reescrever o início.","correction":"","classification":"structure","evidence_source_id":"","evidence_quote":""}]}"#
+            #"{"findings":[{"criterion":"structure","severity":"attention","manuscript_quote":"MANUSCRITO_PRIVADO","observation":"Sugiro reescrever o início.","correction":"","classification":"structure","evidence_source_id":"","evidence_quote":""}]}"#,
+            #"{"findings":[{"criterion":"structure","severity":"attention","manuscript_quote":"MANUSCRITO_PRIVADO","observation":"A expressão “A esperança começa hoje” volta a aparecer no parágrafo.","correction":"","classification":"structure","evidence_source_id":"","evidence_quote":""}]}"#
         ]
 
         for json in cases {
@@ -122,6 +123,38 @@ final class SermonReviewTests: XCTestCase {
             XCTAssertNotNil(result.validationNotice)
             session.invalidateAndCancel()
         }
+    }
+
+    func testSuggestionGuardRejectsIndirectWritingPromptsButAllowsAnchoredAnalysis() {
+        let manuscript = "A promessa parece distante."
+        let suggestions = [
+            "Você pode escrever uma frase sobre esperança.",
+            "Uma forma mais clara seria começar com uma pergunta.",
+            "Comece com uma imagem da vinha.",
+            "Try opening with a question about hope.",
+            "Uma opção seria abrir com uma pergunta.",
+            "Uma possibilidade é incluir uma aplicação cotidiana."
+        ]
+
+        for suggestion in suggestions {
+            XCTAssertTrue(
+                AIReviewPrompt.containsForbiddenSuggestion(suggestion, manuscript: manuscript),
+                "A formulação proibida passou pela validação: \(suggestion)"
+            )
+        }
+
+        XCTAssertTrue(AIReviewPrompt.containsForbiddenSuggestion(
+            "A expressão “A esperança começa hoje” volta a aparecer no parágrafo.",
+            manuscript: manuscript
+        ))
+        XCTAssertFalse(AIReviewPrompt.containsForbiddenSuggestion(
+            "A expressão “A promessa parece distante” retorna no final.",
+            manuscript: manuscript
+        ))
+        XCTAssertFalse(AIReviewPrompt.containsForbiddenSuggestion(
+            "A conclusão retoma a ideia central depois do contexto.",
+            manuscript: manuscript
+        ))
     }
 
     func testKeepsValidFindingsAndReportsOnlyTheCountOfRejectedContent() async throws {
@@ -238,7 +271,10 @@ final class SermonReviewTests: XCTestCase {
     func testEmergencyQuestionsRejectUnanchoredTextAndLeadingSuggestions() async throws {
         let invalidResults = [
             #"{"questions":[{"question":"O que você quis dizer com isso?","manuscript_quote":"trecho inexistente","evidence_source_id":"","evidence_quote":""}]}"#,
-            #"{"questions":[{"question":"Você poderia acrescentar uma aplicação?","manuscript_quote":"MANUSCRITO_PRIVADO","evidence_source_id":"","evidence_quote":""}]}"#
+            #"{"questions":[{"question":"Você poderia acrescentar uma aplicação?","manuscript_quote":"MANUSCRITO_PRIVADO","evidence_source_id":"","evidence_quote":""}]}"#,
+            #"{"questions":[{"question":"Que aplicação cotidiana caberia nesta mensagem?","manuscript_quote":"A promessa parece distante.","evidence_source_id":"","evidence_quote":""}]}"#,
+            #"{"questions":[{"question":"Que esperança aparece?","manuscript_quote":"A promessa parece distante.","evidence_source_id":"","evidence_quote":""}]}"#,
+            #"{"questions":[{"question":"Qual frase você pode usar para abrir o sermão?","manuscript_quote":"A promessa parece distante.","evidence_source_id":"","evidence_quote":""}]}"#
         ]
 
         for json in invalidResults {
@@ -246,7 +282,7 @@ final class SermonReviewTests: XCTestCase {
             let session = stubSession()
             do {
                 _ = try await SermonAIQuestionClient(session: session).questions(
-                    context: questionContext(),
+                    context: questionContext(manuscript: "A promessa parece distante."),
                     sources: [],
                     configuration: configuration(for: .openAI)
                 )
