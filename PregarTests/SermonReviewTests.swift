@@ -50,12 +50,52 @@ final class SermonReviewTests: XCTestCase {
             XCTAssertTrue(body.range(of: Data("MANUSCRITO_PRIVADO".utf8)) != nil)
             XCTAssertFalse(body.range(of: Data("2026-10-04".utf8)) != nil)
             XCTAssertFalse(body.range(of: Data("Mateus 21".utf8)) != nil)
-            if provider == .openAI { XCTAssertEqual(object["store"] as? Bool, false) }
-            if provider == .perplexity {
-                XCTAssertTrue((object["tools"] as? [Any])?.isEmpty == true)
+            if provider == .openAI || provider == .perplexity {
                 XCTAssertEqual(object["store"] as? Bool, false)
             }
+            if provider == .perplexity {
+                XCTAssertTrue((object["tools"] as? [Any])?.isEmpty == true)
+                XCTAssertEqual(object["instructions"] as? String, AIReviewPrompt.system)
+                XCTAssertEqual(object["input"] as? String != nil, true)
+                let format = try XCTUnwrap(object["response_format"] as? [String: Any])
+                XCTAssertEqual(format["type"] as? String, "json_schema")
+                let jsonSchema = try XCTUnwrap(format["json_schema"] as? [String: Any])
+                XCTAssertEqual(jsonSchema["name"] as? String, "sermon_review")
+                let schema = try XCTUnwrap(jsonSchema["schema"] as? [String: Any])
+                let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+                let findings = try XCTUnwrap(properties["findings"] as? [String: Any])
+                let item = try XCTUnwrap(findings["items"] as? [String: Any])
+                let alternatives = try XCTUnwrap(item["oneOf"] as? [[String: Any]])
+                XCTAssertEqual(alternatives.count, 1)
+                let fidelityProperties = try XCTUnwrap(alternatives[0]["properties"] as? [String: Any])
+                XCTAssertEqual(
+                    (fidelityProperties["evidence_source_id"] as? [String: Any])?["enum"] as? [String],
+                    [source.id]
+                )
+                XCTAssertEqual(
+                    (fidelityProperties["correction"] as? [String: Any])?["enum"] as? [String],
+                    [""]
+                )
+            }
         }
+    }
+
+    func testPerplexityAgentStructuredMessageParsesAndValidatesAgainstItsSources() async throws {
+        let json = #"{"findings":[{"criterion":"fidelity","severity":"attention","manuscript_quote":"A promessa parece distante.","observation":"A passagem citada registra que Jesus chorou, sem explicitar a afirmação do manuscrito.","correction":"","classification":"unsupported","evidence_source_id":"bible:nvt","evidence_quote":"Jesus chorou."}]}"#
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .perplexity)) }
+        let session = stubSession()
+        let findings = try await SermonAIReviewClient(session: session).review(
+            context: reviewContext(criteria: [.fidelity], manuscript: "A promessa parece distante."),
+            sources: [bibleSource()],
+            configuration: configuration(for: .perplexity)
+        )
+
+        XCTAssertEqual(findings.count, 1)
+        XCTAssertEqual(findings[0].criterion, .fidelity)
+        XCTAssertEqual(findings[0].manuscriptQuote, "A promessa parece distante.")
+        XCTAssertEqual(findings[0].evidenceQuote, "Jesus chorou.")
+        XCTAssertEqual(findings[0].evidenceSourceTitle, "NVT")
+        session.invalidateAndCancel()
     }
 
     func testRejectsFindingsWithUnverifiableQuotesOrSuggestionLanguage() async throws {
@@ -293,15 +333,20 @@ final class SermonReviewTests: XCTestCase {
         case .openAI: "/v1/responses"
         case .anthropic: "/v1/messages"
         case .google: "/v1beta/interactions"
-        case .perplexity: "/v1/responses"
+        case .perplexity: "/v1/agent"
         }
     }
 
     private static func responseData(_ json: String, provider: AIProvider) -> Data {
         switch provider {
-        case .openAI, .perplexity:
+        case .openAI:
             return try! JSONSerialization.data(withJSONObject: [
                 "output": [["content": [["type": "output_text", "text": json]]]]
+            ])
+        case .perplexity:
+            return try! JSONSerialization.data(withJSONObject: [
+                "status": "completed",
+                "output": [["type": "message", "role": "assistant", "status": "completed", "content": [["type": "output_text", "text": json]]]]
             ])
         case .anthropic:
             return try! JSONSerialization.data(withJSONObject: ["content": [["type": "text", "text": json]]])

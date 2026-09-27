@@ -1,3 +1,4 @@
+import AppKit
 import PDFKit
 import SwiftData
 import XCTest
@@ -77,6 +78,71 @@ final class SermonHistoryTests: XCTestCase {
         XCTAssertTrue(extractedText.contains("Jesus entra na vinha"))
     }
 
+    @MainActor
+    func testFootnoteInsertionReusesLowestFreeNumber() {
+        let textView = NSTextView(frame: .zero)
+        textView.string = "Texto¹\n\n¹ Primeira nota\n\nTexto³\n\n³ Terceira nota"
+        textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+        let commands = EditorCommands()
+        commands.textView = textView
+
+        commands.footnote()
+
+        XCTAssertTrue(textView.string.contains("Terceira nota²\n\n² "))
+        XCTAssertEqual(textView.string.filter { $0 == "²" }.count, 2)
+    }
+
+    @MainActor
+    func testFootnoteInsertionKeepsNumbersAboveNineSuperscripted() {
+        let textView = NSTextView(frame: .zero)
+        textView.string = "¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹"
+        textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+        let commands = EditorCommands()
+        commands.textView = textView
+
+        commands.footnote()
+
+        XCTAssertTrue(textView.string.hasSuffix("\n\n¹⁰ "))
+    }
+
+    @MainActor
+    func testQuotationFormattingIsVisibleAndCanBeRemoved() {
+        let textView = NSTextView(frame: .zero)
+        textView.string = "Uma frase citada."
+        textView.setSelectedRange(NSRange(location: 0, length: (textView.string as NSString).length))
+        let commands = EditorCommands()
+        commands.textView = textView
+
+        commands.quotation()
+
+        let storage = try! XCTUnwrap(textView.textStorage)
+        let paragraphStyle = try! XCTUnwrap(storage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+        XCTAssertEqual(paragraphStyle.headIndent, 22)
+        XCTAssertNotNil(storage.attribute(.backgroundColor, at: 0, effectiveRange: nil))
+
+        commands.quotation()
+
+        let removedStyle = try! XCTUnwrap(storage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+        XCTAssertEqual(removedStyle.headIndent, 0)
+        XCTAssertNil(storage.attribute(.backgroundColor, at: 0, effectiveRange: nil))
+        XCTAssertNil(storage.attribute(.foregroundColor, at: 0, effectiveRange: nil))
+    }
+
+    @MainActor
+    func testFontSizeCommandFormatsSelection() {
+        let textView = NSTextView(frame: .zero)
+        textView.string = "Palavra"
+        textView.setSelectedRange(NSRange(location: 0, length: (textView.string as NSString).length))
+        let commands = EditorCommands()
+        commands.textView = textView
+
+        commands.setFontSize(16)
+
+        let font = try! XCTUnwrap(textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        XCTAssertEqual(font.pointSize, 16)
+        XCTAssertEqual(commands.selectedFontSize, 16)
+    }
+
     func testTabletPDFExporterCanOmitFootnoteParagraphsWithoutChangingSource() throws {
         let source = NSAttributedString(string: "O texto diz algo importante¹.\n\n¹ Nota de rodapé que fica no fim.")
         let rtfData = try source.data(
@@ -97,6 +163,23 @@ final class SermonHistoryTests: XCTestCase {
         XCTAssertTrue(includedText.contains("Nota de rodapé"))
         XCTAssertFalse(omittedText.contains("Nota de rodapé"))
         XCTAssertFalse(omittedText.contains("¹"))
+        XCTAssertTrue(source.string.contains("Nota de rodapé"))
+    }
+
+    func testTabletPDFExporterCanOmitTwoDigitSuperscriptFootnotes() throws {
+        let source = NSAttributedString(string: "O texto diz algo¹⁰.\n\n¹⁰ Nota de rodapé dez.")
+        let rtfData = try source.data(
+            from: NSRange(location: 0, length: source.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        let omitted = try TabletPDFExporter.makePDF(
+            rtfData: rtfData, title: "Sermão", subtitle: nil,
+            fontName: "Arial", fontSize: 14, includeFootnotes: false
+        )
+        let text = try XCTUnwrap(PDFDocument(data: omitted)).page(at: 0)?.string ?? ""
+
+        XCTAssertFalse(text.contains("Nota de rodapé"))
+        XCTAssertFalse(text.contains("¹⁰"))
         XCTAssertTrue(source.string.contains("Nota de rodapé"))
     }
 

@@ -27,13 +27,13 @@ Esta tabela é uma proposta baseada nos catálogos oficiais consultados, e não 
 | OpenAI | `gpt-6-sol` | A documentação o posiciona como equilíbrio entre capacidade e custo; suporta respostas estruturadas. |
 | Anthropic | `claude-sonnet-5` | Candidato da família Sonnet para avaliar revisão e obediência aos limites. |
 | Google | `gemini-3.8-flash` | Candidato estável da família Flash; suporta respostas estruturadas. |
-| Perplexity | `perplexity/sonar` | Revisão sem ferramentas; a pesquisa de materiais permanece um fluxo separado. |
+| Perplexity | `perplexity/sonar` | Usa o Agent API (`/v1/agent`) com JSON Schema; sem ferramentas de busca na revisão. A descoberta de materiais é um fluxo separado. |
 
 Fontes: [OpenAI: modelos](https://developers.openai.com/api/docs/models), [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol), [Claude: modelos](https://platform.claude.com/docs/en/models/overview), [Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash) e [Perplexity: modelos da Agent API](https://docs.perplexity.ai/docs/agent-api/models).
 
 Para descoberta, a [Search API da Perplexity](https://docs.perplexity.ai/docs/search/quickstart) é uma candidata a retornar páginas e metadados. A [Agent API](https://docs.perplexity.ai/docs/agent-api/quickstart) permite controlar modelos e ferramentas. A proposta de revisão usa um modelo explícito com ferramentas de busca desabilitadas; a pesquisa de fontes ocorre em outra operação, sem enviar o manuscrito.
 
-A documentação ainda lista [Sonar Pro](https://docs.perplexity.ai/docs/sonar/models/sonar-pro) em sua seção de API legada. A [Router API](https://docs.perplexity.ai/docs/router/models) é apresentada como preview privado. Por isso, nenhuma dessas duas opções deve ser assumida como integração padrão sem verificar disponibilidade e ciclo de vida na implementação.
+O nome do modelo `perplexity/sonar` continua disponível no catálogo da Agent API; isso não significa usar o endpoint legado Sonar. Revisão e descoberta Perplexity usam o endpoint Agent (`/v1/agent`) e extraem fontes verificáveis dos resultados/anotações da resposta, sem pedir URLs inventadas dentro do JSON. A revisão desativa as ferramentas de pesquisa e define `store: false`.
 
 Os identificadores e as capacidades devem ficar num catálogo atualizável. Preferir versões estáveis e registrar qual modelo efetivamente executou cada revisão. Não selecionar silenciosamente modelos mais caros ou versões novas ainda não avaliadas.
 

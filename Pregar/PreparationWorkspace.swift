@@ -250,29 +250,15 @@ struct PreparationWorkspace: View {
             .help("Barra lateral")
 
             if !isReadingsVisible && !focusMode {
-                Button {
+                panelRestoreButton("Leituras", symbol: "sidebar.left") {
                     isReadingsVisible = true
-                } label: {
-                    Image(systemName: "book.closed")
-                        .font(.system(size: 14))
-                        .foregroundStyle(PrototypeStyle.muted)
-                        .frame(width: 25, height: 30)
                 }
-                .buttonStyle(.plain)
-                .help("Mostrar leituras")
             }
 
             if !isContextVisible && !focusMode {
-                Button {
+                panelRestoreButton("Materiais", symbol: "sidebar.right") {
                     isContextVisible = true
-                } label: {
-                    Image(systemName: "sidebar.right")
-                        .font(.system(size: 14))
-                        .foregroundStyle(PrototypeStyle.muted)
-                        .frame(width: 25, height: 30)
                 }
-                .buttonStyle(.plain)
-                .help("Mostrar painel contextual")
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -443,6 +429,19 @@ struct PreparationWorkspace: View {
         .buttonStyle(.plain)
     }
 
+    private func panelRestoreButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(accentColor)
+                .padding(.horizontal, 8)
+                .frame(height: 27)
+                .background(PrototypeStyle.softGreen.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .help("Reabrir painel de \(title.lowercased())")
+    }
+
     private var dayHeader: some View {
         HStack(spacing: 13) {
             Circle()
@@ -492,6 +491,31 @@ struct PreparationWorkspace: View {
                 editorButton("bold", title: "Negrito", action: editorCommands.bold)
                 editorButton("italic", title: "Itálico", action: editorCommands.italic)
                 Divider().frame(height: 22).padding(.horizontal, 6)
+                Menu {
+                    ForEach(EditorCommands.fontFamilies, id: \.self) { family in
+                        Button(family) { editorCommands.setFontFamily(family) }
+                    }
+                } label: {
+                    Text(editorCommands.selectedFontFamily)
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                        .frame(width: 72, height: 27, alignment: .leading)
+                }
+                .menuStyle(.borderlessButton)
+                .help("Fonte: \(editorCommands.selectedFontFamily)")
+
+                Menu {
+                    ForEach(EditorCommands.fontSizes, id: \.self) { size in
+                        Button("\(size) pt") { editorCommands.setFontSize(size) }
+                    }
+                } label: {
+                    Text("\(editorCommands.selectedFontSize) pt")
+                        .font(.system(size: 11))
+                        .frame(width: 42, height: 27)
+                }
+                .menuStyle(.borderlessButton)
+                .help("Tamanho da fonte")
+                Divider().frame(height: 22).padding(.horizontal, 4)
                 editorTextButton("Título", action: editorCommands.heading)
                 editorTextButton("Citação", action: editorCommands.quotation)
                 editorTextButton("Lista", action: editorCommands.bulletedList)
@@ -536,6 +560,16 @@ struct PreparationWorkspace: View {
                     commands: editorCommands
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .topLeading) {
+                    if editorCommands.isEmpty {
+                        Text("Comece a escrever seu sermão…")
+                            .font(.custom("Arial", size: 10))
+                            .foregroundStyle(PrototypeStyle.muted.opacity(0.8))
+                            .padding(.leading, 53)
+                            .padding(.top, 22)
+                            .allowsHitTesting(false)
+                    }
+                }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 24)
             }
@@ -557,7 +591,8 @@ struct PreparationWorkspace: View {
                 .frame(width: 28, height: 27)
                 .contentShape(Rectangle())
         }
-        .help(title)
+        .keyboardShortcut(symbol == "bold" ? "b" : "i", modifiers: .command)
+        .help(symbol == "bold" ? "\(title) (⌘B)" : "\(title) (⌘I)")
         .accessibilityLabel(title)
     }
 

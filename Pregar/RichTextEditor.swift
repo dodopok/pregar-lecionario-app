@@ -4,10 +4,17 @@ import SwiftUI
 @MainActor
 final class EditorCommands: ObservableObject {
     @Published private(set) var wordCount = 0
+    @Published private(set) var isEmpty = true
+    @Published private(set) var selectedFontFamily = "Arial"
+    @Published private(set) var selectedFontSize = 10
+    static let fontFamilies = ["Arial", "Georgia", "Times New Roman", "Helvetica", "Avenir"]
+    static let fontSizes = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36]
     weak var textView: NSTextView?
 
     func updateWordCount(from text: String) {
         wordCount = text.split(whereSeparator: \.isWhitespace).count
+        isEmpty = text.isEmpty
+        updateSelectionFormatting()
     }
 
     @discardableResult
@@ -32,6 +39,7 @@ final class EditorCommands: ObservableObject {
     func italic() { toggleFontTrait(.italicFontMask) }
 
     func heading() {
+        focusTextView()
         styleSelection { _ in
             NSFont(name: "Arial-BoldMT", size: 14) ?? NSFont.boldSystemFont(ofSize: 14)
         }
@@ -40,15 +48,54 @@ final class EditorCommands: ObservableObject {
     func quotation() {
         guard let textView, let storage = textView.textStorage else { return }
         let range = paragraphRange(in: textView)
+        guard range.length > 0 else { return }
+        textView.window?.makeFirstResponder(textView)
+        let location = min(range.location, storage.length - 1)
         let style = (storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
-        style.headIndent = 22
-        style.firstLineHeadIndent = 22
-        style.tailIndent = -12
+        let isQuoted = style.headIndent >= 20
+        if isQuoted {
+            style.headIndent = 0
+            style.firstLineHeadIndent = 0
+            style.tailIndent = 0
+            style.paragraphSpacingBefore = 0
+            style.paragraphSpacing = 0
+        } else {
+            style.headIndent = 22
+            style.firstLineHeadIndent = 22
+            style.tailIndent = -12
+            style.paragraphSpacingBefore = 7
+            style.paragraphSpacing = 9
+        }
         storage.addAttribute(.paragraphStyle, value: style, range: range)
+        if isQuoted {
+            storage.removeAttribute(.foregroundColor, range: range)
+            storage.removeAttribute(.backgroundColor, range: range)
+        } else {
+            storage.addAttribute(.foregroundColor, value: NSColor(calibratedRed: 0.17, green: 0.39, blue: 0.27, alpha: 1), range: range)
+            storage.addAttribute(.backgroundColor, value: NSColor(calibratedRed: 0.89, green: 0.93, blue: 0.89, alpha: 1), range: range)
+        }
+        textView.setSelectedRange(NSRange(location: location, length: range.length))
+        textView.didChangeText()
+    }
+
+    func setFontFamily(_ family: String) {
+        applyFontChange { font in
+            let manager = NSFontManager.shared
+            var updated = NSFont(name: family, size: font.pointSize) ?? font
+            for trait in [NSFontTraitMask.boldFontMask, .italicFontMask] where manager.traits(of: font).contains(trait) {
+                updated = manager.convert(updated, toHaveTrait: trait)
+            }
+            return updated
+        }
+    }
+
+    func setFontSize(_ size: Int) {
+        applyFontChange { $0.withSize(CGFloat(size)) }
     }
 
     func bulletedList() {
         guard let textView, let storage = textView.textStorage else { return }
+        focusTextView()
         let range = paragraphRange(in: textView)
         let source = textView.string as NSString
         var lineStart = range.location
@@ -70,10 +117,11 @@ final class EditorCommands: ObservableObject {
 
     func footnote() {
         guard let textView, let storage = textView.textStorage else { return }
-        let marks = ["¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"]
-        let used = marks.filter { textView.string.contains($0) }.count
-        let number = used + 1
-        let marker = number <= marks.count ? marks[number - 1] : "¹\(number)"
+        focusTextView()
+        let occupied = footnoteNumbers(in: textView.string)
+        let maximumCandidate = occupied.count + 1
+        let number = (1...maximumCandidate).first { !occupied.contains($0) } ?? maximumCandidate
+        let marker = String(number).compactMap { Self.decimalToSuperscript[$0] }.map(String.init).joined()
         let selection = textView.selectedRange()
         let markerText = NSAttributedString(string: marker, attributes: [
             .font: NSFont.systemFont(ofSize: 8),
@@ -88,16 +136,37 @@ final class EditorCommands: ObservableObject {
         textView.didChangeText()
     }
 
+    private func footnoteNumbers(in text: String) -> Set<Int> {
+        guard let expression = try? NSRegularExpression(pattern: "[⁰¹²³⁴⁵⁶⁷⁸⁹]+") else { return [] }
+        let source = text as NSString
+        return Set(expression.matches(in: text, range: NSRange(location: 0, length: source.length)).compactMap { match in
+            let marker = source.substring(with: match.range)
+            let decimal = marker.compactMap { Self.superscriptToDecimal[$0] }.map(String.init).joined()
+            return Int(decimal)
+        })
+    }
+
+    private static let superscriptToDecimal: [Character: Character] = [
+        "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4",
+        "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9"
+    ]
+    private static let decimalToSuperscript = Dictionary(
+        uniqueKeysWithValues: superscriptToDecimal.map { ($0.value, $0.key) }
+    )
+
     private func styleSelection(_ font: (NSFont) -> NSFont) {
         guard let textView, let storage = textView.textStorage else { return }
+        focusTextView()
         let range = paragraphRange(in: textView)
         let current = storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont ?? NSFont.systemFont(ofSize: 10)
         storage.addAttribute(.font, value: font(current), range: range)
         textView.didChangeText()
+        updateSelectionFormatting()
     }
 
     private func toggleFontTrait(_ trait: NSFontTraitMask) {
         guard let textView, let storage = textView.textStorage else { return }
+        focusTextView()
         let manager = NSFontManager.shared
         let selection = textView.selectedRange()
         let current = textView.typingAttributes[.font] as? NSFont ?? textView.font ?? NSFont.systemFont(ofSize: 10)
@@ -121,6 +190,56 @@ final class EditorCommands: ObservableObject {
         replacements.forEach { storage.addAttribute(.font, value: $0.1, range: $0.0) }
         storage.endEditing()
         textView.didChangeText()
+        updateSelectionFormatting()
+    }
+
+    private func applyFontChange(_ transform: (NSFont) -> NSFont) {
+        guard let textView, let storage = textView.textStorage else { return }
+        textView.window?.makeFirstResponder(textView)
+        let selection = textView.selectedRange()
+        let current = textView.typingAttributes[.font] as? NSFont
+            ?? (storage.length > 0 ? storage.attribute(.font, at: min(selection.location, storage.length - 1), effectiveRange: nil) as? NSFont : nil)
+            ?? textView.font
+            ?? NSFont(name: "Arial", size: 10)!
+
+        guard selection.length > 0, storage.length > 0 else {
+            textView.typingAttributes[.font] = transform(current)
+            updateSelectionFormatting()
+            return
+        }
+
+        let safeRange = NSIntersectionRange(selection, NSRange(location: 0, length: storage.length))
+        var replacements: [(NSRange, NSFont)] = []
+        storage.enumerateAttribute(.font, in: safeRange) { value, range, _ in
+            replacements.append((range, transform(value as? NSFont ?? current)))
+        }
+        storage.beginEditing()
+        replacements.forEach { storage.addAttribute(.font, value: $0.1, range: $0.0) }
+        storage.endEditing()
+        textView.didChangeText()
+        updateSelectionFormatting()
+    }
+
+    func updateSelectionFormatting() {
+        guard let textView else { return }
+        let storage = textView.textStorage
+        let selection = textView.selectedRange()
+        let selectedFont = storage?.length ?? 0 > 0
+            ? storage?.attribute(.font, at: min(selection.location, (storage?.length ?? 1) - 1), effectiveRange: nil) as? NSFont
+            : nil
+        let font = (selection.length > 0 ? selectedFont : nil)
+            ?? textView.typingAttributes[.font] as? NSFont
+            ?? selectedFont
+            ?? textView.font
+        if let font {
+            selectedFontFamily = font.familyName ?? "Arial"
+            selectedFontSize = Int(font.pointSize.rounded())
+        }
+    }
+
+    private func focusTextView() {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
     }
 
     private func paragraphRange(in textView: NSTextView) -> NSRange {
@@ -194,6 +313,10 @@ struct RichTextEditor: NSViewRepresentable {
                 parent.commands.updateWordCount(from: "")
             }
             lastAppliedData = data
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            parent.commands.updateSelectionFormatting()
         }
 
         func textDidChange(_ notification: Notification) {

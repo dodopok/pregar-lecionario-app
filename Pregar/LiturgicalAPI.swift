@@ -59,17 +59,32 @@ struct LiturgicalReading: Decodable, Identifiable {
     }
 }
 
-struct BiblePassageText: Decodable {
+struct BiblePassageText: Decodable, Sendable {
     let format: String?
     let bible: String?
     let verses: [BibleVerse]?
     let content: String?
 }
 
-struct BibleVerse: Decodable, Identifiable {
+struct BibleVerse: Decodable, Identifiable, Sendable {
     let number: Int
     let text: String
     var id: Int { number }
+}
+
+struct BibleVersion: Decodable, Equatable, Identifiable, Sendable {
+    let code: String
+    let name: String
+    let fullName: String?
+    let language: String?
+    let description: String?
+    let publisher: String?
+    let year: Int?
+    let isRecommended: Bool?
+    let versificationSystem: String?
+    let license: String?
+
+    var id: String { code }
 }
 
 struct LiturgicalCollect: Decodable, Identifiable {
@@ -95,6 +110,7 @@ struct LiturgicalAPIError: LocalizedError {
 struct LiturgicalAPIClient {
     let settings: APISettings
     let apiKey: String
+    var session: URLSession = .shared
 
     func fetchDay(_ date: Date) async throws -> LiturgicalDay {
         try await get(APIEnvelope<LiturgicalDay>.self, from: dayURL(date)).data
@@ -108,6 +124,18 @@ struct LiturgicalAPIClient {
         return text
     }
 
+    func fetchBibleVersions() async throws -> [BibleVersion] {
+        guard var components = URLComponents(string: settings.baseURL) else {
+            throw LiturgicalAPIError(message: "Endereço inválido da Estêvão API.")
+        }
+        components.path = "/api/v2/bible-versions"
+        components.queryItems = nil
+        guard let url = components.url else {
+            throw LiturgicalAPIError(message: "Não foi possível montar o catálogo de traduções.")
+        }
+        return try await get(APIEnvelope<[BibleVersion]>.self, from: url).data
+    }
+
     private func get<Value: Decodable>(_ type: Value.Type, from url: URL) async throws -> Value {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -115,7 +143,7 @@ struct LiturgicalAPIClient {
         request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         request.setValue("application/json, application/problem+json", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else {
             throw LiturgicalAPIError(message: "A Estêvão API não retornou uma resposta HTTP válida.")
         }

@@ -35,8 +35,10 @@ struct BibleComparisonView: View {
     @State private var inputReference: String
     @State private var queryReference: String
     @State private var scope: PassageScope = .pericope
-    @State private var comparisonBible = "naa"
-    @State private var additionalBible: String?
+    @State private var selectedComparisonBibles = ["naa"]
+    @State private var availableVersions: [BibleVersion] = []
+    @State private var isLoadingVersions = false
+    @State private var catalogError: String?
     @State private var passages: [String: BiblePassageText] = [:]
     @State private var errorMessage: String?
     @State private var isLoading = false
@@ -61,10 +63,24 @@ struct BibleComparisonView: View {
     }
 
     private var requestKey: String {
-        "\(requestReference)|\(settings.bible)|\(comparisonBible)|\(additionalBible ?? "")"
+        "\(requestReference)|\(displayedVersionCodes.joined(separator: ","))"
     }
 
     private func passageKey(for bible: String) -> String { "\(requestReference)|\(bible)" }
+
+    private var displayedVersionCodes: [String] {
+        [settings.bible] + selectedComparisonBibles.filter { $0 != settings.bible }
+    }
+
+    private var verseNumbers: [Int] {
+        let numbers = displayedVersionCodes.flatMap { code in
+            passages[passageKey(for: code)]?.verses?.map(\.number) ?? []
+        }
+        if !numbers.isEmpty { return Array(Set(numbers)).sorted() }
+        return displayedVersionCodes.contains { code in
+            !(passages[passageKey(for: code)]?.content?.isEmpty ?? true)
+        } ? [0] : []
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,13 +103,28 @@ struct BibleComparisonView: View {
 
                 Spacer(minLength: 6)
 
-                translationBadge(settings.bible.uppercased(), active: true)
+                translationBadge(settings.bible.uppercased())
                 Menu {
-                    ForEach(["nvi", "naa", "ara"].filter { $0 != settings.bible }, id: \.self) { version in
-                        Button(version.uppercased()) { comparisonBible = version }
+                    if isLoadingVersions {
+                        Label("Carregando traduções…", systemImage: "arrow.triangle.2.circlepath")
+                    } else if !availableVersions.isEmpty {
+                        Section("Traduções disponíveis") {
+                            ForEach(availableVersions) { version in
+                                Toggle(isOn: Binding(
+                                    get: { displayedVersionCodes.contains(version.code) },
+                                    set: { isSelected in setTranslation(version.code, selected: isSelected) }
+                                )) {
+                                    Text(versionMenuTitle(version))
+                                }
+                                .disabled(version.code == settings.bible)
+                            }
+                        }
+                    } else {
+                        Text(catalogError ?? "Catálogo indisponível")
+                        Button("Tentar novamente") { Task { await loadBibleVersions() } }
                     }
                 } label: {
-                    Text(comparisonBible.uppercased())
+                    Label("\(displayedVersionCodes.count) traduções", systemImage: "text.book.closed")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(PrototypeStyle.ink)
                         .padding(.horizontal, 14)
@@ -102,17 +133,7 @@ struct BibleComparisonView: View {
                         .overlay(Capsule().stroke(PrototypeStyle.line, lineWidth: 1))
                 }
                 .menuStyle(.borderlessButton)
-                if let additionalBible {
-                    translationBadge(additionalBible.uppercased(), active: false)
-                } else {
-                    Button("+ ARA") { additionalBible = "ara" }
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(PrototypeStyle.muted)
-                        .padding(.horizontal, 13)
-                        .frame(height: 28)
-                        .overlay(Capsule().stroke(PrototypeStyle.muted.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-                        .buttonStyle(.plain)
-                }
+                .help("Selecionar várias traduções")
             }
             .padding(.leading, 104)
             .padding(.trailing, 22)
@@ -121,17 +142,52 @@ struct BibleComparisonView: View {
 
             Divider()
 
-            HSplitView {
-                ForEach([settings.bible, comparisonBible] + (additionalBible.map { [$0] } ?? []), id: \.self) { version in
-                    passageColumn(
-                        passages[passageKey(for: version)],
-                        version: version,
-                        isLoading: isLoading,
-                        errorMessage: errorMessage
-                    )
+            GeometryReader { geometry in
+                let columnWidth = max(320, geometry.size.width / CGFloat(max(displayedVersionCodes.count, 1)))
+                ScrollView([.horizontal, .vertical]) {
+                    LazyVStack(spacing: 0) {
+                        HStack(spacing: 0) {
+                            ForEach(displayedVersionCodes, id: \.self) { version in
+                                Text(versionHeader(version))
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(version == settings.bible ? accent : PrototypeStyle.ink)
+                                    .frame(width: columnWidth, height: 42, alignment: .leading)
+                                    .padding(.horizontal, 18)
+                                    .overlay(alignment: .trailing) { Rectangle().fill(PrototypeStyle.line).frame(width: 1) }
+                            }
+                        }
+                        .background(PrototypeStyle.canvas)
+
+                        if verseNumbers.isEmpty {
+                            VStack(spacing: 10) {
+                                if isLoading {
+                                    ProgressView().controlSize(.small).tint(accent)
+                                } else {
+                                    Image(systemName: "text.book.closed").foregroundStyle(PrototypeStyle.muted)
+                                }
+                                Text(isLoading ? "Carregando as traduções…" : (errorMessage ?? "Nenhum texto disponível para esta referência."))
+                                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                                if !isLoading {
+                                    Button("Tentar novamente") { Task { await loadPassages() } }
+                                        .buttonStyle(.bordered)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 150)
+                        } else {
+                            ForEach(verseNumbers, id: \.self) { number in
+                                HStack(alignment: .top, spacing: 0) {
+                                    ForEach(displayedVersionCodes, id: \.self) { version in
+                                        verseCell(version: version, number: number, width: columnWidth)
+                                            .overlay(alignment: .trailing) { Rectangle().fill(PrototypeStyle.line).frame(width: 1) }
+                                    }
+                                }
+                                .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                            }
+                        }
+                    }
                 }
+                .background(PrototypeStyle.paper)
             }
-            .background(PrototypeStyle.paper)
 
             HStack {
                 Text("Texto ilustrativo — a versão real vem da Estêvão API v2.")
@@ -150,6 +206,7 @@ struct BibleComparisonView: View {
         .frame(minWidth: 820, minHeight: 760)
         .background(PrototypeStyle.paper)
         .tint(accent)
+        .task(id: apiKey) { await loadBibleVersions() }
         .task(id: requestKey) { await loadPassages() }
         .onChange(of: reference) { _, value in
             inputReference = value
@@ -171,59 +228,72 @@ struct BibleComparisonView: View {
         .buttonStyle(.plain)
     }
 
-    private func translationBadge(_ title: String, active: Bool) -> some View {
+    private func translationBadge(_ title: String) -> some View {
         Text(title)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(active ? .white : PrototypeStyle.ink)
+            .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .frame(height: 26)
-            .background(active ? accent : .white, in: Capsule())
+            .background(accent, in: Capsule())
     }
 
-    private func passageColumn(_ text: BiblePassageText?, version: String, isLoading: Bool, errorMessage: String?) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 17) {
-                if let verses = text?.verses, !verses.isEmpty {
-                    ForEach(verses) { verse in
-                        HStack(alignment: .firstTextBaseline, spacing: 13) {
-                            Text("\(verse.number)")
-                                .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
-                                .foregroundStyle(version == settings.bible ? accent : PrototypeStyle.muted)
-                                .frame(width: 18, alignment: .trailing)
-                            Text(verse.text)
-                                .font(PrototypeStyle.serif(23))
-                                .foregroundStyle(PrototypeStyle.ink.opacity(version == settings.bible ? 0.92 : 0.48))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .textSelection(.enabled)
-                        }
-                    }
-                } else if let content = text?.content {
-                    Text(content)
-                        .font(PrototypeStyle.serif(23))
-                        .foregroundStyle(PrototypeStyle.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if isLoading {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ProgressView().controlSize(.small).tint(accent)
-                        Text("Consultando \(version.uppercased())…")
-                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-                    }
-                    .padding(.top, 24)
-                } else {
-                    ContentUnavailableView {
-                        Label("Texto indisponível", systemImage: "text.book.closed")
-                    } description: {
-                        Text(errorMessage ?? "Envie uma referência para carregar esta tradução.")
-                    } actions: {
-                        Button("Tentar novamente") { Task { await loadPassages() } }
-                    }
-                }
+    private func verseCell(version: String, number: Int, width: CGFloat) -> some View {
+        let passage = passages[passageKey(for: version)]
+        let text = number == 0 ? passage?.content : passage?.verses?.first(where: { $0.number == number })?.text
+        return HStack(alignment: .top, spacing: 13) {
+            if number > 0 {
+                Text("\(number)")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(accent)
+                    .frame(width: 18, alignment: .trailing)
             }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 30)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if let text {
+                Text(text)
+                    .font(PrototypeStyle.serif(23))
+                    .foregroundStyle(PrototypeStyle.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            } else if isLoading {
+                Text("Consultando…")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+            } else {
+                Text("Versículo indisponível")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+            }
         }
-        .background(version == settings.bible ? .white : PrototypeStyle.canvas.opacity(0.45))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .frame(width: width, alignment: .leading)
+        .frame(minHeight: 62, alignment: .topLeading)
+        .background(PrototypeStyle.paper)
+    }
+
+    @MainActor
+    private func loadBibleVersions() async {
+        guard !apiKey.isEmpty else {
+            catalogError = "Configure a chave da Estêvão API para carregar o catálogo."
+            isLoadingVersions = false
+            return
+        }
+        isLoadingVersions = true
+        catalogError = nil
+        defer { isLoadingVersions = false }
+        do {
+            let versions = try await LiturgicalAPIClient(settings: settings, apiKey: apiKey).fetchBibleVersions()
+            try Task.checkCancellation()
+            availableVersions = versions
+            selectedComparisonBibles.removeAll { code in
+                !versions.contains(where: { $0.code == code })
+            }
+            if selectedComparisonBibles.isEmpty,
+               let recommended = versions.first(where: { $0.code != settings.bible && $0.isRecommended == true }) {
+                selectedComparisonBibles = [recommended.code]
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            catalogError = error.localizedDescription
+        }
     }
 
     @MainActor
@@ -247,28 +317,20 @@ struct BibleComparisonView: View {
         }
         do {
             let client = LiturgicalAPIClient(settings: settings, apiKey: apiKey)
-            let primaryKey = passageKey(for: settings.bible)
-            let comparisonKey = passageKey(for: comparisonBible)
-            if passages[primaryKey] == nil && passages[comparisonKey] == nil {
-                async let primary = client.fetchPassage(reference: requestReference, bible: settings.bible)
-                async let comparison = client.fetchPassage(reference: requestReference, bible: comparisonBible)
-                let (first, second) = try await (primary, comparison)
-                try Task.checkCancellation()
-                passages[primaryKey] = first
-                passages[comparisonKey] = second
-            } else {
-                if passages[primaryKey] == nil {
-                    passages[primaryKey] = try await client.fetchPassage(reference: requestReference, bible: settings.bible)
-                }
-                if passages[comparisonKey] == nil {
-                    passages[comparisonKey] = try await client.fetchPassage(reference: requestReference, bible: comparisonBible)
+            let reference = requestReference
+            let missingVersions = displayedVersionCodes.filter { passages[passageKey(for: $0)] == nil }
+            let requests = missingVersions.map { version in
+                Task { @MainActor in
+                    (version, try? await client.fetchPassage(reference: reference, bible: version))
                 }
             }
-            if let additionalBible {
-                let additionalKey = passageKey(for: additionalBible)
-                if passages[additionalKey] == nil {
-                    passages[additionalKey] = try await client.fetchPassage(reference: requestReference, bible: additionalBible)
-                }
+            for request in requests {
+                let (version, passage) = await request.value
+                try Task.checkCancellation()
+                if let passage { passages["\(reference)|\(version)"] = passage }
+            }
+            if displayedVersionCodes.allSatisfy({ passages[passageKey(for: $0)] == nil }) {
+                errorMessage = "Não foi possível carregar nenhuma tradução desta passagem."
             }
         } catch is CancellationError {
             return
@@ -282,6 +344,26 @@ struct BibleComparisonView: View {
         inputReference = trimmed
         queryReference = trimmed
         reference = trimmed
+    }
+
+    private func setTranslation(_ code: String, selected: Bool) {
+        guard code != settings.bible else { return }
+        if selected {
+            if !selectedComparisonBibles.contains(code) { selectedComparisonBibles.append(code) }
+        } else {
+            selectedComparisonBibles.removeAll { $0 == code }
+        }
+    }
+
+    private func versionMenuTitle(_ version: BibleVersion) -> String {
+        let language = version.language.map { " · \($0)" } ?? ""
+        let fullName = version.fullName.map { " — \($0)" } ?? ""
+        return "\(version.name)\(fullName)\(language)"
+    }
+
+    private func versionHeader(_ code: String) -> String {
+        guard let version = availableVersions.first(where: { $0.code == code }) else { return code.uppercased() }
+        return "\(version.name) · \(version.fullName ?? version.language ?? "")"
     }
 }
 

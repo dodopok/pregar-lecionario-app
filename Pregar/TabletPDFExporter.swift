@@ -112,7 +112,7 @@ enum TabletPDFExporter {
 
     private static func removeFootnoteParagraphs(from text: NSMutableAttributedString) {
         let source = text.string as NSString
-        let superscriptDigits = CharacterSet(charactersIn: "¹²³⁴⁵⁶⁷⁸⁹")
+        let superscriptDigits = CharacterSet(charactersIn: "⁰¹²³⁴⁵⁶⁷⁸⁹")
         var ranges: [NSRange] = []
         var location = 0
         while location < source.length {
