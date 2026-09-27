@@ -35,6 +35,14 @@ struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
     let components: [PDFSectionComponent]?
     let findingMethod: PDFSectionFindingMethod?
 
+    func matchesSearch(_ query: String) -> Bool {
+        let normalizedQuery = ScriptureReference.normalized(query)
+        guard !normalizedQuery.isEmpty else { return true }
+        return [title, context].compactMap { $0 }.contains {
+            ScriptureReference.normalized($0).contains(normalizedQuery)
+        }
+    }
+
     var findingMethodLabel: String {
         switch findingMethod {
         case .bookmark: "bookmark do PDF"

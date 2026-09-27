@@ -309,9 +309,7 @@ struct PDFLibraryView: View {
 
     private func filteredSections(_ sections: [PDFSectionLocation]) -> [PDFSectionLocation] {
         guard !sectionQuery.isEmpty else { return sections }
-        return sections.filter { section in
-            [section.title, section.context].compactMap { $0 }.contains { $0.localizedCaseInsensitiveContains(sectionQuery) }
-        }
+        return sections.filter { $0.matchesSearch(sectionQuery) }
     }
 
     private func coverImage(_ record: PDFLibraryRecord, width: CGFloat, height: CGFloat) -> some View {

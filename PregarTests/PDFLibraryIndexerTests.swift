@@ -4,6 +4,20 @@ import XCTest
 @testable import Pregar
 
 final class PDFLibraryIndexerTests: XCTestCase {
+    func testSectionSearchMatchesAlternateDashCharacters() {
+        let section = PDFSectionLocation(
+            title: "Matthew 21:23–32",
+            startPage: 636,
+            endPage: 643,
+            context: "Proper 21 (Sunday between September 25 and October 1 inclusive)"
+        )
+
+        XCTAssertTrue(section.matchesSearch("Matthew 21:23-32"))
+        XCTAssertTrue(section.matchesSearch("proper 21"))
+        XCTAssertTrue(section.matchesSearch(""))
+        XCTAssertFalse(section.matchesSearch("Matthew 21:33-46"))
+    }
+
     func testSectionHeadingParserRejectsInlineReferences() throws {
         let heading = try XCTUnwrap(ScriptureReference.parseHeading(
             "Romans 13.8—14 Love, the Law and the Coming Day"
