@@ -442,8 +442,10 @@ struct ScripturePanelView: View {
 
 struct ResourceContextPanel: View {
     @EnvironmentObject private var readerSession: ReaderSessionStore
+    @EnvironmentObject private var aiSettings: AISettingsStore
     @Environment(\.openWindow) private var openWindow
     @AppStorage("pregar.library.records.v1") private var savedPDFRecords = Data()
+    @AppStorage("pregar.material-research.reports.v1") private var savedResearchReports = Data()
     @Binding var selectedTab: ContextPaneTab
     let reference: String
     let occasion: String?
@@ -463,6 +465,10 @@ struct ResourceContextPanel: View {
     @State private var pdfRecordsRevision = 0
     @State private var matchedPDFs: [PDFSectionMatchKind: [MatchedPDF]] = [:]
     @State private var isMatchingPDFs = false
+    @State private var researchReports: [String: AIResearchReport] = [:]
+    @State private var researchInProgressReference: String?
+    @State private var researchErrorReference: String?
+    @State private var researchError: String?
 
     private enum MaterialFilter: String, CaseIterable {
         case all = "Tudo"
@@ -548,8 +554,12 @@ struct ResourceContextPanel: View {
             }
         }
         .background(PrototypeStyle.paper)
-        .onAppear(perform: restorePDFRecords)
+        .onAppear {
+            restorePDFRecords()
+            restoreResearchReports()
+        }
         .onChange(of: savedPDFRecords) { _, _ in restorePDFRecords() }
+        .onChange(of: savedResearchReports) { _, _ in restoreResearchReports() }
         .task(id: "\(reference)|\(pdfRecordsRevision)|\(selectedTab == .materials)|\(filter != .sites)") {
             matchedPDFs = [:]
             isMatchingPDFs = false
@@ -645,6 +655,8 @@ struct ResourceContextPanel: View {
                     .buttonStyle(.plain)
                     .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
                 }
+
+                researchContent
             }
 
             if filter != .sites {
@@ -677,6 +689,146 @@ struct ResourceContextPanel: View {
                     .buttonStyle(.plain)
             }
         }
+    }
+
+    private var researchContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeading("OUTROS MATERIAIS", color: accent)
+            if let report = researchReports[reference] {
+                Text("\(report.provider.name) · \(report.sources.count) fontes · \(report.createdAt.formatted(date: .numeric, time: .shortened))")
+                    .font(.system(size: 10))
+                    .foregroundStyle(PrototypeStyle.muted)
+                ForEach(report.sources) { source in
+                    Button {
+                        openResearchSource(source)
+                    } label: {
+                        HStack(alignment: .top, spacing: 9) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 12))
+                                .foregroundStyle(PrototypeStyle.muted)
+                                .frame(width: 15)
+                                .padding(.top, 2)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(source.title)
+                                    .font(PrototypeStyle.serif(13, weight: .semibold))
+                                    .foregroundStyle(PrototypeStyle.ink)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text([source.domain, source.publishedDate].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(PrototypeStyle.muted)
+                                Text("Abrir no leitor")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(accent)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 7)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                }
+            }
+
+            if researchInProgressReference == reference {
+                HStack(spacing: 7) {
+                    ProgressView().controlSize(.small)
+                    Text("Pesquisando fontes…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(PrototypeStyle.muted)
+                }
+            }
+            if researchErrorReference == reference, let researchError {
+                Text(researchError)
+                    .font(.system(size: 11))
+                    .foregroundStyle(PrototypeStyle.muted)
+                if researchError.localizedCaseInsensitiveContains("chave") {
+                    Button("Configurar IA", systemImage: "key", action: openSettings)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(accent)
+                        .buttonStyle(.plain)
+                }
+            }
+
+            Button {
+                searchForMaterials()
+            } label: {
+                Label(
+                    researchReports[reference] == nil ? "Buscar outros materiais" : "Atualizar pesquisa",
+                    systemImage: "sparkle.magnifyingglass"
+                )
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(accent)
+            }
+            .buttonStyle(.plain)
+            .disabled(reference.isEmpty || researchInProgressReference != nil)
+            .help("Usa o provedor de pesquisa escolhido. Envia somente passagem e ocasião; o manuscrito não é enviado. O provedor pode cobrar a busca.")
+        }
+    }
+
+    private func searchForMaterials() {
+        let searchReference = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !searchReference.isEmpty, researchInProgressReference == nil else { return }
+        let provider = aiSettings.researchProvider
+        let model = aiSettings.researchModel
+        researchInProgressReference = searchReference
+        researchErrorReference = nil
+        researchError = nil
+
+        Task {
+            guard let key = await aiSettings.key(for: provider), !key.isEmpty else {
+                researchErrorReference = searchReference
+                researchError = AIResearchError.noKey.localizedDescription
+                researchInProgressReference = nil
+                return
+            }
+            do {
+                let sources = try await AIResearchClient().search(
+                    reference: searchReference,
+                    occasion: occasion,
+                    configuration: AIResearchConfiguration(provider: provider, model: model, apiKey: key)
+                )
+                let report = AIResearchReport(
+                    reference: searchReference,
+                    provider: provider,
+                    model: model,
+                    createdAt: .now,
+                    sources: sources
+                )
+                researchReports[searchReference] = report
+                persistResearchReports()
+            } catch {
+                researchErrorReference = searchReference
+                researchError = error.localizedDescription
+            }
+            researchInProgressReference = nil
+        }
+    }
+
+    private func openResearchSource(_ source: AIResearchSource) {
+        _ = readerSession.openWeb(
+            title: source.title,
+            url: source.url,
+            reference: reference,
+            sermonDateKey: SermonDateKey.string(from: liturgicalDate)
+        )
+        openWindow(id: "reader")
+    }
+
+    private func restoreResearchReports() {
+        guard let decoded = try? JSONDecoder().decode([AIResearchReport].self, from: savedResearchReports) else {
+            researchReports = [:]
+            return
+        }
+        researchReports = Dictionary(decoded.map { ($0.reference, $0) }, uniquingKeysWith: { earlier, later in
+            earlier.createdAt > later.createdAt ? earlier : later
+        })
+    }
+
+    private func persistResearchReports() {
+        let reports = researchReports.values.sorted { $0.createdAt > $1.createdAt }.prefix(100)
+        savedResearchReports = (try? JSONEncoder().encode(Array(reports))) ?? Data()
     }
 
     private func pdfMatchRow(_ match: MatchedPDF) -> some View {

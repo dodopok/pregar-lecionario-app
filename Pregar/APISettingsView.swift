@@ -222,7 +222,7 @@ struct APISettingsView: View {
                     }.labelsHidden().frame(width: 220, alignment: .leading)
                 }
             }
-            Text("Revisão e perguntas de emergência usam o provedor escolhido. A pesquisa de materiais ainda não está conectada.")
+            Text("Revisão e perguntas usam o provedor de revisão; a busca de materiais usa o provedor de pesquisa. A busca envia apenas passagem e ocasião, nunca o manuscrito.")
                 .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
         }
         .onChange(of: reviewProvider) { _, provider in reviewModel = provider.suggestedModel }

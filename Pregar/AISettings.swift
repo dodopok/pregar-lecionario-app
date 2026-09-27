@@ -23,7 +23,7 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable, Sendable {
         switch self {
         case .openAI: ["gpt-6-sol", "gpt-6-luna"]
         case .anthropic: ["claude-sonnet-5", "claude-haiku-4-5"]
-        case .google: ["gemini-3.8-flash", "gemini-3.8-pro"]
+        case .google: ["gemini-3.8-flash", "gemini-3.1-pro-preview"]
         case .perplexity: ["perplexity/sonar"]
         }
     }
