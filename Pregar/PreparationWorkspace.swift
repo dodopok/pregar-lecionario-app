@@ -746,14 +746,31 @@ struct PreparationWorkspace: View {
             let loadedDay = try await LiturgicalAPIClient(settings: settingsStore.settings, apiKey: key).fetchDay(selectedDate)
             try Task.checkCancellation()
             day = loadedDay
+            let draft = activeDraft
+            var draftChanged = false
+            if let draft {
+                let occasion = loadedDay.sundayName
+                let celebration = loadedDay.celebration?.name ?? loadedDay.celebrations?.first?.name
+                let season = loadedDay.season?.name
+                let prayerBookID = settingsStore.settings.prayerBook
+                draftChanged = draft.liturgicalOccasion != occasion
+                    || draft.liturgicalCelebration != celebration
+                    || draft.liturgicalSeason != season
+                    || draft.prayerBookID != prayerBookID
+                draft.liturgicalOccasion = occasion
+                draft.liturgicalCelebration = celebration
+                draft.liturgicalSeason = season
+                draft.prayerBookID = prayerBookID
+            }
             let preferred = loadedDay.readings?.first(where: { $0.slot == "gospel" }) ?? loadedDay.readings?.first
-            if let draft = activeDraft, draft.mainReadingReference == nil, let preferred {
+            if let draft, draft.mainReadingReference == nil, let preferred {
                 draft.mainReadingReference = preferred.reference
                 draft.mainReadingSlot = preferred.slot
                 if draft.title.isEmpty { draft.title = preferred.reference }
                 draft.modifiedAt = .now
+                draftChanged = true
             }
-            if let draft = activeDraft,
+            if let draft,
                let selected = loadedDay.readings?.first(where: {
                    $0.reference == draft.mainReadingReference && $0.slot == draft.mainReadingSlot
                }) {
@@ -761,6 +778,7 @@ struct PreparationWorkspace: View {
             } else {
                 expandedReadingIDs = []
             }
+            if draftChanged { try? modelContext.save() }
         } catch is CancellationError {
             return
         } catch {

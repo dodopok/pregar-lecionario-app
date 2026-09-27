@@ -5,6 +5,10 @@ import SwiftData
 final class SermonDraft {
     var liturgicalDate: Date
     var title: String
+    var liturgicalOccasion: String?
+    var liturgicalCelebration: String?
+    var liturgicalSeason: String?
+    var prayerBookID: String?
     var mainReadingReference: String?
     var mainReadingSlot: String?
     var modifiedAt: Date
@@ -13,6 +17,10 @@ final class SermonDraft {
     init(liturgicalDate: Date) {
         self.liturgicalDate = Calendar.current.startOfDay(for: liturgicalDate)
         self.title = ""
+        self.liturgicalOccasion = nil
+        self.liturgicalCelebration = nil
+        self.liturgicalSeason = nil
+        self.prayerBookID = nil
         self.mainReadingReference = nil
         self.mainReadingSlot = nil
         self.modifiedAt = .now

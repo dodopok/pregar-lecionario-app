@@ -477,10 +477,40 @@ private struct PDFLibraryMetadataEditor: View {
     }
 }
 
-private enum ArchiveSearchMode: String, CaseIterable {
+enum ArchiveSearchMode: String, CaseIterable {
     case passage = "Passagem"
     case occasion = "Ocasião"
     case date = "Data"
+
+    var placeholder: String {
+        switch self {
+        case .passage: "Mateus 21"
+        case .occasion: "Próprio 22"
+        case .date: "04/10/2026"
+        }
+    }
+
+    func matches(_ draft: SermonDraft, query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return true }
+        let values: [String]
+        switch self {
+        case .passage:
+            values = [draft.mainReadingReference, draft.title].compactMap { $0 }
+        case .occasion:
+            values = [draft.liturgicalOccasion, draft.liturgicalCelebration, draft.liturgicalSeason].compactMap { $0 }
+        case .date:
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "pt_BR")
+            formatter.timeZone = TimeZone.current
+            formatter.dateFormat = "dd/MM/yyyy"
+            let numeric = formatter.string(from: draft.liturgicalDate)
+            formatter.dateFormat = "yyyy-MM-dd"
+            values = [numeric, formatter.string(from: draft.liturgicalDate)]
+        }
+        return values.contains { $0.localizedCaseInsensitiveContains(trimmed) }
+    }
 }
 
 struct SermonArchiveView: View {
@@ -489,20 +519,7 @@ struct SermonArchiveView: View {
     @State private var searchText = ""
 
     private var results: [SermonDraft] {
-        guard !searchText.isEmpty else { return drafts }
-        return drafts.filter { draft in
-            let date = draft.liturgicalDate.formatted(date: .numeric, time: .omitted)
-            let values: [String]
-            switch searchMode {
-            case .passage:
-                values = [draft.mainReadingReference, draft.title].compactMap { $0 }
-            case .occasion:
-                values = [draft.title, draft.mainReadingReference].compactMap { $0 }
-            case .date:
-                values = [date, draft.liturgicalDate.formatted(date: .long, time: .omitted)]
-            }
-            return values.contains { $0.localizedCaseInsensitiveContains(searchText) }
-        }
+        drafts.filter { searchMode.matches($0, query: searchText) }
     }
 
     var body: some View {
@@ -515,7 +532,7 @@ struct SermonArchiveView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 185)
-                TextField(searchMode == .passage ? "Mateus 21" : searchMode == .occasion ? "Próprio 22" : "04/10/2026", text: $searchText)
+                TextField(searchMode.placeholder, text: $searchText)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 250)
             }
@@ -542,9 +559,16 @@ struct SermonArchiveView: View {
                                 Text(draft.liturgicalDate.formatted(.dateTime.day().month(.twoDigits).year().locale(Locale(identifier: "pt_BR"))))
                                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
                                     .frame(width: 100, alignment: .leading)
-                                Text("LOC 2027")
-                                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
-                                    .frame(width: 200, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(draft.liturgicalOccasion ?? draft.liturgicalCelebration ?? "—")
+                                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                                    let context = [draft.liturgicalSeason, draft.liturgicalCelebration == draft.liturgicalOccasion ? nil : draft.liturgicalCelebration]
+                                        .compactMap { $0 }.joined(separator: " · ")
+                                    if !context.isEmpty {
+                                        Text(context).font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted).lineLimit(1)
+                                    }
+                                }
+                                .frame(width: 200, alignment: .leading)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(draft.title.isEmpty ? draft.mainReadingReference ?? "Preparação sem título" : draft.title)
                                         .font(PrototypeStyle.serif(15, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
