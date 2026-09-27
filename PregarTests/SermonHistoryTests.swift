@@ -298,20 +298,34 @@ final class SermonHistoryTests: XCTestCase {
 
     @MainActor
     func testTabletPDFCopyLocationPersistsWithItsSermonDraft() throws {
-        let container = try ModelContainer(
-            for: SermonDraft.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PregarDraftPersistence-(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let schema = Schema([SermonDraft.self])
+        let configuration = ModelConfiguration(
+            "DriveDraftTest",
+            schema: schema,
+            url: directory.appendingPathComponent("Drafts.store"),
+            cloudKitDatabase: .none
         )
-        let draft = SermonDraft(liturgicalDate: .now)
-        draft.tabletPDFPath = "/tmp/2026-10-04 - Mateus 21.pdf"
-        draft.tabletPDFUpdatedAt = Date(timeIntervalSince1970: 1_790_493_600)
-        draft.googleDriveDraftKey = "draft-key-123"
-        container.mainContext.insert(draft)
-        try container.mainContext.save()
+        let expectedPDFPath = "/tmp/2026-10-04 - Mateus 21.pdf"
+        let expectedPDFUpdatedAt = Date(timeIntervalSince1970: 1_790_493_600)
 
-        let restored = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<SermonDraft>()).first)
-        XCTAssertEqual(restored.tabletPDFPath, draft.tabletPDFPath)
-        XCTAssertEqual(restored.tabletPDFUpdatedAt, draft.tabletPDFUpdatedAt)
+        do {
+            let container = try ModelContainer(for: schema, configurations: [configuration])
+            let draft = SermonDraft(liturgicalDate: .now)
+            draft.tabletPDFPath = expectedPDFPath
+            draft.tabletPDFUpdatedAt = expectedPDFUpdatedAt
+            draft.googleDriveDraftKey = "draft-key-123"
+            container.mainContext.insert(draft)
+            try container.mainContext.save()
+        }
+
+        let reopenedContainer = try ModelContainer(for: schema, configurations: [configuration])
+        let restored = try XCTUnwrap(reopenedContainer.mainContext.fetch(FetchDescriptor<SermonDraft>()).first)
+        XCTAssertEqual(restored.tabletPDFPath, expectedPDFPath)
+        XCTAssertEqual(restored.tabletPDFUpdatedAt, expectedPDFUpdatedAt)
         XCTAssertEqual(restored.googleDriveDraftKey, "draft-key-123")
     }
 
