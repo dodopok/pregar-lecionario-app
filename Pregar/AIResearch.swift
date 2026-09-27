@@ -18,9 +18,23 @@ struct AIResearchSource: Codable, Equatable, Identifiable, Sendable {
     let title: String
     let url: URL
     let publishedDate: String?
+    let author: String?
+    let publisher: String?
+    let tradition: String?
+    let language: String?
 
     var id: String { url.absoluteString }
     var domain: String { url.host ?? url.absoluteString }
+
+    var editorialContext: String {
+        let details = [
+            author.map { "Autor: \($0)" },
+            publisher.map { "Instituição: \($0)" },
+            tradition.map { "Tradição: \($0)" },
+            language.map { "Idioma: \($0)" }
+        ].compactMap { $0 }
+        return details.isEmpty ? "Metadados editoriais não informados pela busca" : details.joined(separator: " · ")
+    }
 }
 
 struct AIResearchReport: Codable, Equatable, Identifiable, Sendable {
@@ -95,7 +109,7 @@ struct AIResearchClient {
             ? "Do not invent a source or author."
             : "Prioritize these user-selected authors when relevant: \(preferredAuthors). Do not invent a source or author."
         let instructions = """
-        Find existing web sources about the specified biblical passage. Search for biblical commentaries, exegetical articles, lectionary reflections, or sermons by serious Anglican, Catholic, and Protestant scholars and institutions. \(authorInstruction) Return source links and titles only. Do not interpret the passage, summarize theology, suggest sermon ideas or applications, or draft any wording. Search only for this public passage and occasion; no sermon manuscript or personal text is provided.
+        Find existing web sources about the specified biblical passage. Search for biblical commentaries, exegetical articles, lectionary reflections, or sermons by serious Anglican, Catholic, and Protestant scholars and institutions. Prefer named scholars and identifiable scholarly or church publishers. \(authorInstruction) Return source links and titles only, with author, publisher, publication date, language, and self-identified tradition only when explicitly available in source metadata. Omit unknown metadata; never infer an author's denomination or tradition from a name or domain. Do not interpret the passage, summarize theology, suggest sermon ideas or applications, or draft any wording. Search only for this public passage and occasion; no sermon manuscript or personal text is provided.
         """
 
         let endpoint: URL
@@ -213,10 +227,43 @@ struct AIResearchClient {
             return AIResearchSource(
                 title: title.flatMap { $0.isEmpty ? nil : $0 } ?? host,
                 url: url,
-                publishedDate: candidate["date"] as? String ?? candidate["page_age"] as? String
+                publishedDate: metadataText(in: candidate, keys: ["date", "published_date", "page_age"]),
+                author: metadataText(in: candidate, keys: ["author", "authors", "byline", "creator"]),
+                publisher: metadataText(in: candidate, keys: ["publisher", "site_name", "organization"]),
+                tradition: metadataText(in: candidate, keys: ["tradition", "denomination", "church_tradition"]),
+                language: metadataText(in: candidate, keys: ["language", "lang"])
             )
         }
         .prefix(12)
         .map { $0 }
+    }
+
+    private static func metadataText(in candidate: [String: Any], keys: [String]) -> String? {
+        for key in keys {
+            guard let value = candidate[key] else { continue }
+            let text: String?
+            if let value = value as? String {
+                text = value
+            } else if let values = value as? [String] {
+                text = values.joined(separator: ", ")
+            } else if let values = value as? [Any] {
+                text = values.compactMap { item in
+                    if let string = item as? String { return string }
+                    if let object = item as? [String: Any] { return object["name"] as? String }
+                    return nil
+                }.joined(separator: ", ")
+            } else if let object = value as? [String: Any] {
+                text = object["name"] as? String ?? object["label"] as? String
+            } else {
+                text = nil
+            }
+
+            let normalized = text?
+                .components(separatedBy: .newlines)
+                .joined(separator: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if let normalized, !normalized.isEmpty, normalized.count <= 180 { return normalized }
+        }
+        return nil
     }
 }

@@ -26,6 +26,14 @@ final class AIResearchTests: XCTestCase {
             XCTAssertEqual(sources.count, 1)
             XCTAssertEqual(sources.first?.title, "Commentary on Romans 13")
             XCTAssertEqual(sources.first?.publishedDate, "2026-05-12")
+            XCTAssertEqual(sources.first?.author, "Dr. Rowan Williams")
+            XCTAssertEqual(sources.first?.publisher, "Theology Journal")
+            XCTAssertEqual(sources.first?.tradition, "Anglican")
+            XCTAssertEqual(sources.first?.language, "en")
+            XCTAssertEqual(
+                sources.first?.editorialContext,
+                "Autor: Dr. Rowan Williams · Instituição: Theology Journal · Tradição: Anglican · Idioma: en"
+            )
             XCTAssertEqual(captured?.httpMethod, "POST")
             XCTAssertEqual(captured?.url?.host, Self.expectedHost(for: provider))
             XCTAssertEqual(captured?.url?.path, Self.expectedPath(for: provider))
@@ -67,6 +75,7 @@ final class AIResearchTests: XCTestCase {
             XCTAssertFalse(request.url?.absoluteString.contains("secret-key") ?? true)
             XCTAssertTrue(body.range(of: Data("N. T. Wright".utf8)) != nil)
             XCTAssertTrue(body.range(of: Data("sem manuscrito".utf8)) != nil || body.range(of: Data("no sermon manuscript".utf8)) != nil)
+            XCTAssertTrue(body.range(of: Data("never infer an author's denomination".utf8)) != nil)
 
             switch provider {
             case .openAI:
@@ -124,6 +133,33 @@ final class AIResearchTests: XCTestCase {
         }
     }
 
+    func testMissingEditorialMetadataIsNotInferredAndOldSourcesRemainReadable() throws {
+        let payload: [String: Any] = ["output": [[
+            "type": "web_search_call",
+            "action": ["sources": [[
+                "title": "Commentary on Romans",
+                "url": "https://anglican.example.org/romans"
+            ]]]
+        ]]]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        let source = try XCTUnwrap(AIResearchClient.sources(in: data, from: .openAI).first)
+
+        XCTAssertNil(source.author)
+        XCTAssertNil(source.publisher)
+        XCTAssertNil(source.tradition)
+        XCTAssertNil(source.language)
+        XCTAssertEqual(source.editorialContext, "Metadados editoriais não informados pela busca")
+
+        let olderReportSource = Data("""
+        {"title":"Saved commentary","url":"https://example.org/old","publishedDate":null}
+        """.utf8)
+        let restored = try JSONDecoder().decode(AIResearchSource.self, from: olderReportSource)
+        XCTAssertNil(restored.author)
+        XCTAssertNil(restored.publisher)
+        XCTAssertNil(restored.tradition)
+        XCTAssertNil(restored.language)
+    }
+
     private func configuration(for provider: AIProvider) -> AIResearchConfiguration {
         AIResearchConfiguration(provider: provider, model: provider.suggestedModel, apiKey: "secret-key")
     }
@@ -156,21 +192,30 @@ final class AIResearchTests: XCTestCase {
         let source: [String: Any] = [
             "title": "Commentary on Romans 13",
             "url": "https://example.org/romans-13",
-            "date": "2026-05-12"
+            "date": "2026-05-12",
+            "author": "Dr. Rowan Williams",
+            "publisher": "Theology Journal",
+            "tradition": "Anglican",
+            "language": "en"
         ]
         let payload: [String: Any]
         switch provider {
         case .openAI:
             payload = ["output": [["type": "web_search_call", "action": ["sources": [source]]]]]
         case .anthropic:
+            var result = source
+            result["type"] = "web_search_result"
+            result["page_age"] = "2026-05-12"
             payload = ["content": [[
                 "type": "web_search_tool_result",
-                "content": [["type": "web_search_result", "title": source["title"]!, "url": source["url"]!, "page_age": "2026-05-12"]]
+                "content": [result]
             ]]]
         case .google:
+            var annotation = source
+            annotation["type"] = "url_citation"
             payload = ["steps": [[
                 "type": "model_output",
-                "content": [["type": "text", "annotations": [["type": "url_citation", "title": source["title"]!, "url": source["url"]!, "date": "2026-05-12"]]]]
+                "content": [["type": "text", "annotations": [annotation]]]
             ]]]
         case .perplexity:
             payload = ["output": [
