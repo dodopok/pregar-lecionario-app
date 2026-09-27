@@ -203,6 +203,7 @@ final class PDFLibraryIndexerTests: XCTestCase {
 
         XCTAssertEqual(result.candidatePageCount, 1)
         XCTAssertEqual(result.scannedPageCount, 1)
+        XCTAssertEqual(result.recognizedTextPageCount, 1)
         XCTAssertEqual(section.startPage, 1)
         XCTAssertEqual(section.confidenceLabel, "baixa · conferir")
         XCTAssertFalse(section.hasHighConfidence)
@@ -213,6 +214,26 @@ final class PDFLibraryIndexerTests: XCTestCase {
         let reindexed = try XCTUnwrap(PDFLibraryIndexer.index(path: url.path, previousRecord: result.record))
         XCTAssertEqual(reindexed.ocrPageNumbers, [1])
         XCTAssertTrue(reindexed.sections?.contains { $0.findingMethod == .ocrHeading } == true)
+    }
+
+    func testRealImageOnlyDownloadUsesOCRWithoutChangingSource() throws {
+        guard let url = downloadedPDF(containing: "16_16_13_compressed") else {
+            throw XCTSkip("A local image-only scan is not available in ~/Downloads")
+        }
+        let original = try Data(contentsOf: url)
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        XCTAssertEqual(document.pageCount, 21)
+        XCTAssertTrue((0..<document.pageCount).allSatisfy { pageNumber in
+            document.page(at: pageNumber)?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+        })
+
+        let result = try XCTUnwrap(PDFLibraryIndexer.recognizeScannedPages(path: url.path, previousRecord: nil))
+
+        XCTAssertEqual(result.candidatePageCount, 21)
+        XCTAssertEqual(result.scannedPageCount, 21)
+        XCTAssertGreaterThan(result.recognizedTextPageCount, 0)
+        XCTAssertEqual(result.record.ocrPageNumbers?.count, 21)
+        XCTAssertEqual(try Data(contentsOf: url), original, "OCR must not modify the downloaded source")
     }
 
     func testRealFeastingVolumeFourRomansUnitWhenAvailable() throws {

@@ -109,6 +109,7 @@ struct PDFLibraryOCRResult: Sendable {
     let record: PDFLibraryRecord
     let candidatePageCount: Int
     let scannedPageCount: Int
+    let recognizedTextPageCount: Int
     let sectionsFound: Int
 }
 
@@ -374,6 +375,7 @@ enum PDFLibraryIndexer {
             record: record,
             candidatePageCount: candidatePages.count,
             scannedPageCount: pagesToScan.count,
+            recognizedTextPageCount: recognizedText.count,
             sectionsFound: max(0, (record.sections?.count ?? 0) - previousSectionCount)
         )
     }

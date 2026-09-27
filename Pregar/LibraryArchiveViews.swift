@@ -471,7 +471,7 @@ struct PDFLibraryView: View {
             } else if result.scannedPageCount == 0 {
                 ocrNotice = "As páginas digitalizadas deste arquivo já foram examinadas."
             } else {
-                ocrNotice = "OCR examinou \(result.scannedPageCount) de \(result.candidatePageCount) páginas digitalizadas e identificou \(result.sectionsFound) novas referências."
+                ocrNotice = "OCR examinou \(result.scannedPageCount) de \(result.candidatePageCount) páginas, reconheceu texto em \(result.recognizedTextPageCount) e identificou \(result.sectionsFound) novas referências."
             }
         }
     }
