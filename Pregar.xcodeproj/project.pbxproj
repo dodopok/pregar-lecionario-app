@@ -8,9 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */; };
+		11DF447737C4F2F6B3A484EE /* WorkspaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */; };
+		2236BE23F5A46EA6012ECFD1 /* PrototypeStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */; };
 		39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */; };
+		3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495567BA510561B3883455A /* LibraryArchiveViews.swift */; };
 		515BA5D71E86AA58E543FE54 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */; };
 		68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */; };
+		7DF5C8B29B917622A6B03CAA /* WorkspaceSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */; };
 		99645F1CBB2F74C88E281950 /* PregarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478AAAADD24805C4AAF1C997 /* PregarApp.swift */; };
 		AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D8516E9667268B7075CEB2 /* APISettings.swift */; };
 		FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */; };
@@ -18,13 +22,17 @@
 
 /* Begin PBXFileReference section */
 		0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
+		2495567BA510561B3883455A /* LibraryArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryArchiveViews.swift; sourceTree = "<group>"; };
+		39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrototypeStyle.swift; sourceTree = "<group>"; };
 		478AAAADD24805C4AAF1C997 /* PregarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PregarApp.swift; sourceTree = "<group>"; };
 		4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonDraft.swift; sourceTree = "<group>"; };
 		547C3A36015E310F5E8EDD26 /* Pregar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pregar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettingsView.swift; sourceTree = "<group>"; };
 		74D8516E9667268B7075CEB2 /* APISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettings.swift; sourceTree = "<group>"; };
 		9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparationWorkspace.swift; sourceTree = "<group>"; };
+		9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSheets.swift; sourceTree = "<group>"; };
 		A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiturgicalAPI.swift; sourceTree = "<group>"; };
+		A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChrome.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -49,11 +57,15 @@
 			children = (
 				74D8516E9667268B7075CEB2 /* APISettings.swift */,
 				62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */,
+				2495567BA510561B3883455A /* LibraryArchiveViews.swift */,
 				A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */,
 				478AAAADD24805C4AAF1C997 /* PregarApp.swift */,
 				9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */,
+				39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */,
 				0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */,
 				4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */,
+				A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */,
+				9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */,
 			);
 			path = Pregar;
 			sourceTree = "<group>";
@@ -115,11 +127,15 @@
 			files = (
 				AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */,
 				39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */,
+				3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */,
 				00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */,
 				99645F1CBB2F74C88E281950 /* PregarApp.swift in Sources */,
 				FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */,
+				2236BE23F5A46EA6012ECFD1 /* PrototypeStyle.swift in Sources */,
 				515BA5D71E86AA58E543FE54 /* RichTextEditor.swift in Sources */,
 				68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */,
+				11DF447737C4F2F6B3A484EE /* WorkspaceChrome.swift in Sources */,
+				7DF5C8B29B917622A6B03CAA /* WorkspaceSheets.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

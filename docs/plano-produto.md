@@ -234,7 +234,9 @@ Direção proposta: consumir a API existente para calendário e Bíblia. Manter 
 
 ## 7. Plataforma e limites da primeira versão
 
-Decisão provisória de implementação: começar com um app nativo para macOS, priorizando armazenamento local, janelas independentes, editor e leitores integrados. O primeiro protótipo usa SwiftUI; PDFKit e WebKit permanecem candidatos para as etapas de leitura. A Apple oferece suporte a [múltiplas janelas](https://developer.apple.com/documentation/swiftui/windows), [PDFs](https://developer.apple.com/documentation/pdfkit) e [páginas web](https://developer.apple.com/documentation/webkit/wkwebview).
+Decisão de implementação: começar com um app nativo para macOS, priorizando armazenamento local, janelas independentes, editor e leitores integrados. O protótipo de referência visual e de interação é [Pregar para macOS](https://marvelous-syrniki-65b530.netlify.app/pregar-macos.html), com as telas 3a–3f fornecidas pelo usuário. SwiftUI, PDFKit e WebKit são a base inicial do app. A Apple oferece suporte a [múltiplas janelas](https://developer.apple.com/documentation/swiftui/windows), [PDFs](https://developer.apple.com/documentation/pdfkit) e [páginas web](https://developer.apple.com/documentation/webkit/wkwebview).
+
+Na reprodução visual, conservar a composição, hierarquia tipográfica, painéis recolhíveis, abas e folhas demonstradas no protótipo. A cor de acento segue a cor litúrgica do dia fornecida pela API, não uma cor fixa. O host da Estêvão API é sempre `https://api.caminhoanglicano.com.br` e não é editável, mesmo que uma captura do protótipo mostre um campo de endereço de exemplo.
 
 A escolha do componente de edição permanece aberta. Notas de rodapé, citações, persistência e exportação precisam ser comprovadas num pequeno protótipo antes de fechar a tecnologia. A possibilidade de usar um componente web dentro do app pode ser avaliada nessa etapa, sem assumir que a interface atual do lecionário resolve a escrita.
 

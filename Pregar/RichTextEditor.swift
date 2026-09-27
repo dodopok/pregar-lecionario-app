@@ -45,6 +45,26 @@ final class EditorCommands: ObservableObject {
         textView.didChangeText()
     }
 
+    func footnote() {
+        guard let textView, let storage = textView.textStorage else { return }
+        let marks = ["¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"]
+        let used = marks.filter { textView.string.contains($0) }.count
+        let number = used + 1
+        let marker = number <= marks.count ? marks[number - 1] : "¹\(number)"
+        let selection = textView.selectedRange()
+        let markerText = NSAttributedString(string: marker, attributes: [
+            .font: NSFont.systemFont(ofSize: 8),
+            .baselineOffset: 4
+        ])
+        storage.replaceCharacters(in: selection, with: markerText)
+        storage.append(NSAttributedString(string: "\n\n\(marker) ", attributes: [
+            .font: NSFont.systemFont(ofSize: 10)
+        ]))
+        textView.setSelectedRange(NSRange(location: storage.length - 1, length: 0))
+        textView.scrollRangeToVisible(textView.selectedRange())
+        textView.didChangeText()
+    }
+
     private func styleSelection(_ font: (NSFont) -> NSFont) {
         guard let textView, let storage = textView.textStorage else { return }
         let range = paragraphRange(in: textView)
@@ -103,6 +123,7 @@ struct RichTextEditor: NSViewRepresentable {
         let textView = NSTextView()
         textView.isRichText = true
         textView.allowsUndo = true
+        textView.drawsBackground = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
         textView.font = NSFont(name: "Arial", size: 10)
