@@ -229,8 +229,8 @@ struct APISettingsView: View {
                 PreferenceRow(label: "Livro de oração") {
                     Button { showsPrayerBookPicker = true } label: {
                         HStack(spacing: 10) {
-                            PrayerBookCover(book: selectedPrayerBook, width: 38, height: 50, accent: accent)
-                            VStack(alignment: .leading, spacing: 3) {
+                            PrayerBookCover(book: selectedPrayerBook, width: 42, height: 56, accent: accent)
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(selectedPrayerBook.name)
                                     .font(PrototypeStyle.serif(14, weight: .semibold))
                                     .foregroundStyle(PrototypeStyle.ink)
@@ -239,6 +239,11 @@ struct APISettingsView: View {
                                     .font(.system(size: 11))
                                     .foregroundStyle(PrototypeStyle.muted)
                                     .lineLimit(1)
+                                Text(selectedPrayerBook.displayDescription)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(PrototypeStyle.muted)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
                             }
                             Spacer(minLength: 4)
                             Image(systemName: "chevron.up.chevron.down")
@@ -250,7 +255,7 @@ struct APISettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Escolher livro de oração")
-                    .accessibilityLabel("Livro de oração: \(selectedPrayerBook.name). Escolher outro.")
+                    .accessibilityLabel("Livro de oração: \(selectedPrayerBook.name). \(prayerBookSubtitle(selectedPrayerBook)). \(selectedPrayerBook.displayDescription). Escolher outro.")
                 }
                 PreferenceRow(label: "Leituras dominicais") {
                     Picker("Leituras dominicais", selection: $settings.readingType) {
