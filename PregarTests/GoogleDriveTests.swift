@@ -41,7 +41,12 @@ final class GoogleDriveTests: XCTestCase {
         quoteStyle.headIndent = 22
         quoteStyle.firstLineHeadIndent = 22
         quoteStyle.tailIndent = -12
-        source.addAttribute(.paragraphStyle, value: quoteStyle, range: NSRange(location: 12, length: 12))
+        quoteStyle.paragraphSpacingBefore = 7
+        quoteStyle.paragraphSpacing = 9
+        let quoteRange = NSRange(location: 12, length: 12)
+        source.addAttribute(.paragraphStyle, value: quoteStyle, range: quoteRange)
+        source.addAttribute(.foregroundColor, value: NSColor(calibratedRed: 0.17, green: 0.39, blue: 0.27, alpha: 1), range: quoteRange)
+        source.addAttribute(.backgroundColor, value: NSColor(calibratedRed: 0.89, green: 0.93, blue: 0.89, alpha: 1), range: quoteRange)
         let data = try source.data(
             from: NSRange(location: 0, length: source.length),
             documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
@@ -51,15 +56,52 @@ final class GoogleDriveTests: XCTestCase {
 
         XCTAssertEqual(content.text, "Sermão fiel\nUma citação\n")
         XCTAssertTrue(content.styles.contains { $0.range.location == 0 && $0.bold && $0.fontSize >= 13 })
+        XCTAssertTrue(content.styles.contains { $0.foregroundColor != nil && $0.backgroundColor != nil })
         XCTAssertTrue(content.paragraphs.contains { $0.headingType == "HEADING_2" })
         XCTAssertTrue(content.paragraphs.contains { $0.indentStart > 0 }, "Paragraph styles: \(content.paragraphs)")
+        XCTAssertTrue(content.paragraphs.contains { $0.spacingBefore == 7 && $0.spacingAfter == 9 })
+    }
+
+    func testRTFConversionPreservesBulletsAndSuperscriptFootnoteMarkers() throws {
+        let source = NSMutableAttributedString(string: "• Um item\nTexto¹\n\n¹ Nota de rodapé\n")
+        let markerRange = (source.string as NSString).range(of: "¹")
+        source.addAttributes([
+            .font: NSFont.systemFont(ofSize: 8),
+            .baselineOffset: 4
+        ], range: markerRange)
+        let data = try source.data(
+            from: NSRange(location: 0, length: source.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+
+        let content = try GoogleDocsContent.fromRTF(data)
+
+        XCTAssertEqual(content.text, source.string)
+        XCTAssertTrue(content.text.hasPrefix("• Um item\n"))
+        XCTAssertTrue(content.styles.contains { $0.range == markerRange && $0.superscript })
     }
 
     func testBatchUpdateRequiresRemoteRevisionAndUsesUTF16Ranges() throws {
         let content = GoogleDocsContent(
             text: "A 😀 B\n",
-            styles: [.init(range: NSRange(location: 2, length: 2), fontName: "Arial", fontSize: 14, bold: true, italic: false, superscript: false)],
-            paragraphs: [.init(range: NSRange(location: 0, length: 7), indentStart: 22, indentFirstLine: 22, indentEnd: 12, headingType: "HEADING_2")]
+            styles: [.init(
+                range: NSRange(location: 2, length: 2),
+                fontName: "Arial",
+                fontSize: 14,
+                bold: true,
+                italic: false,
+                superscript: false,
+                backgroundColor: .init(color: NSColor(calibratedRed: 0.89, green: 0.93, blue: 0.89, alpha: 1))
+            )],
+            paragraphs: [.init(
+                range: NSRange(location: 0, length: 7),
+                indentStart: 22,
+                indentFirstLine: 22,
+                indentEnd: 12,
+                headingType: "HEADING_2",
+                spacingBefore: 7,
+                spacingAfter: 9
+            )]
         )
 
         let body = GoogleDriveAPI.batchUpdateBody(content: content, currentEndIndex: 15, requiredRevisionID: "revision-8")
@@ -73,6 +115,10 @@ final class GoogleDriveTests: XCTestCase {
         let writeControl = try XCTUnwrap(body["writeControl"] as? [String: String])
         let paragraphUpdate = try XCTUnwrap(requests.compactMap { $0["updateParagraphStyle"] as? [String: Any] }.first)
         let paragraphFields = try XCTUnwrap(paragraphUpdate["fields"] as? String)
+        let textStyle = try XCTUnwrap(styledUpdate["textStyle"] as? [String: Any])
+        let backgroundColor = try XCTUnwrap(textStyle["backgroundColor"] as? [String: Any])
+        let optionalColor = try XCTUnwrap(backgroundColor["color"] as? [String: Any])
+        let rgbColor = try XCTUnwrap(optionalColor["rgbColor"] as? [String: Double])
 
         XCTAssertEqual(deletedRange["startIndex"], 1)
         XCTAssertEqual(deletedRange["endIndex"], 14)
@@ -81,6 +127,9 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(range["endIndex"], 5)
         XCTAssertEqual(writeControl["requiredRevisionId"], "revision-8")
         XCTAssertTrue(paragraphFields.contains("namedStyleType"))
+        XCTAssertTrue(paragraphFields.contains("spaceAbove"))
+        XCTAssertTrue(paragraphFields.contains("spaceBelow"))
+        XCTAssertEqual(try XCTUnwrap(rgbColor["green"]), 0.93, accuracy: 0.03)
     }
 
     func testDocumentFetchExtractsTextAndUsesBearerToken() async throws {

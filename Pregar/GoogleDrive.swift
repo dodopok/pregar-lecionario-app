@@ -437,6 +437,23 @@ struct GoogleDocsContent {
     let styles: [StyleRun]
     let paragraphs: [ParagraphRun]
 
+    struct RGBColor: Equatable {
+        let red: Double
+        let green: Double
+        let blue: Double
+
+        init?(color: NSColor) {
+            guard let color = color.usingColorSpace(.deviceRGB) else { return nil }
+            red = Double(color.redComponent)
+            green = Double(color.greenComponent)
+            blue = Double(color.blueComponent)
+        }
+
+        var docsValue: [String: Any] {
+            ["color": ["rgbColor": ["red": red, "green": green, "blue": blue]]]
+        }
+    }
+
     struct StyleRun: Equatable {
         let range: NSRange
         let fontName: String
@@ -444,6 +461,28 @@ struct GoogleDocsContent {
         let bold: Bool
         let italic: Bool
         let superscript: Bool
+        let foregroundColor: RGBColor?
+        let backgroundColor: RGBColor?
+
+        init(
+            range: NSRange,
+            fontName: String,
+            fontSize: Double,
+            bold: Bool,
+            italic: Bool,
+            superscript: Bool,
+            foregroundColor: RGBColor? = nil,
+            backgroundColor: RGBColor? = nil
+        ) {
+            self.range = range
+            self.fontName = fontName
+            self.fontSize = fontSize
+            self.bold = bold
+            self.italic = italic
+            self.superscript = superscript
+            self.foregroundColor = foregroundColor
+            self.backgroundColor = backgroundColor
+        }
     }
 
     struct ParagraphRun: Equatable {
@@ -452,6 +491,26 @@ struct GoogleDocsContent {
         let indentFirstLine: Double
         let indentEnd: Double
         let headingType: String?
+        let spacingBefore: Double
+        let spacingAfter: Double
+
+        init(
+            range: NSRange,
+            indentStart: Double,
+            indentFirstLine: Double,
+            indentEnd: Double,
+            headingType: String?,
+            spacingBefore: Double = 0,
+            spacingAfter: Double = 0
+        ) {
+            self.range = range
+            self.indentStart = indentStart
+            self.indentFirstLine = indentFirstLine
+            self.indentEnd = indentEnd
+            self.headingType = headingType
+            self.spacingBefore = spacingBefore
+            self.spacingAfter = spacingAfter
+        }
     }
 
     init(text: String, styles: [StyleRun], paragraphs: [ParagraphRun] = []) {
@@ -469,18 +528,22 @@ struct GoogleDocsContent {
         let text = attributed.string
         let fullRange = NSRange(location: 0, length: attributed.length)
         var runs: [StyleRun] = []
-        attributed.enumerateAttribute(.font, in: fullRange) { value, range, _ in
+        attributed.enumerateAttributes(in: fullRange) { attributes, range, _ in
             guard range.length > 0 else { return }
-            let font = value as? NSFont ?? NSFont(name: "Arial", size: 10) ?? .systemFont(ofSize: 10)
+            let font = attributes[.font] as? NSFont ?? NSFont(name: "Arial", size: 10) ?? .systemFont(ofSize: 10)
             let traits = font.fontDescriptor.symbolicTraits
-            let superscript = ((attributed.attribute(.baselineOffset, at: range.location, effectiveRange: nil) as? NSNumber)?.doubleValue ?? 0) > 0
+            let superscript = ((attributes[.baselineOffset] as? NSNumber)?.doubleValue ?? 0) > 0
+            let foregroundColor = (attributes[.foregroundColor] as? NSColor).flatMap(RGBColor.init(color:))
+            let backgroundColor = (attributes[.backgroundColor] as? NSColor).flatMap(RGBColor.init(color:))
             let run = StyleRun(
                 range: range,
                 fontName: font.familyName ?? "Arial",
                 fontSize: Double(font.pointSize),
                 bold: traits.contains(.bold),
                 italic: traits.contains(.italic),
-                superscript: superscript
+                superscript: superscript,
+                foregroundColor: foregroundColor,
+                backgroundColor: backgroundColor
             )
             if let last = runs.last,
                NSMaxRange(last.range) == range.location,
@@ -488,14 +551,18 @@ struct GoogleDocsContent {
                last.fontSize == run.fontSize,
                last.bold == run.bold,
                last.italic == run.italic,
-               last.superscript == run.superscript {
+               last.superscript == run.superscript,
+               last.foregroundColor == run.foregroundColor,
+               last.backgroundColor == run.backgroundColor {
                 runs[runs.count - 1] = StyleRun(
                     range: NSRange(location: last.range.location, length: last.range.length + range.length),
                     fontName: last.fontName,
                     fontSize: last.fontSize,
                     bold: last.bold,
                     italic: last.italic,
-                    superscript: last.superscript
+                    superscript: last.superscript,
+                    foregroundColor: last.foregroundColor,
+                    backgroundColor: last.backgroundColor
                 )
             } else {
                 runs.append(run)
@@ -514,9 +581,11 @@ struct GoogleDocsContent {
                 indentStart: Double(max(0, style.headIndent)),
                 indentFirstLine: Double(max(0, style.firstLineHeadIndent)),
                 indentEnd: Double(max(0, -style.tailIndent)),
-                headingType: isHeading ? "HEADING_2" : nil
+                headingType: isHeading ? "HEADING_2" : nil,
+                spacingBefore: Double(max(0, style.paragraphSpacingBefore)),
+                spacingAfter: Double(max(0, style.paragraphSpacing))
             )
-            if run.indentStart > 0 || run.indentFirstLine > 0 || run.indentEnd > 0 || run.headingType != nil {
+            if run.indentStart > 0 || run.indentFirstLine > 0 || run.indentEnd > 0 || run.headingType != nil || run.spacingBefore > 0 || run.spacingAfter > 0 {
                 paragraphs.append(run)
             }
             paragraphLocation = NSMaxRange(range)
@@ -618,23 +687,26 @@ struct GoogleDriveAPI {
                     "weightedFontFamily": ["fontFamily": "Arial"],
                     "fontSize": ["magnitude": 10, "unit": "PT"]
                 ],
-                "fields": "bold,italic,baselineOffset,weightedFontFamily,fontSize"
+                "fields": "bold,italic,baselineOffset,weightedFontFamily,fontSize,foregroundColor,backgroundColor"
             ]])
-            for style in content.styles where style.bold || style.italic || style.superscript || style.fontSize != 10 || style.fontName != "Arial" {
+            for style in content.styles where style.bold || style.italic || style.superscript || style.fontSize != 10 || style.fontName != "Arial" || style.foregroundColor != nil || style.backgroundColor != nil {
                 let range: [String: Int] = [
                     "startIndex": style.range.location + 1,
                     "endIndex": NSMaxRange(style.range) + 1
                 ]
+                var textStyle: [String: Any] = [
+                    "bold": style.bold,
+                    "italic": style.italic,
+                    "baselineOffset": style.superscript ? "SUPERSCRIPT" : "BASELINE",
+                    "weightedFontFamily": ["fontFamily": style.fontName],
+                    "fontSize": ["magnitude": style.fontSize, "unit": "PT"]
+                ]
+                if let foregroundColor = style.foregroundColor { textStyle["foregroundColor"] = foregroundColor.docsValue }
+                if let backgroundColor = style.backgroundColor { textStyle["backgroundColor"] = backgroundColor.docsValue }
                 requests.append(["updateTextStyle": [
                     "range": range,
-                    "textStyle": [
-                        "bold": style.bold,
-                        "italic": style.italic,
-                        "baselineOffset": style.superscript ? "SUPERSCRIPT" : "BASELINE",
-                        "weightedFontFamily": ["fontFamily": style.fontName],
-                        "fontSize": ["magnitude": style.fontSize, "unit": "PT"]
-                    ],
-                    "fields": "bold,italic,baselineOffset,weightedFontFamily,fontSize"
+                    "textStyle": textStyle,
+                    "fields": "bold,italic,baselineOffset,weightedFontFamily,fontSize,foregroundColor,backgroundColor"
                 ]])
             }
             for paragraph in content.paragraphs {
@@ -651,6 +723,14 @@ struct GoogleDriveAPI {
                 if paragraph.indentEnd > 0 {
                     paragraphStyle["indentEnd"] = ["magnitude": paragraph.indentEnd, "unit": "PT"]
                     fields.append("indentEnd")
+                }
+                if paragraph.spacingBefore > 0 {
+                    paragraphStyle["spaceAbove"] = ["magnitude": paragraph.spacingBefore, "unit": "PT"]
+                    fields.append("spaceAbove")
+                }
+                if paragraph.spacingAfter > 0 {
+                    paragraphStyle["spaceBelow"] = ["magnitude": paragraph.spacingAfter, "unit": "PT"]
+                    fields.append("spaceBelow")
                 }
                 if let headingType = paragraph.headingType {
                     paragraphStyle["namedStyleType"] = headingType
