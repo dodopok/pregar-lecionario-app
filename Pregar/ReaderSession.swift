@@ -84,6 +84,7 @@ final class ReaderSessionStore: ObservableObject {
 
     private let archiveKey = "reader.session.v1"
     private let linksKey = "reader.section-links.v1"
+    private let userDefaults: UserDefaults
     private var pdfDocuments: [String: PDFDocument] = [:]
     private var pdfSections: [String: [PDFSectionLocation]] = [:]
     private var sectionTasks: [String: Task<[PDFSectionLocation], Never>] = [:]
@@ -91,8 +92,9 @@ final class ReaderSessionStore: ObservableObject {
     private var rememberedPages: [String: Int] = [:]
     private var pendingPagePersistence: Task<Void, Never>?
 
-    init() {
-        if let data = UserDefaults.standard.data(forKey: archiveKey),
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        if let data = userDefaults.data(forKey: archiveKey),
            let archive = try? JSONDecoder().decode(ReaderArchive.self, from: data) {
             tabs = archive.tabs.filter { tab in
                 switch tab.kind {
@@ -104,7 +106,7 @@ final class ReaderSessionStore: ObservableObject {
             }
             selectedID = archive.selectedID.flatMap { id in tabs.contains(where: { $0.id == id }) ? id : nil }
         }
-        if let data = UserDefaults.standard.data(forKey: linksKey),
+        if let data = userDefaults.data(forKey: linksKey),
            let links = try? JSONDecoder().decode([String: Int].self, from: data) {
             rememberedPages = links
         }
@@ -322,7 +324,7 @@ final class ReaderSessionStore: ObservableObject {
         let page = startPage ?? section?.startPage ?? tab.physicalPage
         rememberedPages[sectionLinkKey(path: tab.location, reference: reference)] = page
         if let data = try? JSONEncoder().encode(rememberedPages) {
-            UserDefaults.standard.set(data, forKey: linksKey)
+            userDefaults.set(data, forKey: linksKey)
         }
     }
 
@@ -355,7 +357,7 @@ final class ReaderSessionStore: ObservableObject {
     private func persistNow() {
         let archive = ReaderArchive(tabs: tabs, selectedID: selectedID)
         guard let data = try? JSONEncoder().encode(archive) else { return }
-        UserDefaults.standard.set(data, forKey: archiveKey)
+        userDefaults.set(data, forKey: archiveKey)
     }
 }
 

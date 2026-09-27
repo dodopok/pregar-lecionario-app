@@ -79,6 +79,84 @@ final class SermonHistoryTests: XCTestCase {
     }
 
     @MainActor
+    func testReaderSessionRestoresTabsPDFPageSelectionAndPericopeLink() throws {
+        let suiteName = "Pregar.ReaderSessionTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(suiteName, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let paragraph = "Jesus conta a parábola dos lavradores e revela a paciência do proprietário. "
+        let manuscript = NSAttributedString(string: String(repeating: paragraph, count: 600))
+        let rtfData = try manuscript.data(
+            from: NSRange(location: 0, length: manuscript.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        let pdfData = try TabletPDFExporter.makePDF(
+            rtfData: rtfData,
+            title: "Mateus 21.33-46",
+            subtitle: nil,
+            fontName: "Arial",
+            fontSize: 14,
+            includeFootnotes: true
+        )
+        let generatedPDF = try XCTUnwrap(PDFDocument(data: pdfData))
+        XCTAssertGreaterThanOrEqual(generatedPDF.pageCount, 3)
+
+        let pdfURL = directory.appendingPathComponent("commentary.pdf")
+        try pdfData.write(to: pdfURL, options: .atomic)
+
+        var originalWebTabID: UUID?
+        do {
+            let session = ReaderSessionStore(userDefaults: defaults)
+            XCTAssertTrue(session.openPDF(
+                title: "Comentário",
+                path: pdfURL.path,
+                page: 1,
+                reference: "Mateus 21.33-46",
+                sermonDateKey: "2026-10-04"
+            ))
+            let pdfTab = try XCTUnwrap(session.tabs.first)
+            session.setPage(2, for: pdfTab.id)
+            session.flushPagePersistence()
+            session.rememberLink(
+                for: pdfTab,
+                section: PDFSectionLocation(title: "Mateus 21.33-46", startPage: 3, endPage: 4)
+            )
+
+            XCTAssertTrue(session.openWeb(
+                title: "Working Preacher",
+                url: try XCTUnwrap(URL(string: "https://www.workingpreacher.org/example")),
+                reference: "Mateus 21.33-46",
+                sermonDateKey: "2026-10-04"
+            ))
+            originalWebTabID = session.selectedTab?.id
+        }
+
+        let restored = ReaderSessionStore(userDefaults: defaults)
+        XCTAssertEqual(restored.tabs.count, 2)
+        XCTAssertEqual(restored.selectedTab?.id, originalWebTabID)
+        XCTAssertEqual(restored.selectedTab?.title, "Working Preacher")
+        let restoredPDF = try XCTUnwrap(restored.tabs.first(where: { $0.kind == .pdf }))
+        XCTAssertEqual(restoredPDF.physicalPage, 2)
+        XCTAssertEqual(restoredPDF.sermonDateKey, "2026-10-04")
+
+        if let selectedID = restored.selectedID { restored.close(selectedID) }
+        XCTAssertTrue(restored.openPDF(
+            title: "Comentário",
+            path: pdfURL.path,
+            page: 1,
+            reference: "Mateus 21.33-46",
+            sermonDateKey: "2026-10-04"
+        ))
+        XCTAssertEqual(restored.selectedTab?.physicalPage, 3)
+    }
+
+    @MainActor
     func testPoemQuotationsListAndFootnoteSurviveEditorDriveAndTabletExport() throws {
         let poem = "Na noite, uma janela;\no silêncio aprende a escutar.\n\nA manhã responde."
         let inlineQuote = "“A esperança não decepciona.”"
