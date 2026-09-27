@@ -19,6 +19,11 @@ struct PreparationWorkspace: View {
     @State private var showingReview = false
     @State private var showingQuestions = false
     @State private var showingTablet = false
+    @State private var showingHistory = false
+    @State private var historyRevisions: [SermonRevision] = []
+    @State private var historyDirty = false
+    @State private var historySaveTask: Task<Void, Never>?
+    @State private var historyErrorMessage: String?
     @State private var isSidebarVisible = true
     @State private var isReadingsVisible = true
     @State private var isContextVisible = true
@@ -29,6 +34,7 @@ struct PreparationWorkspace: View {
     @State private var expandedReadingIDs: Set<String> = []
     @State private var contextTab: ContextPaneTab = .materials
     @StateObject private var editorCommands = EditorCommands()
+    private let revisionStore = SermonRevisionStore.shared
 
     private var selectedDayKey: String {
         let formatter = DateFormatter()
@@ -144,9 +150,23 @@ struct PreparationWorkspace: View {
         .sheet(isPresented: $showingTablet) {
             TabletPreparationSheet(draft: activeDraft, accent: accentColor, openSettings: openPreferences)
         }
+        .sheet(isPresented: $showingHistory) {
+            if let draft = activeDraft {
+                SermonHistorySheet(draft: draft, accent: accentColor)
+            }
+        }
+        .alert(
+            "Histórico de sermões",
+            isPresented: Binding(get: { historyErrorMessage != nil }, set: { if !$0 { historyErrorMessage = nil } })
+        ) {
+            Button("OK") { historyErrorMessage = nil }
+        } message: {
+            Text(historyErrorMessage ?? "")
+        }
         .task(id: requestKey) { await loadDay() }
         .onAppear {
             ensureDraft(for: selectedDate)
+            Task { await loadHistory(for: selectedDate) }
             selectedBible = settingsStore.settings.bible
             appearanceStore.accent = accentColor
             if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
@@ -156,11 +176,16 @@ struct PreparationWorkspace: View {
             if !loading && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
         .onChange(of: selectedDayKey) { _, _ in
+            historySaveTask?.cancel()
+            historyRevisions = []
+            historyDirty = false
             ensureDraft(for: selectedDate)
+            Task { await loadHistory(for: selectedDate) }
             if !Calendar.current.isDate(selectedDate, equalTo: calendarMonth, toGranularity: .month) {
                 calendarMonth = selectedDate
             }
         }
+        .onChange(of: activeDraft?.modifiedAt) { _, _ in scheduleHistorySnapshot() }
         .onChange(of: showingSettingsOnLaunch) { _, shouldPresent in
             if shouldPresent {
                 openPreferences()
@@ -516,18 +541,61 @@ struct PreparationWorkspace: View {
             Circle().fill(PrototypeStyle.muted.opacity(0.42)).frame(width: 6, height: 6)
             Text("Drive não conectado")
                 .foregroundStyle(PrototypeStyle.muted)
-            Button("\(draft.modifiedAt.formatted(date: .omitted, time: .shortened)) · local") {
-                openWindow(id: "archive")
+            Button("v\(currentRevisionNumber) · histórico") {
+                showingHistory = true
             }
             .buttonStyle(.plain)
             .foregroundStyle(accentColor)
-            .help("Abrir histórico de sermões")
+            .help("Abrir histórico recuperável deste sermão")
         }
         .font(.system(size: 11))
         .padding(.horizontal, 20)
         .frame(height: 34)
         .background(PrototypeStyle.canvas)
         .overlay(alignment: .top) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+    }
+
+    private var currentRevisionNumber: Int {
+        max(1, (historyRevisions.last?.version ?? 0) + (historyDirty ? 1 : 0))
+    }
+
+    @MainActor
+    private func loadHistory(for date: Date) async {
+        do {
+            let revisions = try await revisionStore.revisions(for: date)
+            guard Calendar.current.isDate(date, inSameDayAs: selectedDate) else { return }
+            historyRevisions = revisions
+            if let draft = activeDraft {
+                historyDirty = revisions.last.map { !$0.matches(SermonRevisionSnapshot(draft: draft)) } ?? false
+            }
+        } catch {
+            historyErrorMessage = "Não foi possível carregar o histórico: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func scheduleHistorySnapshot() {
+        historySaveTask?.cancel()
+        guard let draft = activeDraft else { return }
+        historyDirty = true
+        let date = draft.liturgicalDate
+        historySaveTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(12))
+                try Task.checkCancellation()
+                let revisions = try await revisionStore.capture(
+                    SermonRevisionSnapshot(draft: draft),
+                    for: date
+                )
+                guard Calendar.current.isDate(date, inSameDayAs: selectedDate) else { return }
+                historyRevisions = revisions
+                historyDirty = false
+            } catch is CancellationError {
+                return
+            } catch {
+                historyErrorMessage = "Não foi possível salvar uma versão local: \(error.localizedDescription)"
+            }
+        }
     }
 
     private func chooseMainReading(_ reading: LiturgicalReading, for draft: SermonDraft) {
