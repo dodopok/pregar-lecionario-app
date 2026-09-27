@@ -370,6 +370,41 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertFalse(homileticalText.contains("DAVID L. BARTLETT"))
     }
 
+    func testRealFeastingVolumeFourMatthewProper22WhenAvailable() throws {
+        guard let url = downloadedPDF(startingWith: "Feasting-on-the-Word_-Year-A_-Volume-4") else {
+            throw XCTSkip("Feasting Year A Volume 4 is not in ~/Downloads")
+        }
+        let record = try XCTUnwrap(PDFLibraryIndexer.index(path: url.path))
+        let matching = (record.sections ?? []).filter {
+            PDFLibraryIndexer.match($0, reference: "Matthew 21:33-46") == .exact
+        }
+
+        XCTAssertEqual(matching.count, 1)
+        let section = try XCTUnwrap(matching.first)
+        XCTAssertEqual(section.startPage, 314)
+        XCTAssertEqual(section.endPage, 328)
+        XCTAssertEqual(section.findingMethod, .bookmark)
+        XCTAssertEqual(section.components?.count, 5)
+        XCTAssertEqual(section.components?.map(\.author), [
+            nil,
+            "ANDREW PURVES",
+            "RICHARD E. SPALDING",
+            "SUSAN GROVE EASTMAN",
+            "MARVIN A. MCMICKLE"
+        ])
+
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        let scripture = try XCTUnwrap(section.components?.first)
+        let scriptureText = PDFLibraryIndexer.extractedText(in: scripture.content, from: document)
+        XCTAssertTrue(scriptureText.contains("Listen to another parable"))
+        XCTAssertFalse(scriptureText.contains("Nathan Eddy"), "The shared page must start at the Matthew heading, not include the previous section's author.")
+
+        let homiletical = try XCTUnwrap(section.components?.last)
+        let homileticalText = PDFLibraryIndexer.extractedText(in: homiletical.content, from: document)
+        XCTAssertTrue(homileticalText.contains("must be read as an allegory"))
+        XCTAssertFalse(homileticalText.contains("Isaiah 5:1-7"), "The section must stop before the next Proper 22 reading.")
+    }
+
     func testRealWrightRomansHeaderAndPrintedPagesWhenAvailable() throws {
         guard let url = downloadedPDF(containing: "Romans Part 2") else {
             throw XCTSkip("Wright Romans Part 2 is not in ~/Downloads")

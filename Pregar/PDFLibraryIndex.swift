@@ -733,7 +733,8 @@ enum PDFLibraryIndexer {
             let boundary = boundaryIndex < lines.count ? lines[boundaryIndex] : lines.last
             guard let boundary else { return nil }
             let authorLine = lines[(heading.index + 1)..<boundaryIndex]
-                .last { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .reversed()
+                .first { normalizedAuthor(from: $0.text) != nil }
             let author = authorLine.flatMap { normalizedAuthor(from: $0.text) }
             let contentEnd = author == nil ? boundary.start : authorLine!.start
             components.append(PDFSectionComponent(
