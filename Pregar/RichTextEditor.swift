@@ -7,6 +7,11 @@ final class EditorCommands: ObservableObject {
     @Published private(set) var isEmpty = true
     @Published private(set) var selectedFontFamily = "Arial"
     @Published private(set) var selectedFontSize = 10
+    @Published private(set) var isBoldActive = false
+    @Published private(set) var isItalicActive = false
+    @Published private(set) var isHeadingActive = false
+    @Published private(set) var isQuoteActive = false
+    @Published private(set) var isListActive = false
     static let fontFamilies = ["Arial", "Georgia", "Times New Roman", "Helvetica", "Avenir"]
     static let fontSizes = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36]
     weak var textView: NSTextView?
@@ -48,35 +53,35 @@ final class EditorCommands: ObservableObject {
 
     func quotation() {
         guard let textView, let storage = textView.textStorage else { return }
-        let range = paragraphRange(in: textView)
-        guard range.length > 0 else { return }
+        let ranges = paragraphRanges(in: textView)
+        guard !ranges.isEmpty, storage.length > 0 else { return }
         textView.window?.makeFirstResponder(textView)
-        let location = min(range.location, storage.length - 1)
-        let style = (storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
-        let isQuoted = style.headIndent >= 20
-        if isQuoted {
-            style.headIndent = 0
-            style.firstLineHeadIndent = 0
-            style.tailIndent = 0
-            style.paragraphSpacingBefore = 0
-            style.paragraphSpacing = 0
-        } else {
-            style.headIndent = 22
-            style.firstLineHeadIndent = 22
-            style.tailIndent = -12
-            style.paragraphSpacingBefore = 7
-            style.paragraphSpacing = 9
+        let shouldRemove = ranges.allSatisfy { isQuoted($0, in: storage) }
+        storage.beginEditing()
+        for range in ranges {
+            let style = (storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
+            if shouldRemove {
+                style.headIndent = 0
+                style.firstLineHeadIndent = 0
+                style.tailIndent = 0
+                style.paragraphSpacingBefore = 0
+                style.paragraphSpacing = 0
+                storage.removeAttribute(.foregroundColor, range: range)
+                storage.removeAttribute(.backgroundColor, range: range)
+            } else {
+                style.headIndent = 34
+                style.firstLineHeadIndent = 34
+                style.tailIndent = -12
+                style.paragraphSpacingBefore = 11
+                style.paragraphSpacing = 12
+                storage.addAttribute(.foregroundColor, value: NSColor(calibratedRed: 0.17, green: 0.32, blue: 0.24, alpha: 1), range: range)
+                storage.addAttribute(.backgroundColor, value: NSColor(calibratedRed: 0.91, green: 0.94, blue: 0.91, alpha: 1), range: range)
+            }
+            storage.addAttribute(.paragraphStyle, value: style, range: range)
         }
-        storage.addAttribute(.paragraphStyle, value: style, range: range)
-        if isQuoted {
-            storage.removeAttribute(.foregroundColor, range: range)
-            storage.removeAttribute(.backgroundColor, range: range)
-        } else {
-            storage.addAttribute(.foregroundColor, value: NSColor(calibratedRed: 0.17, green: 0.39, blue: 0.27, alpha: 1), range: range)
-            storage.addAttribute(.backgroundColor, value: NSColor(calibratedRed: 0.89, green: 0.93, blue: 0.89, alpha: 1), range: range)
-        }
-        textView.setSelectedRange(NSRange(location: location, length: range.length))
+        storage.endEditing()
         textView.didChangeText()
+        updateSelectionFormatting()
     }
 
     func setFontFamily(_ family: String) {
@@ -170,8 +175,14 @@ final class EditorCommands: ObservableObject {
         focusTextView()
         let manager = NSFontManager.shared
         let selection = textView.selectedRange()
-        let current = textView.typingAttributes[.font] as? NSFont ?? textView.font ?? NSFont.systemFont(ofSize: 10)
-        let shouldEnable = !manager.traits(of: current).contains(trait)
+        let current = selection.length > 0 && storage.length > 0
+            ? storage.attribute(.font, at: min(selection.location, storage.length - 1), effectiveRange: nil) as? NSFont
+                ?? textView.font
+                ?? NSFont.systemFont(ofSize: 10)
+            : textView.typingAttributes[.font] as? NSFont
+                ?? textView.font
+                ?? NSFont.systemFont(ofSize: 10)
+        let shouldEnable = !hasTrait(trait, in: selection, textView: textView, storage: storage, fallback: current)
         let convert: (NSFont) -> NSFont = shouldEnable
             ? { manager.convert($0, toHaveTrait: trait) }
             : { manager.convert($0, toNotHaveTrait: trait) }
@@ -225,6 +236,7 @@ final class EditorCommands: ObservableObject {
         guard let textView else { return }
         let storage = textView.textStorage
         let selection = textView.selectedRange()
+        let safeSelection = NSIntersectionRange(selection, NSRange(location: 0, length: storage?.length ?? 0))
         let selectedFont = storage?.length ?? 0 > 0
             ? storage?.attribute(.font, at: min(selection.location, (storage?.length ?? 1) - 1), effectiveRange: nil) as? NSFont
             : nil
@@ -237,7 +249,50 @@ final class EditorCommands: ObservableObject {
             let size = Int(font.pointSize.rounded())
             if selectedFontFamily != family { selectedFontFamily = family }
             if selectedFontSize != size { selectedFontSize = size }
+            isBoldActive = hasTrait(.boldFontMask, in: safeSelection, textView: textView, storage: storage, fallback: font)
+            isItalicActive = hasTrait(.italicFontMask, in: safeSelection, textView: textView, storage: storage, fallback: font)
+            isHeadingActive = font.pointSize >= 13 && NSFontManager.shared.traits(of: font).contains(.boldFontMask)
+        } else {
+            isBoldActive = false
+            isItalicActive = false
+            isHeadingActive = false
         }
+        let paragraphRanges = paragraphRanges(in: textView)
+        isQuoteActive = !paragraphRanges.isEmpty && paragraphRanges.allSatisfy { range in
+            guard let storage, storage.length > 0 else { return false }
+            return isQuoted(range, in: storage)
+        }
+        isListActive = !paragraphRanges.isEmpty && paragraphRanges.allSatisfy { range in
+            guard let storage, range.location < storage.length else { return false }
+            let prefixLength = min(2, range.length)
+            return (storage.string as NSString).substring(with: NSRange(location: range.location, length: prefixLength)) == "• "
+        }
+    }
+
+    private func hasTrait(
+        _ trait: NSFontTraitMask,
+        in selection: NSRange,
+        textView: NSTextView,
+        storage: NSTextStorage?,
+        fallback: NSFont
+    ) -> Bool {
+        let manager = NSFontManager.shared
+        guard selection.length > 0, let storage else {
+            let font = textView.typingAttributes[.font] as? NSFont ?? fallback
+            return manager.traits(of: font).contains(trait)
+        }
+        var allHaveTrait = true
+        storage.enumerateAttribute(.font, in: selection) { value, _, _ in
+            let font = value as? NSFont ?? fallback
+            if !manager.traits(of: font).contains(trait) { allHaveTrait = false }
+        }
+        return allHaveTrait
+    }
+
+    private func isQuoted(_ range: NSRange, in storage: NSTextStorage) -> Bool {
+        guard range.location < storage.length,
+              let style = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle else { return false }
+        return style.headIndent >= 20
     }
 
     private func focusTextView() {
@@ -250,6 +305,65 @@ final class EditorCommands: ObservableObject {
         let selection = textView.selectedRange()
         let location = min(selection.location, max(source.length - 1, 0))
         return source.length == 0 ? NSRange(location: 0, length: 0) : source.paragraphRange(for: NSRange(location: location, length: selection.length))
+    }
+
+    private func paragraphRanges(in textView: NSTextView) -> [NSRange] {
+        let source = textView.string as NSString
+        guard source.length > 0 else { return [] }
+        let selection = textView.selectedRange()
+        let start = min(selection.location, source.length - 1)
+        let expanded = source.paragraphRange(for: NSRange(location: start, length: selection.length))
+        var ranges: [NSRange] = []
+        var location = expanded.location
+        while location < NSMaxRange(expanded) {
+            let range = source.paragraphRange(for: NSRange(location: location, length: 0))
+            guard range.length > 0 else { break }
+            ranges.append(range)
+            location = NSMaxRange(range)
+        }
+        return ranges
+    }
+}
+
+@MainActor
+final class QuotationTextView: NSTextView {
+    override func draw(_ dirtyRect: NSRect) {
+        drawQuotationBlocks(in: dirtyRect)
+        super.draw(dirtyRect)
+    }
+
+    private func drawQuotationBlocks(in dirtyRect: NSRect) {
+        guard let storage = textStorage,
+              storage.length > 0,
+              let layoutManager,
+              let textContainer else { return }
+
+        let origin = textContainerOrigin
+        let containerWidth = textContainer.size.width
+        storage.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            guard let style = value as? NSParagraphStyle, style.headIndent >= 20 else { return }
+            let glyphRange = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            guard glyphRange.length > 0 else { return }
+            var top = CGFloat.greatestFiniteMagnitude
+            var bottom = -CGFloat.greatestFiniteMagnitude
+            layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) { lineRect, _, _, _, _ in
+                let viewRect = lineRect.offsetBy(dx: origin.x, dy: origin.y)
+                top = min(top, viewRect.minY)
+                bottom = max(bottom, viewRect.maxY)
+            }
+            guard top.isFinite, bottom.isFinite else { return }
+            let block = NSRect(
+                x: origin.x + 4,
+                y: top - 5,
+                width: max(0, containerWidth - 8),
+                height: bottom - top + 10
+            )
+            guard block.intersects(dirtyRect) else { return }
+            NSColor(calibratedRed: 0.94, green: 0.96, blue: 0.94, alpha: 1).setFill()
+            NSBezierPath(roundedRect: block, xRadius: 6, yRadius: 6).fill()
+            NSColor(calibratedRed: 0.20, green: 0.48, blue: 0.34, alpha: 1).setFill()
+            NSBezierPath(roundedRect: NSRect(x: block.minX + 8, y: block.minY + 8, width: 3, height: max(0, block.height - 16)), xRadius: 1.5, yRadius: 1.5).fill()
+        }
     }
 }
 
@@ -265,7 +379,7 @@ struct RichTextEditor: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
 
-        let textView = NSTextView()
+        let textView = QuotationTextView()
         textView.isRichText = true
         textView.allowsUndo = true
         textView.drawsBackground = false

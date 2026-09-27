@@ -306,7 +306,7 @@ struct APISettingsView: View {
                 }
                 PreferenceRow(label: "Modelo de revisão") {
                     Picker("Modelo de revisão", selection: $reviewModel) {
-                        ForEach(reviewProvider.models, id: \.self) { Text($0).tag($0) }
+                        ForEach(reviewProvider.models, id: \.self) { Text(reviewProvider.modelDisplayName(for: $0)).tag($0) }
                     }.labelsHidden().frame(width: 220, alignment: .leading)
                 }
                 PreferenceRow(label: "Pesquisa de materiais") {
@@ -316,11 +316,11 @@ struct APISettingsView: View {
                 }
                 PreferenceRow(label: "Modelo de pesquisa") {
                     Picker("Modelo de pesquisa", selection: $researchModel) {
-                        ForEach(researchProvider.models, id: \.self) { Text($0).tag($0) }
+                        ForEach(researchProvider.models, id: \.self) { Text(researchProvider.modelDisplayName(for: $0)).tag($0) }
                     }.labelsHidden().frame(width: 220, alignment: .leading)
                 }
             }
-            Text("Revisão e perguntas usam o provedor de revisão; a busca de materiais usa o provedor de pesquisa. A busca envia apenas passagem e ocasião, nunca o manuscrito.")
+            Text("A revisão Perplexity usa a Agent API com resposta estruturada. Sonar é o modelo; não é o endpoint. A pesquisa envia apenas passagem e ocasião, nunca o manuscrito.")
                 .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
         }
         .onChange(of: reviewProvider) { _, provider in reviewModel = provider.suggestedModel }

@@ -3,6 +3,47 @@ import XCTest
 @testable import Pregar
 
 final class SermonReviewTests: XCTestCase {
+    @MainActor
+    func testLivePerplexityAgentAPIUsesSavedKeyForSyntheticStructuredReviewWhenOptedIn() async throws {
+        #if PREGAR_LIVE_PERPLEXITY_TEST
+        let isOptedIn = true
+        #else
+        let isOptedIn = ProcessInfo.processInfo.environment["PREGAR_LIVE_PERPLEXITY_TEST"] == "1"
+        #endif
+        guard isOptedIn else {
+            throw XCTSkip("Defina PREGAR_LIVE_PERPLEXITY_TEST=1 para autorizar a chamada real com texto sintético.")
+        }
+        guard let key = await AISettingsStore().key(for: .perplexity), !key.isEmpty else {
+            throw XCTSkip("Nenhuma chave Perplexity foi encontrada no Acesso às Chaves deste contexto de assinatura.")
+        }
+
+        let context = SermonReviewContext(
+            dateKey: "teste",
+            title: "Teste sintético",
+            mainReference: "",
+            manuscript: "A excessão confirma a regra.",
+            criteria: [.spelling]
+        )
+        let startedAt = Date.now
+        let result = try await SermonAIReviewClient().review(
+            context: context,
+            sources: [],
+            configuration: SermonReviewConfiguration(
+                provider: .perplexity,
+                model: AIProvider.perplexity.suggestedModel,
+                apiKey: key
+            )
+        )
+        let elapsedMilliseconds = Int(Date.now.timeIntervalSince(startedAt) * 1_000)
+        let correction = try XCTUnwrap(result.findings.first { $0.manuscriptQuote == "excessão" })
+
+        XCTAssertEqual(correction.criterion, .spelling)
+        XCTAssertEqual(correction.correction, "exceção")
+        XCTAssertEqual(result.rejectedFindingCount, 0)
+        XCTAssertNil(result.validationNotice)
+        print("Perplexity Agent API · resposta estruturada validada · \(elapsedMilliseconds) ms · chave não exibida")
+    }
+
     func testEachProviderUsesItsOwnAuthenticatedStructuredEndpoint() async throws {
         let context = reviewContext(criteria: [.fidelity])
         let source = bibleSource()

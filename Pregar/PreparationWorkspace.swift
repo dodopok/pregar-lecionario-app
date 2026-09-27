@@ -503,8 +503,8 @@ struct PreparationWorkspace: View {
     private func sermonEditor(draft: SermonDraft) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 5) {
-                editorButton("bold", title: "Negrito", action: editorCommands.bold)
-                editorButton("italic", title: "Itálico", action: editorCommands.italic)
+                editorButton("bold", title: "Negrito", isActive: editorCommands.isBoldActive, shortcut: "b", action: editorCommands.bold)
+                editorButton("italic", title: "Itálico", isActive: editorCommands.isItalicActive, shortcut: "i", action: editorCommands.italic)
                 Divider().frame(height: 22).padding(.horizontal, 6)
                 Menu {
                     ForEach(EditorCommands.fontFamilies, id: \.self) { family in
@@ -531,9 +531,9 @@ struct PreparationWorkspace: View {
                 .menuStyle(.borderlessButton)
                 .help("Tamanho da fonte")
                 Divider().frame(height: 22).padding(.horizontal, 4)
-                editorTextButton("Título", action: editorCommands.heading)
-                editorTextButton("Citação", action: editorCommands.quotation)
-                editorTextButton("Lista", action: editorCommands.bulletedList)
+                editorTextButton("Título", isActive: editorCommands.isHeadingActive, action: editorCommands.heading)
+                editorTextButton("Citação", isActive: editorCommands.isQuoteActive, action: editorCommands.quotation)
+                editorTextButton("Lista", isActive: editorCommands.isListActive, action: editorCommands.bulletedList)
                 editorTextButton("Nota", action: editorCommands.footnote)
             }
             .buttonStyle(.plain)
@@ -606,24 +606,31 @@ struct PreparationWorkspace: View {
         .background(PrototypeStyle.editorSurface)
     }
 
-    private func editorButton(_ symbol: String, title: String, action: @escaping () -> Void) -> some View {
+    private func editorButton(_ symbol: String, title: String, isActive: Bool, shortcut: KeyEquivalent, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
+                .foregroundStyle(isActive ? accentColor : PrototypeStyle.ink)
                 .frame(width: 32, height: 32)
+                .background(isActive ? PrototypeStyle.softGreen : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .contentShape(Rectangle())
         }
-        .keyboardShortcut(symbol == "bold" ? "b" : "i", modifiers: .command)
+        .keyboardShortcut(shortcut, modifiers: .command)
+        .buttonStyle(.plain)
         .help(symbol == "bold" ? "\(title) (⌘B)" : "\(title) (⌘I)")
         .accessibilityLabel(title)
     }
 
-    private func editorTextButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func editorTextButton(_ title: String, isActive: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12))
+                .foregroundStyle(isActive ? accentColor : PrototypeStyle.ink)
                 .padding(.horizontal, 8)
                 .frame(height: 32)
+                .background(isActive ? PrototypeStyle.softGreen : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .help(title)
     }
 

@@ -39,7 +39,7 @@ struct PregarApp: App {
                 .environmentObject(readerSession)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
-        .defaultSize(width: 1120, height: 760)
+        .defaultSize(width: 1380, height: 860)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
 
@@ -50,7 +50,7 @@ struct PregarApp: App {
                 .environmentObject(bibleSession)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
-        .defaultSize(width: 820, height: 760)
+        .defaultSize(width: 1220, height: 820)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
 
@@ -59,7 +59,7 @@ struct PregarApp: App {
                 .environmentObject(readerSession)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
-        .defaultSize(width: 1040, height: 640)
+        .defaultSize(width: 1320, height: 820)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
 
@@ -68,7 +68,7 @@ struct PregarApp: App {
                 .environmentObject(readerSession)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
-        .defaultSize(width: 1000, height: 600)
+        .defaultSize(width: 1220, height: 760)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
         .modelContainer(sermonModelContainer)
@@ -81,7 +81,7 @@ struct PregarApp: App {
                 .environmentObject(readerSession)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
-        .defaultSize(width: 620, height: 640)
+        .defaultSize(width: 1120, height: 820)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
         .modelContainer(sermonModelContainer)

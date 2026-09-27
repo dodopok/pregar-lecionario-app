@@ -303,7 +303,7 @@ final class SermonHistoryTests: XCTestCase {
         XCTAssertTrue(NSFontManager.shared.traits(of: italicFont).contains(.italicFontMask))
         let blockRange = reopenedNSString.range(of: blockQuote)
         let blockStyle = try XCTUnwrap(reopenedEditor.textStorage?.attribute(.paragraphStyle, at: blockRange.location, effectiveRange: nil) as? NSParagraphStyle)
-        XCTAssertEqual(blockStyle.headIndent, 22)
+        XCTAssertEqual(blockStyle.headIndent, 34)
         XCTAssertNotNil(reopenedEditor.textStorage?.attribute(.backgroundColor, at: blockRange.location, effectiveRange: nil))
         let markerRange = reopenedNSString.range(of: "¹")
         let markerOffset = try XCTUnwrap(reopenedEditor.textStorage?.attribute(.baselineOffset, at: markerRange.location, effectiveRange: nil) as? NSNumber)
@@ -314,7 +314,7 @@ final class SermonHistoryTests: XCTestCase {
         XCTAssertTrue(docsContent.styles.contains { $0.superscript && $0.range == markerRange })
         XCTAssertTrue(docsContent.styles.contains { $0.italic && $0.range.contains(italicRange.location) })
         XCTAssertTrue(docsContent.styles.contains { $0.backgroundColor != nil })
-        XCTAssertTrue(docsContent.paragraphs.contains { $0.indentStart == 22 && $0.spacingBefore == 7 && $0.spacingAfter == 9 })
+        XCTAssertTrue(docsContent.paragraphs.contains { $0.indentStart == 34 && $0.spacingBefore == 11 && $0.spacingAfter == 12 })
 
         let driveBody = GoogleDriveAPI.batchUpdateBody(
             content: docsContent,
@@ -394,7 +394,7 @@ final class SermonHistoryTests: XCTestCase {
 
         let storage = try! XCTUnwrap(textView.textStorage)
         let paragraphStyle = try! XCTUnwrap(storage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
-        XCTAssertEqual(paragraphStyle.headIndent, 22)
+        XCTAssertEqual(paragraphStyle.headIndent, 34)
         XCTAssertNotNil(storage.attribute(.backgroundColor, at: 0, effectiveRange: nil))
 
         commands.quotation()
@@ -403,6 +403,58 @@ final class SermonHistoryTests: XCTestCase {
         XCTAssertEqual(removedStyle.headIndent, 0)
         XCTAssertNil(storage.attribute(.backgroundColor, at: 0, effectiveRange: nil))
         XCTAssertNil(storage.attribute(.foregroundColor, at: 0, effectiveRange: nil))
+    }
+
+    @MainActor
+    func testQuoteToggleCoversEverySelectedParagraphWithoutChangingText() {
+        let source = "Primeiro trecho citado.\nSegundo trecho citado."
+        let textView = NSTextView(frame: .zero)
+        textView.string = source
+        textView.setSelectedRange(NSRange(location: 0, length: (source as NSString).length))
+        let commands = EditorCommands()
+        commands.textView = textView
+
+        commands.quotation()
+
+        let storage = try! XCTUnwrap(textView.textStorage)
+        XCTAssertEqual(textView.string, source)
+        XCTAssertTrue(commands.isQuoteActive)
+        for phrase in ["Primeiro", "Segundo"] {
+            let range = (textView.string as NSString).range(of: phrase)
+            let style = try! XCTUnwrap(storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle)
+            XCTAssertEqual(style.headIndent, 34)
+        }
+
+        commands.quotation()
+
+        XCTAssertFalse(commands.isQuoteActive)
+        XCTAssertEqual(textView.string, source)
+        for phrase in ["Primeiro", "Segundo"] {
+            let range = (textView.string as NSString).range(of: phrase)
+            let style = try! XCTUnwrap(storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle)
+            XCTAssertEqual(style.headIndent, 0)
+        }
+    }
+
+    @MainActor
+    func testBoldAndItalicCanBeToggledOffOnSelectedText() {
+        let textView = NSTextView(frame: .zero)
+        textView.string = "Palavra selecionada"
+        let range = (textView.string as NSString).range(of: "selecionada")
+        textView.setSelectedRange(range)
+        let commands = EditorCommands()
+        commands.textView = textView
+
+        commands.bold()
+        XCTAssertTrue(commands.isBoldActive)
+        commands.bold()
+        XCTAssertFalse(commands.isBoldActive)
+
+        commands.italic()
+        XCTAssertTrue(commands.isItalicActive)
+        commands.italic()
+        XCTAssertFalse(commands.isItalicActive)
+        XCTAssertEqual(textView.string, "Palavra selecionada")
     }
 
     @MainActor

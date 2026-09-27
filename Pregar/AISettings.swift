@@ -29,6 +29,13 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable, Sendable {
     }
 
     var suggestedModel: String { models[0] }
+
+    func modelDisplayName(for model: String) -> String {
+        if self == .perplexity && model == "perplexity/sonar" {
+            return "Sonar · Agent API"
+        }
+        return model
+    }
 }
 
 private enum AIKeychain {
