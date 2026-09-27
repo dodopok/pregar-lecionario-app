@@ -61,7 +61,9 @@ final class SermonReviewTests: XCTestCase {
                 let format = try XCTUnwrap(object["response_format"] as? [String: Any])
                 XCTAssertEqual(format["type"] as? String, "json_schema")
                 let jsonSchema = try XCTUnwrap(format["json_schema"] as? [String: Any])
-                XCTAssertEqual(jsonSchema["name"] as? String, "sermon_review")
+                let schemaName = try XCTUnwrap(jsonSchema["name"] as? String)
+                XCTAssertEqual(schemaName, "sermonreview")
+                XCTAssertNotNil(schemaName.range(of: #"^[A-Za-z0-9]{1,64}$"#, options: .regularExpression))
                 let schema = try XCTUnwrap(jsonSchema["schema"] as? [String: Any])
                 let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
                 let findings = try XCTUnwrap(properties["findings"] as? [String: Any])
@@ -222,6 +224,14 @@ final class SermonReviewTests: XCTestCase {
             let body = try XCTUnwrap(builtRequest.httpBody)
             XCTAssertFalse(body.range(of: Data("2026-10-04".utf8)) != nil)
             XCTAssertFalse(body.range(of: Data("Mateus 21".utf8)) != nil)
+            if provider == .perplexity {
+                let requestObject = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                let format = try XCTUnwrap(requestObject["response_format"] as? [String: Any])
+                let jsonSchema = try XCTUnwrap(format["json_schema"] as? [String: Any])
+                let schemaName = try XCTUnwrap(jsonSchema["name"] as? String)
+                XCTAssertEqual(schemaName, "sermonquestions")
+                XCTAssertNotNil(schemaName.range(of: #"^[A-Za-z0-9]{1,64}$"#, options: .regularExpression))
+            }
         }
     }
 

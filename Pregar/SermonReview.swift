@@ -282,7 +282,7 @@ struct SermonAIReviewClient {
         return try makeStructuredRequest(
             userText: userText,
             systemPrompt: AIReviewPrompt.system,
-            formatName: "sermon_review",
+            formatName: "sermonreview",
             schema: Self.schema(criteria: context.criteria, sources: sources),
             maxOutputTokens: 4000,
             configuration: configuration
@@ -706,7 +706,7 @@ struct SermonAIQuestionClient {
         return try SermonAIReviewClient.makeStructuredRequest(
             userText: userText,
             systemPrompt: SermonAIQuestionPrompt.system,
-            formatName: "sermon_questions",
+            formatName: "sermonquestions",
             schema: Self.schema,
             maxOutputTokens: 1400,
             configuration: configuration

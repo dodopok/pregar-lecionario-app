@@ -35,6 +35,8 @@ Para descoberta, a [Search API da Perplexity](https://docs.perplexity.ai/docs/se
 
 O nome do modelo `perplexity/sonar` continua disponível no catálogo da Agent API; isso não significa usar o endpoint legado Sonar. Revisão e descoberta Perplexity usam o endpoint Agent (`/v1/agent`) e extraem fontes verificáveis dos resultados/anotações da resposta, sem pedir URLs inventadas dentro do JSON. A revisão desativa as ferramentas de pesquisa e define `store: false`.
 
+Na revisão e nas perguntas, `response_format` envia JSON Schema, e a resposta só é decodificada dos blocos `message`/`output_text`. O `name` do schema segue a restrição documentada pela Agent API: 1–64 caracteres alfanuméricos. O schema assegura a forma do objeto; a validação local ainda confere âncoras e escopo, que não podem ser garantidos apenas pelo tipo JSON.
+
 Os identificadores e as capacidades devem ficar num catálogo atualizável. Preferir versões estáveis e registrar qual modelo efetivamente executou cada revisão. Não selecionar silenciosamente modelos mais caros ou versões novas ainda não avaliadas.
 
 ## 4. Contexto da revisão
