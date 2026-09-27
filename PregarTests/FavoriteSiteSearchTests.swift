@@ -29,6 +29,10 @@ final class FavoriteSiteSearchTests: XCTestCase {
             XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/json")
             XCTAssertEqual(components.queryItems?.first(where: { ["search", "q"].contains($0.name) })?.value, "Romans 13")
             XCTAssertFalse(request.url?.absoluteString.contains("sermão") ?? true)
+            if site == .anglicanCompass {
+                XCTAssertEqual(components.queryItems?.first(where: { $0.name == "_embed" })?.value, "author")
+                XCTAssertTrue(components.queryItems?.first(where: { $0.name == "_fields" })?.value?.contains("_embedded") == true)
+            }
         }
 
         XCTAssertNil(FavoriteSiteSearchClient.request(for: .workingPreacher, reference: "Romanos 13.8-14"))
@@ -40,7 +44,8 @@ final class FavoriteSiteSearchTests: XCTestCase {
                 "date": "2026-09-20T12:00:00",
                 "link": "https://anglicancompass.com/today-in-the-spirit-proper-21a/",
                 "title": ["rendered": "Today in the Spirit: Proper 21A"],
-                "excerpt": ["rendered": "<p>The Gospel reading is Matthew 21:28-32.</p>"]
+                "excerpt": ["rendered": "<p>The Gospel reading is Matthew 21:28-32.</p>"],
+                "_embedded": ["author": [["name": "Rev. Anna Smith"]]]
             ],
             [
                 "date": "2026-09-20T12:00:00",
@@ -58,6 +63,7 @@ final class FavoriteSiteSearchTests: XCTestCase {
 
         XCTAssertEqual(results.count, 1)
         XCTAssertEqual(results.first?.match, .context)
+        XCTAssertEqual(results.first?.author, "Rev. Anna Smith")
         XCTAssertEqual(results.first?.url.host, "anglicancompass.com")
         XCTAssertEqual(results.first?.publishedAt, ISO8601DateFormatter().date(from: "2026-09-20T12:00:00Z"))
     }
@@ -77,6 +83,10 @@ final class FavoriteSiteSearchTests: XCTestCase {
         )
 
         XCTAssertEqual(results.map(\.match), [.same, .contains, .partial, .context])
+        XCTAssertEqual(results[0].passageReference, "Romans 13:8-14")
+        XCTAssertEqual(results[1].overlapReference, "Romans 13:8-14")
+        XCTAssertEqual(results[2].overlapReference, "Romans 13:11-14")
+        XCTAssertNil(results[3].passageReference)
         XCTAssertEqual(results.first?.url.scheme, "https")
         XCTAssertEqual(results.first?.author, "Rev. James E. Laurence")
     }
@@ -99,7 +109,30 @@ final class FavoriteSiteSearchTests: XCTestCase {
 
         XCTAssertEqual(results.count, 1)
         XCTAssertEqual(results.first?.match, .partial)
+        XCTAssertEqual(results.first?.overlapReference, "Matthew 21:23-27")
+        XCTAssertEqual(results.first?.passageReference, "Matthew 21:18-27")
         XCTAssertEqual(results.first?.author, "Bob Cornwall")
+    }
+
+    func testCrossChapterOverlapReportsOnlyTheSharedVerses() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "feed": [
+                "entry": [bloggerEntry(title: "Matthew 21:33-22:4", url: "https://www.bobcornwall.com/2026/03/vineyard.html")]
+            ]
+        ])
+
+        let results = try FavoriteSiteSearchClient.articles(
+            from: data,
+            site: .bobCornwall,
+            targetReference: "Matthew 22:1-6"
+        )
+
+        XCTAssertEqual(results.first?.match, .partial)
+        XCTAssertEqual(results.first?.overlapReference, "Matthew 22:1-4")
+        XCTAssertEqual(results.first?.passageReference, "Matthew 21:33-22:4")
+
+        let restored = try JSONDecoder().decode([FavoriteSiteArticle].self, from: JSONEncoder().encode(results))
+        XCTAssertEqual(restored.first?.overlapReference, "Matthew 22:1-4")
     }
 
     func testSearchReturnsPartialFailuresAndKeepsWorkingPreacherFallback() async throws {

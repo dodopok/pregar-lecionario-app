@@ -26,6 +26,8 @@ enum FavoriteSite: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    var language: String { "inglês" }
+
     var hasStructuredSearch: Bool { self != .workingPreacher }
 
     func searchURL(reference: String, occasion: String?, date: Date, isSunday: Bool) -> URL {
@@ -74,6 +76,8 @@ struct FavoriteSiteArticle: Codable, Equatable, Identifiable, Sendable {
     let author: String?
     let publishedAt: Date?
     let match: FavoriteSiteMatch
+    let passageReference: String?
+    let overlapReference: String?
 
     var id: String { url.absoluteString }
 }
@@ -174,7 +178,8 @@ struct FavoriteSiteSearchClient {
             components.queryItems = [
                 URLQueryItem(name: "search", value: term),
                 URLQueryItem(name: "per_page", value: "12"),
-                URLQueryItem(name: "_fields", value: "date,link,title,excerpt")
+                URLQueryItem(name: "_embed", value: "author"),
+                URLQueryItem(name: "_fields", value: "date,link,title,excerpt,_links,_embedded")
             ]
         case .myPastoralPonderings:
             components.host = "public-api.wordpress.com"
@@ -209,7 +214,13 @@ struct FavoriteSiteSearchClient {
             return []
         case .anglicanCompass:
             candidates = try JSONDecoder().decode([WordPressV2Post].self, from: data).map {
-                SiteArticleCandidate(title: $0.title.rendered, url: $0.link, author: nil, date: $0.date, excerpt: $0.excerpt.rendered)
+                SiteArticleCandidate(
+                    title: $0.title.rendered,
+                    url: $0.link,
+                    author: $0.embedded?.author?.first?.name,
+                    date: $0.date,
+                    excerpt: $0.excerpt.rendered
+                )
             }
         case .myPastoralPonderings:
             candidates = try JSONDecoder().decode(WordPressComResponse.self, from: data).posts.map {
@@ -234,7 +245,7 @@ struct FavoriteSiteSearchClient {
                   let title = decodedText(candidate.title),
                   !title.isEmpty,
                   seen.insert(url.absoluteString).inserted,
-                  let match = relation(title: title, excerpt: candidate.excerpt, target: target) else { return nil }
+                  let relation = relation(title: title, excerpt: candidate.excerpt, target: target) else { return nil }
             let author = candidate.author.flatMap(decodedText).flatMap { $0.isEmpty ? nil : $0 }
             return FavoriteSiteArticle(
                 site: site,
@@ -242,7 +253,9 @@ struct FavoriteSiteSearchClient {
                 url: url,
                 author: author,
                 publishedAt: parseDate(candidate.date),
-                match: match
+                match: relation.match,
+                passageReference: relation.passageReference,
+                overlapReference: relation.overlapReference
             )
         }
         .sorted {
@@ -276,26 +289,41 @@ struct FavoriteSiteSearchClient {
         }
     }
 
-    private static func relation(title: String, excerpt: String, target: ScriptureReference) -> FavoriteSiteMatch? {
+    private struct PassageRelation {
+        let match: FavoriteSiteMatch
+        let passageReference: String?
+        let overlapReference: String?
+    }
+
+    private static func relation(title: String, excerpt: String, target: ScriptureReference) -> PassageRelation? {
         let titleReferences = ScriptureReference.parseAll(title)
         if let match = bestRelation(titleReferences, target: target) { return match }
         let excerptReferences = ScriptureReference.parseAll(decodedText(excerpt) ?? excerpt)
         guard bestRelation(excerptReferences, target: target) != nil else { return nil }
-        return .context
+        return PassageRelation(match: .context, passageReference: nil, overlapReference: nil)
     }
 
-    private static func bestRelation(_ candidates: [ScriptureReference], target: ScriptureReference) -> FavoriteSiteMatch? {
-        candidates.compactMap { relation(candidate: $0, target: target) }.min { $0.priority < $1.priority }
+    private static func bestRelation(_ candidates: [ScriptureReference], target: ScriptureReference) -> PassageRelation? {
+        candidates.compactMap { relation(candidate: $0, target: target) }
+            .min { $0.match.priority < $1.match.priority }
     }
 
-    private static func relation(candidate: ScriptureReference, target: ScriptureReference) -> FavoriteSiteMatch? {
+    private static func relation(candidate: ScriptureReference, target: ScriptureReference) -> PassageRelation? {
         guard candidate.book == target.book else { return nil }
         let candidateEndChapter = candidate.endChapter ?? candidate.chapter
         let targetEndChapter = target.endChapter ?? target.chapter
 
         guard let candidateStartVerse = candidate.startVerse,
               let targetStartVerse = target.startVerse else {
-            return candidate.chapter <= targetEndChapter && candidateEndChapter >= target.chapter ? .context : nil
+            guard candidate.chapter <= targetEndChapter && candidateEndChapter >= target.chapter else { return nil }
+            let candidateReference = formatReference(
+                book: candidate.englishBookName,
+                startChapter: candidate.chapter,
+                startVerse: nil,
+                endChapter: candidate.endChapter,
+                endVerse: nil
+            )
+            return PassageRelation(match: .context, passageReference: candidateReference, overlapReference: nil)
         }
 
         let candidateStart = (candidate.chapter, candidateStartVerse)
@@ -304,9 +332,46 @@ struct FavoriteSiteSearchClient {
         let targetEnd = (targetEndChapter, target.endVerse ?? targetStartVerse)
         guard point(candidateStart, isBeforeOrEqual: targetEnd), point(targetStart, isBeforeOrEqual: candidateEnd) else { return nil }
 
-        if point(candidateStart, isEqualTo: targetStart), point(candidateEnd, isEqualTo: targetEnd) { return .same }
-        if point(candidateStart, isBeforeOrEqual: targetStart), point(targetEnd, isBeforeOrEqual: candidateEnd) { return .contains }
-        return .partial
+        let candidateReference = formatReference(
+            book: candidate.englishBookName,
+            startChapter: candidate.chapter,
+            startVerse: candidateStartVerse,
+            endChapter: candidate.endChapter,
+            endVerse: candidate.endVerse ?? candidateStartVerse
+        )
+        let overlapStart = point(candidateStart, isBeforeOrEqual: targetStart) ? targetStart : candidateStart
+        let overlapEnd = point(candidateEnd, isBeforeOrEqual: targetEnd) ? candidateEnd : targetEnd
+        let overlapReference = formatReference(
+            book: candidate.englishBookName,
+            startChapter: overlapStart.0,
+            startVerse: overlapStart.1,
+            endChapter: overlapEnd.0,
+            endVerse: overlapEnd.1
+        )
+
+        if point(candidateStart, isEqualTo: targetStart), point(candidateEnd, isEqualTo: targetEnd) {
+            return PassageRelation(match: .same, passageReference: candidateReference, overlapReference: overlapReference)
+        }
+        if point(candidateStart, isBeforeOrEqual: targetStart), point(targetEnd, isBeforeOrEqual: candidateEnd) {
+            return PassageRelation(match: .contains, passageReference: candidateReference, overlapReference: overlapReference)
+        }
+        return PassageRelation(match: .partial, passageReference: candidateReference, overlapReference: overlapReference)
+    }
+
+    private static func formatReference(
+        book: String,
+        startChapter: Int,
+        startVerse: Int?,
+        endChapter: Int?,
+        endVerse: Int?
+    ) -> String {
+        let start = startVerse.map { "\(startChapter):\($0)" } ?? "\(startChapter)"
+        guard let endChapter, endChapter != startChapter else {
+            guard let endVerse, let startVerse, endVerse != startVerse else { return "\(book) \(start)" }
+            return "\(book) \(start)-\(endVerse)"
+        }
+        guard let endVerse else { return "\(book) \(startChapter)-\(endChapter)" }
+        return "\(book) \(start)-\(endChapter):\(endVerse)"
     }
 
     private static func point(_ lhs: (Int, Int), isBeforeOrEqual rhs: (Int, Int)) -> Bool {
@@ -405,6 +470,20 @@ private struct WordPressV2Post: Decodable {
     let link: String
     let title: RenderedText
     let excerpt: RenderedText
+    let embedded: Embedded?
+
+    enum CodingKeys: String, CodingKey {
+        case date, link, title, excerpt
+        case embedded = "_embedded"
+    }
+
+    struct Embedded: Decodable {
+        let author: [Author]?
+    }
+
+    struct Author: Decodable {
+        let name: String
+    }
 }
 
 private struct WordPressComResponse: Decodable {

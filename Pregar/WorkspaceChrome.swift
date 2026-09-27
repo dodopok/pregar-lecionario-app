@@ -447,7 +447,7 @@ struct ResourceContextPanel: View {
     @Environment(\.openWindow) private var openWindow
     @AppStorage("pregar.library.records.v1") private var savedPDFRecords = Data()
     @AppStorage("pregar.material-research.reports.v1") private var savedResearchReports = Data()
-    @AppStorage("pregar.favorite-site-search.reports.v2") private var savedFavoriteSiteReports = Data()
+    @AppStorage("pregar.favorite-site-search.reports.v3") private var savedFavoriteSiteReports = Data()
     @Binding var selectedTab: ContextPaneTab
     let reference: String
     let occasion: String?
@@ -714,9 +714,12 @@ struct ResourceContextPanel: View {
                         .font(PrototypeStyle.serif(13, weight: .semibold))
                         .foregroundStyle(PrototypeStyle.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(site == .anglicanCompass
-                         ? FavoriteSourceURLs.anglicanCompassDetail(occasion: occasion, date: liturgicalDate, isSunday: isSunday)
-                         : site.detail)
+                    Text([
+                        site == .anglicanCompass
+                            ? FavoriteSourceURLs.anglicanCompassDetail(occasion: occasion, date: liturgicalDate, isSunday: isSunday)
+                            : site.detail,
+                        site.language
+                    ].joined(separator: " · "))
                         .font(.system(size: 10))
                         .foregroundStyle(PrototypeStyle.muted)
                 }
@@ -777,6 +780,12 @@ struct ResourceContextPanel: View {
                     .compactMap { $0 }
                 if !metadata.isEmpty {
                     Text(metadata.joined(separator: " · "))
+                        .font(.system(size: 10))
+                        .foregroundStyle(PrototypeStyle.muted)
+                }
+                if let passageReference = article.passageReference {
+                    let overlap = article.match == .partial ? article.overlapReference : nil
+                    Text(overlap.map { "Trecho comum: \($0) · material: \(passageReference)" } ?? passageReference)
                         .font(.system(size: 10))
                         .foregroundStyle(PrototypeStyle.muted)
                 }
