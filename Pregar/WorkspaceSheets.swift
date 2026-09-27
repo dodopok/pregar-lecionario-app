@@ -546,41 +546,174 @@ struct ReviewRequestSheet: View {
 
 struct EmergencyQuestionsSheet: View {
     let accent: Color
+    let context: SermonQuestionContext
+    let bibleSources: [SermonReviewSource]
+    let selectQuote: (String) -> Void
     let configureAI: () -> Void
+    @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var readerSession: ReaderSessionStore
     @Environment(\.dismiss) private var dismiss
+    @State private var questions: [SermonAIQuestion]?
+    @State private var isSending = false
+    @State private var errorMessage: String?
+
+    private var selectedMaterials: [ReaderTab] { readerSession.materialsMarkedForReview() }
+    private var provider: AIProvider { aiSettings.reviewProvider }
+    private var canSend: Bool {
+        !isSending
+            && !context.manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && aiSettings.hasKey(for: provider)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
-            Text("Perguntas de emergência").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-            Text("Perguntas sobre o que você já escreveu. Sem ideias novas, sem aplicação, sem redação.")
-                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-            VStack(alignment: .leading, spacing: 7) {
-                Text("ESCOPO").font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
-                Text("As perguntas partirão apenas do manuscrito, da leitura principal e dos materiais que você marcar para revisão.")
-                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(13)
-            .background(.white, in: RoundedRectangle(cornerRadius: 9))
+            if let questions {
+                resultView(questions)
+            } else {
+                Text("Perguntas de emergência").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+                Text("Perguntas sobre o que você já escreveu. Sem ideias novas, sem aplicação, sem redação.")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("ESCOPO").font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+                    Text(payloadDescription)
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
+                    if !selectedMaterials.isEmpty {
+                        Text(selectedMaterials.prefix(4).map(\.title).joined(separator: " · "))
+                            .font(.system(size: 11)).foregroundStyle(PrototypeStyle.ink).lineLimit(2)
+                        if selectedMaterials.count > 4 {
+                            Text("e mais \(selectedMaterials.count - 4) materiais")
+                                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                        }
+                    }
+                }
+                .padding(13)
+                .background(.white, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(PrototypeStyle.line, lineWidth: 1))
 
-            HStack(spacing: 8) {
-                Image(systemName: "key.fill").foregroundStyle(accent)
-                Text("Configure um provedor de IA para usar esta ação.")
-                    .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
-                Spacer()
-                Button("Configurar") { configureAI() }.buttonStyle(.plain).foregroundStyle(accent)
-            }
-            HStack {
-                Spacer()
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Pedir perguntas") {}
+                HStack(spacing: 8) {
+                    Image(systemName: "key.fill").foregroundStyle(accent)
+                    Text(aiSettings.hasKey(for: provider)
+                         ? "\(provider.name) · \(aiSettings.reviewModel) · chave salva neste Mac"
+                         : "Nenhuma chave salva para \(provider.name).")
+                        .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                    Spacer(minLength: 0)
+                    Button("Configurar") { configureAI() }
+                        .font(.system(size: 11, weight: .medium)).buttonStyle(.plain).foregroundStyle(accent)
+                }
+                if context.manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Label("Escreva no manuscrito antes de pedir perguntas.", systemImage: "exclamationmark.triangle")
+                        .font(.system(size: 11)).foregroundStyle(.orange)
+                }
+                if let errorMessage {
+                    Text(errorMessage).font(.system(size: 11)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                    Button {
+                        Task { await requestQuestions() }
+                    } label: {
+                        if isSending {
+                            Label("Pensando…", systemImage: "hourglass")
+                        } else {
+                            Text("Pedir perguntas")
+                        }
+                    }
                     .buttonStyle(.borderedProminent)
                     .tint(accent)
-                    .disabled(true)
+                    .disabled(!canSend)
+                    .help("O manuscrito e as fontes listadas serão enviados ao provedor selecionado")
+                }
             }
         }
         .padding(22)
         .frame(width: 540)
+        .frame(minHeight: 300)
         .background(PrototypeStyle.canvas)
+    }
+
+    private var payloadDescription: String {
+        var included: [String] = []
+        if !context.mainReference.isEmpty { included.append("leitura principal") }
+        if !bibleSources.isEmpty { included.append("traduções bíblicas carregadas") }
+        if !selectedMaterials.isEmpty { included.append("materiais marcados no Leitor") }
+        let scope = (["manuscrito"] + included).joined(separator: ", ")
+        return "\(scope) serão enviados diretamente a \(provider.name) ao clicar em Pedir perguntas. A chamada usa sua chave, não passa pelo app Pregar, e nada é escrito no manuscrito. Aplicam-se as regras de retenção do provedor."
+    }
+
+    @ViewBuilder
+    private func resultView(_ questions: [SermonAIQuestion]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Perguntas").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+                Spacer()
+                Text("\(provider.name) · \(aiSettings.reviewModel)")
+                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+            }
+            if questions.isEmpty {
+                ContentUnavailableView("Sem perguntas adicionais", systemImage: "text.bubble", description: Text("Não encontrei uma pergunta neutra que respeitasse os limites definidos."))
+                    .frame(minHeight: 150)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(questions) { item in
+                            VStack(alignment: .leading, spacing: 7) {
+                                Text("“\(item.manuscriptQuote)”")
+                                    .font(.system(size: 11, weight: .medium)).foregroundStyle(PrototypeStyle.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text(item.question)
+                                    .font(.system(size: 13, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Button("Ir ao trecho", systemImage: "text.viewfinder") { selectQuote(item.manuscriptQuote) }
+                                    .font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(accent)
+                                if !item.evidenceQuote.isEmpty {
+                                    Text("“\(item.evidenceQuote)”")
+                                        .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text([item.evidenceSourceTitle, item.evidenceCitation].compactMap { $0 }.joined(separator: " · "))
+                                        .font(.system(size: 9)).foregroundStyle(PrototypeStyle.muted)
+                                }
+                            }
+                            .padding(.vertical, 9)
+                            .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                        }
+                    }
+                }
+                .frame(maxHeight: 430)
+            }
+            HStack {
+                Text("Perguntas temporárias · nada foi acrescentado ao manuscrito")
+                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                Spacer()
+                Button("Concluído") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    @MainActor
+    private func requestQuestions() async {
+        guard canSend else { return }
+        isSending = true
+        errorMessage = nil
+        defer { isSending = false }
+        do {
+            guard let key = await aiSettings.key(for: provider), !key.isEmpty else {
+                throw SermonAIQuestionError.noKey
+            }
+            let sources = bibleSources + (try await readerSession.reviewSources(for: context.mainReference))
+            questions = try await SermonAIQuestionClient().questions(
+                context: context,
+                sources: sources,
+                configuration: SermonReviewConfiguration(
+                    provider: provider,
+                    model: aiSettings.reviewModel,
+                    apiKey: key
+                )
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

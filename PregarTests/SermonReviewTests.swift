@@ -48,6 +48,8 @@ final class SermonReviewTests: XCTestCase {
             let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
             XCTAssertEqual(object["model"] as? String, provider.suggestedModel)
             XCTAssertTrue(body.range(of: Data("MANUSCRITO_PRIVADO".utf8)) != nil)
+            XCTAssertFalse(body.range(of: Data("2026-10-04".utf8)) != nil)
+            XCTAssertFalse(body.range(of: Data("Mateus 21".utf8)) != nil)
             if provider == .openAI { XCTAssertEqual(object["store"] as? Bool, false) }
             if provider == .perplexity {
                 XCTAssertTrue((object["tools"] as? [Any])?.isEmpty == true)
@@ -115,7 +117,76 @@ final class SermonReviewTests: XCTestCase {
         } catch let error as SermonReviewError {
             guard case .contextTooLarge = error else { return XCTFail("Erro inesperado: \(error)") }
         }
+        do {
+            _ = try await SermonAIReviewClient(session: session).review(
+                context: reviewContext(criteria: [.fidelity]),
+                sources: [SermonReviewSource(
+                    id: "reader:large",
+                    title: "Material grande",
+                    citation: "Seção",
+                    text: String(repeating: "x", count: PDFReviewSourceExtractor.maximumBytesPerSource + 1)
+                )],
+                configuration: configuration(for: .openAI)
+            )
+            XCTFail("Uma fonte acima do limite deve ser bloqueada antes da rede.")
+        } catch let error as SermonReviewError {
+            guard case .contextTooLarge = error else { return XCTFail("Erro inesperado: \(error)") }
+        }
         session.invalidateAndCancel()
+    }
+
+    func testEmergencyQuestionsUseAllProvidersWithoutSendingDateOrTitle() async throws {
+        let context = questionContext(manuscript: "A promessa parece distante.")
+        let json = #"{"questions":[{"question":"O que você quis dizer com “distante”?","manuscript_quote":"A promessa parece distante.","evidence_source_id":"","evidence_quote":""}]}"#
+
+        for provider in AIProvider.allCases {
+            var captured: URLRequest?
+            let builtRequest = try SermonAIQuestionClient.makeRequest(
+                context: context,
+                sources: [],
+                configuration: configuration(for: provider)
+            )
+            ReviewStubURLProtocol.setHandler { request in
+                captured = request
+                return (200, Self.responseData(json, provider: provider))
+            }
+            let session = stubSession()
+            let results = try await SermonAIQuestionClient(session: session).questions(
+                context: context,
+                sources: [],
+                configuration: configuration(for: provider)
+            )
+            session.invalidateAndCancel()
+
+            XCTAssertEqual(results.map(\.question), ["O que você quis dizer com “distante”?"])
+            XCTAssertEqual(captured?.url?.host, Self.expectedHost(for: provider))
+            let body = try XCTUnwrap(builtRequest.httpBody)
+            XCTAssertFalse(body.range(of: Data("2026-10-04".utf8)) != nil)
+            XCTAssertFalse(body.range(of: Data("Mateus 21".utf8)) != nil)
+        }
+    }
+
+    func testEmergencyQuestionsRejectUnanchoredTextAndLeadingSuggestions() async throws {
+        let invalidResults = [
+            #"{"questions":[{"question":"O que você quis dizer com isso?","manuscript_quote":"trecho inexistente","evidence_source_id":"","evidence_quote":""}]}"#,
+            #"{"questions":[{"question":"Você poderia acrescentar uma aplicação?","manuscript_quote":"MANUSCRITO_PRIVADO","evidence_source_id":"","evidence_quote":""}]}"#
+        ]
+
+        for json in invalidResults {
+            ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .openAI)) }
+            let session = stubSession()
+            do {
+                _ = try await SermonAIQuestionClient(session: session).questions(
+                    context: questionContext(),
+                    sources: [],
+                    configuration: configuration(for: .openAI)
+                )
+                XCTFail("Uma pergunta fora do escopo não deve ser exibida.")
+            } catch let error as SermonAIQuestionError {
+                guard case .invalidQuestion = error else { return XCTFail("Erro inesperado: \(error)") }
+            }
+            session.invalidateAndCancel()
+        }
     }
 
     func testPreviousReaderTabsAreNotTreatedAsExplicitReviewConsent() throws {
@@ -166,6 +237,7 @@ final class SermonReviewTests: XCTestCase {
 
         XCTAssertEqual(loaded, [report])
         XCTAssertFalse(loaded[0].isStale(manuscript: manuscript, mainReference: "Mateus 21.33-46"))
+        XCTAssertFalse(loaded[0].isStale(manuscript: manuscript, mainReference: ""))
         XCTAssertTrue(loaded[0].isStale(manuscript: manuscript + " mudou", mainReference: "Mateus 21.33-46"))
         let persisted = try Data(contentsOf: directory.appendingPathComponent("2026-10-04.json"))
         XCTAssertFalse(String(decoding: persisted, as: UTF8.self).contains(manuscript))
@@ -181,6 +253,15 @@ final class SermonReviewTests: XCTestCase {
             mainReference: "João 3:16",
             manuscript: manuscript,
             criteria: criteria
+        )
+    }
+
+    private func questionContext(manuscript: String = "MANUSCRITO_PRIVADO") -> SermonQuestionContext {
+        SermonQuestionContext(
+            dateKey: "2026-10-04",
+            title: "Mateus 21",
+            mainReference: "João 3:16",
+            manuscript: manuscript
         )
     }
 

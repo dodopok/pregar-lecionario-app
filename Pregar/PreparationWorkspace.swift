@@ -159,9 +159,22 @@ struct PreparationWorkspace: View {
             }
         }
         .sheet(isPresented: $showingQuestions) {
-            EmergencyQuestionsSheet(accent: accentColor) {
-                showingQuestions = false
-                openPreferences()
+            if let draft = activeDraft {
+                EmergencyQuestionsSheet(
+                    accent: accentColor,
+                    context: SermonQuestionContext(
+                        dateKey: selectedDayKey,
+                        title: draft.title,
+                        mainReference: draft.mainReadingReference ?? "",
+                        manuscript: SermonReviewText.plainText(from: draft.rtfData)
+                    ),
+                    bibleSources: reviewBibleSources(for: draft),
+                    selectQuote: { editorCommands.selectQuote($0) },
+                    configureAI: {
+                        showingQuestions = false
+                        openPreferences()
+                    }
+                )
             }
         }
         .sheet(isPresented: $showingTablet) {

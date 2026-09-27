@@ -276,11 +276,14 @@ final class ReaderSessionStore: ObservableObject {
             case .web:
                 guard let session = webSession(for: tab) else { throw SermonReviewMaterialError.sourceUnavailable(tab.title) }
                 let page = try await session.reviewPageText()
+                guard page.text.utf8.count <= PDFReviewSourceExtractor.maximumBytesPerSource else {
+                    throw SermonReviewMaterialError.sourceTooLarge(tab.title)
+                }
                 sources.append(SermonReviewSource(
                     id: "web:\(tab.id.uuidString)",
                     title: page.title.isEmpty ? tab.title : page.title,
                     citation: page.citation,
-                    text: String(page.text.prefix(PDFReviewSourceExtractor.maximumCharactersPerSource))
+                    text: page.text
                 ))
             }
         }

@@ -6,6 +6,7 @@ enum SermonReviewMaterialError: LocalizedError {
     case pageUnavailable
     case sourceUnavailable(String)
     case sectionNotFound(String)
+    case sourceTooLarge(String)
 
     var errorDescription: String? {
         switch self {
@@ -13,12 +14,14 @@ enum SermonReviewMaterialError: LocalizedError {
         case .pageUnavailable: "Não foi possível extrair o texto da página marcada para revisão."
         case let .sourceUnavailable(title): "Não foi possível abrir o material “\(title)” marcado para revisão."
         case let .sectionNotFound(title): "Não encontrei uma seção legível em “\(title)”. Desmarque-a ou escolha a seção no Leitor."
+        case let .sourceTooLarge(title): "A extração de “\(title)” excede os limites e não será enviada parcialmente. Desmarque esta aba para continuar."
         }
     }
 }
 
 enum PDFReviewSourceExtractor {
-    static let maximumCharactersPerSource = 24_000
+    static let maximumBytesPerSource = 24_000
+    private static let maximumPagesPerSource = 36
 
     static func extract(tab: ReaderTab, targetReference: String?) throws -> [SermonReviewSource] {
         guard let document = PDFDocument(url: URL(fileURLWithPath: tab.location)), document.pageCount > 0 else {
@@ -42,24 +45,29 @@ enum PDFReviewSourceExtractor {
 
         if let components = section.components, !components.isEmpty {
             let comments = components.filter { $0.kind != .biblicalText }
-            let sources = comments.enumerated().compactMap { index, component -> SermonReviewSource? in
+            var sources: [SermonReviewSource] = []
+            for (index, component) in comments.enumerated() {
                 let text = PDFLibraryIndexer.extractedText(in: component.content, from: document)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return nil }
+                guard !text.isEmpty else { continue }
+                guard text.utf8.count <= maximumBytesPerSource else {
+                    throw SermonReviewMaterialError.sourceTooLarge("\(workTitle) — \(component.title)")
+                }
                 let authorLine = component.author.map { " · \($0)" } ?? ""
                 let page = component.location.start.page
-                return SermonReviewSource(
+                sources.append(SermonReviewSource(
                     id: "pdf:\(tab.id.uuidString):\(index)",
                     title: "\(workTitle) — \(component.title)\(authorLine)",
                     citation: "\(section.title) · página física \(page)",
-                    text: String(text.prefix(maximumCharactersPerSource))
-                )
+                    text: text
+                ))
             }
             if !sources.isEmpty { return sources }
         }
 
         var pages: [String] = []
-        let lastPage = min(section.endPage, section.startPage + 35, document.pageCount)
+        let lastPage = min(section.endPage, section.startPage + maximumPagesPerSource - 1, document.pageCount)
+        guard lastPage == section.endPage else { throw SermonReviewMaterialError.sourceTooLarge(tab.title) }
         let nextSection = sections.indices.contains(selectedIndex + 1) ? sections[selectedIndex + 1] : nil
         if section.startPage <= lastPage {
             for pageNumber in section.startPage...lastPage {
@@ -75,6 +83,9 @@ enum PDFReviewSourceExtractor {
         }
         let text = pages.joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw SermonReviewMaterialError.sectionNotFound(tab.title) }
+        guard text.utf8.count <= maximumBytesPerSource else {
+            throw SermonReviewMaterialError.sourceTooLarge(tab.title)
+        }
 
         let authorLine = author.map { " · \($0)" } ?? ""
         let pageRange = section.startPage == section.endPage
@@ -84,7 +95,7 @@ enum PDFReviewSourceExtractor {
             id: "pdf:\(tab.id.uuidString):section",
             title: "\(workTitle)\(authorLine)",
             citation: "\(section.title) · páginas \(pageRange)",
-            text: String(text.prefix(maximumCharactersPerSource))
+            text: text
         )]
     }
 
