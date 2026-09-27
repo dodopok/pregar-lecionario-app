@@ -22,6 +22,8 @@
 		545D1E4BC97796B726BB67B2 /* PDFLibraryIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */; };
 		62A7B3018E6849EE9EA4A311 /* AIResearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D04F9F8324A4B0AAE51B195 /* AIResearch.swift */; };
 		6B19E8A458C4A17B4E1D4C21 /* GoogleDrive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F4D9BC217E4B34A15831A6 /* GoogleDrive.swift */; };
+		6938077666FE4A3A9520F407 /* FavoriteSiteSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C1E5D8E06445878A351AAD /* FavoriteSiteSearch.swift */; };
+		5329FE8D581C43FEA58AA293 /* FavoriteSiteSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CFB5BF9DCC04B6A81D40587 /* FavoriteSiteSearchTests.swift */; };
 		75F403AE9DE0459899C54DCA /* AIResearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E8A6F70CEB4565A4E4D0A0 /* AIResearchTests.swift */; };
 		C90D0A6447594F2E981D67C1 /* GoogleDriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C90D0A6447594F2E981D67C2 /* GoogleDriveTests.swift */; };
 		5791E5B8E6B99C8CF7C942D1 /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */; };
@@ -59,6 +61,7 @@
 		9D04F9F8324A4B0AAE51B195 /* AIResearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResearch.swift; sourceTree = "<group>"; };
 		17F4D9BC217E4B34A15831A6 /* GoogleDrive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDrive.swift; sourceTree = "<group>"; };
 		D6E8A6F70CEB4565A4E4D0A0 /* AIResearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResearchTests.swift; sourceTree = "<group>"; };
+		9CFB5BF9DCC04B6A81D40587 /* FavoriteSiteSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSiteSearchTests.swift; sourceTree = "<group>"; };
 		C90D0A6447594F2E981D67C2 /* GoogleDriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveTests.swift; sourceTree = "<group>"; };
 		547C3A36015E310F5E8EDD26 /* Pregar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pregar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettingsView.swift; sourceTree = "<group>"; };
@@ -74,6 +77,7 @@
 		AA1C17D3DB8E8C292118A7FF /* SermonHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonHistory.swift; sourceTree = "<group>"; };
 		CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFLibraryIndex.swift; sourceTree = "<group>"; };
 		D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSourceURLs.swift; sourceTree = "<group>"; };
+		24C1E5D8E06445878A351AAD /* FavoriteSiteSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSiteSearch.swift; sourceTree = "<group>"; };
 		D6ACD579D8F2E7611FB24671 /* PregarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PregarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F3C58A2501218EC111B74290 /* SermonReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonReview.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -101,6 +105,7 @@
 			isa = PBXGroup;
 			children = (
 				D6E8A6F70CEB4565A4E4D0A0 /* AIResearchTests.swift */,
+				9CFB5BF9DCC04B6A81D40587 /* FavoriteSiteSearchTests.swift */,
 				C90D0A6447594F2E981D67C2 /* GoogleDriveTests.swift */,
 				90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */,
 				A5DDFCFC902260D6AF83F167 /* SermonHistoryTests.swift */,
@@ -113,6 +118,7 @@
 			isa = PBXGroup;
 			children = (
 				9D04F9F8324A4B0AAE51B195 /* AIResearch.swift */,
+				24C1E5D8E06445878A351AAD /* FavoriteSiteSearch.swift */,
 				17F4D9BC217E4B34A15831A6 /* GoogleDrive.swift */,
 				3B1C3731E589A46BFCE0F8FB /* AIReviewMaterials.swift */,
 				3DCCDA011317AD64332990C8 /* AISettings.swift */,
@@ -221,6 +227,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				75F403AE9DE0459899C54DCA /* AIResearchTests.swift in Sources */,
+				5329FE8D581C43FEA58AA293 /* FavoriteSiteSearchTests.swift in Sources */,
 				C90D0A6447594F2E981D67C1 /* GoogleDriveTests.swift in Sources */,
 				0AF15226A4B95D3A7B6A0B84 /* PDFLibraryIndexerTests.swift in Sources */,
 				78900D070DCE8DD17EE335CC /* SermonHistoryTests.swift in Sources */,
@@ -233,6 +240,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				62A7B3018E6849EE9EA4A311 /* AIResearch.swift in Sources */,
+				6938077666FE4A3A9520F407 /* FavoriteSiteSearch.swift in Sources */,
 				6B19E8A458C4A17B4E1D4C21 /* GoogleDrive.swift in Sources */,
 				3AE4D461A05EE1772CD35DC4 /* AIReviewMaterials.swift in Sources */,
 				0B931865BC2CBFCE6E3D9D9C /* AISettings.swift in Sources */,

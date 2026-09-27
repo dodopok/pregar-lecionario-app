@@ -278,8 +278,6 @@ struct APISettingsView: View {
                 ResourcePreferenceRow(name: "My Pastoral Ponderings", detail: "Sermões e reflexões", accent: accent)
                 ResourcePreferenceRow(name: "Ponderings on a Faith Journey", detail: "Bob Cornwall · reflexão pastoral", accent: accent)
             }
-            Text("A navegação web já abre os sites na Mesa. Busca por passagem, indexação de capítulos e OCR ainda não estão ativos.")
-                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
         }
     }
 

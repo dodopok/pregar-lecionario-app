@@ -447,6 +447,7 @@ struct ResourceContextPanel: View {
     @Environment(\.openWindow) private var openWindow
     @AppStorage("pregar.library.records.v1") private var savedPDFRecords = Data()
     @AppStorage("pregar.material-research.reports.v1") private var savedResearchReports = Data()
+    @AppStorage("pregar.favorite-site-search.reports.v2") private var savedFavoriteSiteReports = Data()
     @Binding var selectedTab: ContextPaneTab
     let reference: String
     let occasion: String?
@@ -472,6 +473,8 @@ struct ResourceContextPanel: View {
     @State private var researchInProgressReference: String?
     @State private var researchErrorReference: String?
     @State private var researchError: String?
+    @State private var favoriteSiteReports: [String: FavoriteSiteSearchReport] = [:]
+    @State private var favoriteSiteSearchInProgressReference: String?
     @State private var isPreparingIdeas = false
     @State private var ideasError: String?
 
@@ -481,13 +484,6 @@ struct ResourceContextPanel: View {
         case sites = "Sites"
     }
 
-    private struct SourceLink: Identifiable {
-        let title: String
-        let detail: String
-        let url: URL
-        var id: String { url.absoluteString }
-    }
-
     private struct MatchedPDF: Identifiable, Sendable {
         let record: PDFLibraryRecord
         let section: PDFSectionLocation
@@ -495,17 +491,13 @@ struct ResourceContextPanel: View {
         var id: String { "\(record.id)|\(section.id)" }
     }
 
-    private var sources: [SourceLink] {
-        [
-            SourceLink(title: "Working Preacher", detail: "Comentários · Lecionário Comum Revisado", url: FavoriteSourceURLs.workingPreacher(reference: reference)),
-            SourceLink(
-                title: "Anglican Compass",
-                detail: FavoriteSourceURLs.anglicanCompassDetail(occasion: occasion, date: liturgicalDate, isSunday: isSunday),
-                url: FavoriteSourceURLs.anglicanCompass(reference: reference, occasion: occasion, date: liturgicalDate, isSunday: isSunday)
-            ),
-            SourceLink(title: "My Pastoral Ponderings", detail: "Busca por passagem", url: FavoriteSourceURLs.myPastoralPonderings(reference: reference)),
-            SourceLink(title: "Ponderings on a Faith Journey", detail: "Bob Cornwall · busca por passagem", url: FavoriteSourceURLs.bobCornwall(reference: reference))
-        ]
+    private var favoriteSiteSearchKey: String {
+        FavoriteSiteSearchReport.cacheKey(
+            reference: reference,
+            occasion: occasion,
+            date: liturgicalDate,
+            isSunday: isSunday
+        )
     }
 
     var body: some View {
@@ -562,9 +554,11 @@ struct ResourceContextPanel: View {
         .onAppear {
             restorePDFRecords()
             restoreResearchReports()
+            restoreFavoriteSiteReports()
         }
         .onChange(of: savedPDFRecords) { _, _ in restorePDFRecords() }
         .onChange(of: savedResearchReports) { _, _ in restoreResearchReports() }
+        .onChange(of: savedFavoriteSiteReports) { _, _ in restoreFavoriteSiteReports() }
         .onChange(of: selectedTab) { _, tab in
             if tab == .ideas { Task { await refreshIdeasIfLinked() } }
         }
@@ -607,6 +601,11 @@ struct ResourceContextPanel: View {
             matchedPDFs = results
             isMatchingPDFs = false
         }
+        .task(id: "\(favoriteSiteSearchKey)|\(selectedTab == .materials)|\(filter != .library)") {
+            guard selectedTab == .materials, filter != .library,
+                  ScriptureReference.parse(reference) != nil else { return }
+            await searchFavoriteSitesIfStale(reference: reference, cacheKey: favoriteSiteSearchKey)
+        }
     }
 
     private var materialsContent: some View {
@@ -631,45 +630,7 @@ struct ResourceContextPanel: View {
             }
 
             if filter != .library {
-                sectionHeading("FONTES FAVORITAS", color: accent)
-
-                ForEach(sources) { source in
-                    Button {
-                        _ = readerSession.openWeb(
-                            title: source.title,
-                            url: source.url,
-                            reference: reference,
-                            sermonDateKey: SermonDateKey.string(from: liturgicalDate)
-                        )
-                        openWindow(id: "reader")
-                    } label: {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "globe")
-                                .font(.system(size: 13))
-                                .foregroundStyle(PrototypeStyle.muted)
-                                .frame(width: 16)
-                                .padding(.top, 3)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(source.title)
-                                    .font(PrototypeStyle.serif(14, weight: .semibold))
-                                    .foregroundStyle(PrototypeStyle.ink)
-                                    .multilineTextAlignment(.leading)
-                                Text(source.detail)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(PrototypeStyle.muted)
-                                Text("Buscar esta passagem")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(accent)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
-                }
-
+                favoriteSourcesContent
                 researchContent
             }
 
@@ -703,6 +664,183 @@ struct ResourceContextPanel: View {
                     .buttonStyle(.plain)
             }
         }
+    }
+
+    private var favoriteSourcesContent: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                sectionHeading("FONTES FAVORITAS", color: accent)
+                Spacer(minLength: 4)
+                Button {
+                    Task { await refreshFavoriteSites(reference: reference, cacheKey: favoriteSiteSearchKey) }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(PrototypeStyle.muted)
+                .help("Atualizar resultados das fontes favoritas")
+                .disabled(reference.isEmpty || favoriteSiteSearchInProgressReference != nil)
+            }
+
+            if favoriteSiteSearchInProgressReference == favoriteSiteSearchKey {
+                HStack(spacing: 7) {
+                    ProgressView().controlSize(.small)
+                    Text("Consultando as fontes…")
+                        .font(.system(size: 10))
+                        .foregroundStyle(PrototypeStyle.muted)
+                }
+            }
+
+            ForEach(FavoriteSite.allCases) { site in
+                favoriteSourceRow(site)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func favoriteSourceRow(_ site: FavoriteSite) -> some View {
+        let group = favoriteSiteReports[favoriteSiteSearchKey]?.groups.first(where: { $0.site == site })
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(size: 12))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .frame(width: 15)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(site.title)
+                        .font(PrototypeStyle.serif(13, weight: .semibold))
+                        .foregroundStyle(PrototypeStyle.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(site == .anglicanCompass
+                         ? FavoriteSourceURLs.anglicanCompassDetail(occasion: occasion, date: liturgicalDate, isSunday: isSunday)
+                         : site.detail)
+                        .font(.system(size: 10))
+                        .foregroundStyle(PrototypeStyle.muted)
+                }
+                Spacer(minLength: 2)
+                Button {
+                    openFavoriteSite(site, url: group?.searchURL ?? site.searchURL(
+                        reference: reference,
+                        occasion: occasion,
+                        date: liturgicalDate,
+                        isSunday: isSunday
+                    ))
+                } label: {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 11))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(accent)
+                .help("Buscar no site")
+            }
+
+            if site == .workingPreacher {
+                Text("Arquivo da perícope. Confira o intervalo bíblico em cada resultado.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let group {
+                if let error = group.errorMessage {
+                    Text(error)
+                        .font(.system(size: 10))
+                        .foregroundStyle(PrototypeStyle.muted)
+                } else if group.articles.isEmpty {
+                    Text("Nenhuma correspondência explícita nesta busca.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(PrototypeStyle.muted)
+                } else {
+                    ForEach(group.articles) { article in
+                        favoriteArticleRow(article)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+    }
+
+    private func favoriteArticleRow(_ article: FavoriteSiteArticle) -> some View {
+        Button {
+            openFavoriteSite(article.site, url: article.url, title: article.title)
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(article.title)
+                    .font(PrototypeStyle.serif(12, weight: .medium))
+                    .foregroundStyle(PrototypeStyle.ink)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                let metadata = [article.author, article.publishedAt?.formatted(date: .numeric, time: .omitted)]
+                    .compactMap { $0 }
+                if !metadata.isEmpty {
+                    Text(metadata.joined(separator: " · "))
+                        .font(.system(size: 10))
+                        .foregroundStyle(PrototypeStyle.muted)
+                }
+                Text(article.match.label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(article.match == .same || article.match == .contains ? accent : Color(red: 0.62, green: 0.43, blue: 0.04))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 23)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openFavoriteSite(_ site: FavoriteSite, url: URL, title: String? = nil) {
+        _ = readerSession.openWeb(
+            title: title ?? site.title,
+            url: url,
+            reference: reference,
+            sermonDateKey: SermonDateKey.string(from: liturgicalDate)
+        )
+        openWindow(id: "reader")
+    }
+
+    @MainActor
+    private func searchFavoriteSitesIfStale(reference: String, cacheKey: String) async {
+        if let report = favoriteSiteReports[cacheKey], Date.now.timeIntervalSince(report.searchedAt) < 24 * 60 * 60 { return }
+        await refreshFavoriteSites(reference: reference, cacheKey: cacheKey)
+    }
+
+    @MainActor
+    private func refreshFavoriteSites(reference: String, cacheKey: String) async {
+        guard favoriteSiteSearchInProgressReference != cacheKey,
+              !reference.isEmpty,
+              ScriptureReference.parse(reference) != nil else { return }
+        favoriteSiteSearchInProgressReference = cacheKey
+        defer {
+            if favoriteSiteSearchInProgressReference == cacheKey { favoriteSiteSearchInProgressReference = nil }
+        }
+        let report = await FavoriteSiteSearchClient().search(
+            reference: reference,
+            occasion: occasion,
+            date: liturgicalDate,
+            isSunday: isSunday
+        )
+        guard !Task.isCancelled, favoriteSiteSearchKey == cacheKey else { return }
+        favoriteSiteReports[cacheKey] = report
+        persistFavoriteSiteReports()
+    }
+
+    private func restoreFavoriteSiteReports() {
+        guard let decoded = try? JSONDecoder().decode([FavoriteSiteSearchReport].self, from: savedFavoriteSiteReports) else {
+            favoriteSiteReports = [:]
+            return
+        }
+        favoriteSiteReports = Dictionary(decoded.map { ($0.cacheKey, $0) }, uniquingKeysWith: { earlier, later in
+            earlier.searchedAt > later.searchedAt ? earlier : later
+        })
+    }
+
+    private func persistFavoriteSiteReports() {
+        let reports = favoriteSiteReports.values.sorted { $0.searchedAt > $1.searchedAt }.prefix(100)
+        savedFavoriteSiteReports = (try? JSONEncoder().encode(Array(reports))) ?? Data()
     }
 
     private var researchContent: some View {
