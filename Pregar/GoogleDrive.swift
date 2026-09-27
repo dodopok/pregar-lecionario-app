@@ -1258,14 +1258,25 @@ final class GoogleDriveStore: ObservableObject {
     init(defaults: UserDefaults = .standard, apiOverride: GoogleDriveAPI? = nil) {
         self.defaults = defaults
         self.apiOverride = apiOverride
-        ideasDocumentID = defaults.string(forKey: "drive.ideasDocumentID")
-        ideasText = defaults.string(forKey: "drive.ideasText") ?? ""
-        ideasUpdatedAt = defaults.object(forKey: "drive.ideasUpdatedAt") as? Date
         if apiOverride != nil {
+            ideasDocumentID = defaults.string(forKey: "drive.ideasDocumentID")
+            ideasText = defaults.string(forKey: "drive.ideasText") ?? ""
+            ideasUpdatedAt = defaults.object(forKey: "drive.ideasUpdatedAt") as? Date
             isConnected = true
             isLoading = false
             return
         }
+        if PregarRuntime.isIsolatedTestHost {
+            ideasDocumentID = nil
+            ideasText = ""
+            ideasUpdatedAt = nil
+            isConnected = false
+            isLoading = false
+            return
+        }
+        ideasDocumentID = defaults.string(forKey: "drive.ideasDocumentID")
+        ideasText = defaults.string(forKey: "drive.ideasText") ?? ""
+        ideasUpdatedAt = defaults.object(forKey: "drive.ideasUpdatedAt") as? Date
         let tokenTask = Task.detached(priority: .utility) { GoogleRefreshTokenKeychain.read() }
         Task { [weak self] in
             let token = await tokenTask.value

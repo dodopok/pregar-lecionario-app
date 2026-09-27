@@ -3,6 +3,20 @@ import Combine
 import Security
 import SwiftUI
 
+enum PregarRuntime {
+    static let isIsolatedTestHost: Bool = {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCInjectBundleInto"] != nil
+            || environment["XCTestBundlePath"] != nil
+    }()
+
+    static func makeAppUserDefaults() -> UserDefaults {
+        guard isIsolatedTestHost else { return .standard }
+        return UserDefaults(suiteName: "br.caminhoanglicano.pregar.tests.\(UUID().uuidString)")!
+    }
+}
+
 struct APISettings: Equatable {
     static let apiBaseURL = "https://api.caminhoanglicano.com.br"
     var baseURL: String { Self.apiBaseURL }
@@ -96,7 +110,7 @@ enum APIKeychain {
 
 @MainActor
 final class APISettingsStore: ObservableObject {
-    @Published private(set) var settings = APISettings.load()
+    @Published private(set) var settings: APISettings
     @Published private(set) var credential: String?
     @Published private(set) var isLoadingCredential = true
     @Published private(set) var credentialReadTimedOut = false
@@ -111,6 +125,12 @@ final class APISettingsStore: ObservableObject {
     }
 
     init() {
+        settings = PregarRuntime.isIsolatedTestHost ? APISettings() : APISettings.load()
+        guard !PregarRuntime.isIsolatedTestHost else {
+            isLoadingCredential = false
+            return
+        }
+
         let readTask = Task.detached(priority: .utility) { APIKeychain.read() }
         Task { [weak self] in
             let savedCredential = await readTask.value

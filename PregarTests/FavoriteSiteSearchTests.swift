@@ -3,6 +3,10 @@ import XCTest
 @testable import Pregar
 
 final class FavoriteSiteSearchTests: XCTestCase {
+    func testAppHostIsIsolatedFromThePersonalInstallation() {
+        XCTAssertTrue(PregarRuntime.isIsolatedTestHost)
+    }
+
     func testCacheKeyIncludesLiturgicalContext() {
         let date = ISO8601DateFormatter().date(from: "2026-09-27T12:00:00Z")!
         let nextSunday = ISO8601DateFormatter().date(from: "2026-10-04T12:00:00Z")!
@@ -68,6 +72,44 @@ final class FavoriteSiteSearchTests: XCTestCase {
         XCTAssertEqual(compassURL.host, "anglican.example.org")
         XCTAssertTrue(compassURL.path.hasPrefix("/resources"))
         XCTAssertTrue(FavoriteSite.anglicanCompass.usesAnglicanCompassDestination)
+    }
+
+    func testCrossChapterRangesStayIntactInFavoriteSourceSearches() throws {
+        let reference = "Mateus 21.33-22.4"
+
+        let workingPreacher = FavoriteSourceURLs.workingPreacher(reference: reference)
+        let workingPreacherComponents = try XCTUnwrap(URLComponents(url: workingPreacher, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(workingPreacher.path, "/")
+        XCTAssertEqual(workingPreacherComponents.queryItems?.first(where: { $0.name == "s" })?.value, "Matthew 21:33-22:4")
+
+        let compass = FavoriteSourceURLs.anglicanCompass(
+            reference: reference,
+            occasion: nil,
+            date: nil,
+            isSunday: false
+        )
+        let compassComponents = try XCTUnwrap(URLComponents(url: compass, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(
+            compassComponents.queryItems?.first(where: { $0.name == "s" })?.value,
+            "Today in the Spirit Matthew 21:33-22:4"
+        )
+
+        let customSite = FavoriteSite(
+            id: "cross-chapter-search",
+            title: "Busca configurada",
+            baseURL: URL(string: "https://example.org")!,
+            detail: "",
+            language: "inglês",
+            adapter: .websiteSearch,
+            searchURLTemplate: "https://example.org/?passage={reference}"
+        )
+        XCTAssertTrue(customSite.searchURL(reference: reference, occasion: nil, date: .now, isSunday: false)
+            .absoluteString.contains("passage=Matthew%2021:33-22:4"))
+
+        XCTAssertEqual(ScriptureReference.parse(reference)?.englishReference, "Matthew 21:33-22:4")
+        let pastoralPonderings = FavoriteSourceURLs.myPastoralPonderings(reference: reference)
+        let pastoralComponents = try XCTUnwrap(URLComponents(url: pastoralPonderings, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(pastoralComponents.queryItems?.first(where: { $0.name == "s" })?.value, "Matthew 21:33-22:4")
     }
 
     func testBuildsFirstPartySearchRequestsFromPassageOnly() throws {

@@ -3,13 +3,17 @@ import Foundation
 enum FavoriteSourceURLs {
     static func workingPreacher(reference: String) -> URL {
         if let passage = ScriptureReference.parse(reference),
-           let startVerse = passage.startVerse {
+           let startVerse = passage.startVerse,
+           (passage.endChapter ?? passage.chapter) == passage.chapter {
             let endVerse = passage.endVerse ?? startVerse
             let book = passage.englishBookName.lowercased().replacingOccurrences(of: " ", with: "-")
             let slug = "\(book)-\(passage.chapter)_\(startVerse)-\(endVerse)"
             if let url = URL(string: "https://www.workingpreacher.org/posts-by-tag/\(slug)") { return url }
         }
-        return searchURL(host: "www.workingpreacher.org", query: reference)
+        return searchURL(
+            host: "www.workingpreacher.org",
+            query: ScriptureReference.parse(reference)?.englishReference ?? reference
+        )
     }
 
     static func anglicanCompass(
@@ -42,13 +46,7 @@ enum FavoriteSourceURLs {
     }
 
     private static func englishReference(_ reference: String) -> String {
-        guard let passage = ScriptureReference.parse(reference) else { return reference }
-        var result = "\(passage.englishBookName) \(passage.chapter)"
-        if let start = passage.startVerse {
-            result += ":\(start)"
-            if let end = passage.endVerse, end != start { result += "-\(end)" }
-        }
-        return result
+        ScriptureReference.parse(reference)?.englishReference ?? reference
     }
 
     private struct ProperDay {
@@ -130,6 +128,7 @@ enum FavoriteSourceURLs {
         var components = URLComponents()
         components.scheme = "https"
         components.host = host
+        components.path = "/"
         components.queryItems = [URLQueryItem(name: "s", value: query)]
         return components.url ?? URL(string: "https://\(host)/")!
     }

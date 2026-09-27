@@ -196,8 +196,12 @@ struct PreparationWorkspace: View {
         } message: {
             Text(historyErrorMessage ?? "")
         }
-        .task(id: requestKey) { await loadDay() }
+        .task(id: requestKey) {
+            guard !PregarRuntime.isIsolatedTestHost else { return }
+            await loadDay()
+        }
         .onAppear {
+            guard !PregarRuntime.isIsolatedTestHost else { return }
             ensureDraft(for: selectedDate)
             Task { await loadHistory(for: selectedDate) }
             Task { await loadReviewReports(for: selectedDayKey) }
@@ -210,6 +214,7 @@ struct PreparationWorkspace: View {
             if !loading && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
         .onChange(of: selectedDayKey) { _, _ in
+            guard !PregarRuntime.isIsolatedTestHost else { return }
             historySaveTask?.cancel()
             driveSyncTask?.cancel()
             historyRevisions = []

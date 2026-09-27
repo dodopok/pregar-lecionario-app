@@ -3,10 +3,14 @@ import SwiftUI
 
 @main
 struct PregarApp: App {
+    private let sermonModelContainer: ModelContainer = {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: PregarRuntime.isIsolatedTestHost)
+        return try! ModelContainer(for: SermonDraft.self, configurations: configuration)
+    }()
     @StateObject private var settings = APISettingsStore()
     @StateObject private var aiSettings = AISettingsStore()
     @StateObject private var appearance = AppAppearanceStore()
-    @StateObject private var readerSession = ReaderSessionStore()
+    @StateObject private var readerSession = ReaderSessionStore(userDefaults: PregarRuntime.makeAppUserDefaults())
     @StateObject private var bibleSession = BibleWindowSession()
     @StateObject private var googleDrive = GoogleDriveStore()
 
@@ -25,7 +29,7 @@ struct PregarApp: App {
         .defaultSize(width: 1440, height: 900)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
-        .modelContainer(for: SermonDraft.self)
+        .modelContainer(sermonModelContainer)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
@@ -67,7 +71,7 @@ struct PregarApp: App {
         .defaultSize(width: 1000, height: 600)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
-        .modelContainer(for: SermonDraft.self)
+        .modelContainer(sermonModelContainer)
 
         Window("Preferências", id: "preferences") {
             PreferencesSceneView()
@@ -80,6 +84,6 @@ struct PregarApp: App {
         .defaultSize(width: 620, height: 640)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
-        .modelContainer(for: SermonDraft.self)
+        .modelContainer(sermonModelContainer)
     }
 }

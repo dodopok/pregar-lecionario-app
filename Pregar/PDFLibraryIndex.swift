@@ -135,6 +135,22 @@ struct ScriptureReference: Equatable, Sendable {
         ScriptureReference.books.first(where: { $0.canonical == book })?.english ?? book
     }
 
+    var englishReference: String {
+        var value = "\(englishBookName) \(chapter)"
+        let finalChapter = endChapter ?? chapter
+        if let startVerse {
+            value += ":\(startVerse)"
+            if finalChapter != chapter {
+                value += endVerse.map { "-\(finalChapter):\($0)" } ?? "-\(finalChapter)"
+            } else if let endVerse, endVerse != startVerse {
+                value += "-\(endVerse)"
+            }
+        } else if finalChapter != chapter {
+            value += "-\(finalChapter)"
+        }
+        return value
+    }
+
     static func parse(_ value: String) -> ScriptureReference? {
         parseAll(value).first
     }

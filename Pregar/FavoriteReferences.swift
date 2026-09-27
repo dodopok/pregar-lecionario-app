@@ -63,7 +63,7 @@ struct FavoriteSite: Codable, Equatable, Identifiable, Sendable {
         let query = passage.map { "\($0.englishBookName) \($0.chapter)" } ?? reference
         let values = [
             "query": query,
-            "reference": passage.map(formatReference) ?? reference,
+            "reference": passage?.englishReference ?? reference,
             "book": passage?.englishBookName ?? reference,
             "chapter": passage.map { String($0.chapter) } ?? "",
             "occasion": occasion ?? "",
@@ -191,15 +191,6 @@ struct FavoriteSite: Codable, Equatable, Identifiable, Sendable {
     private func searchTemplate(fallingBackFrom defaultSite: FavoriteSite) -> String {
         guard searchURLTemplate == defaultSite.searchURLTemplate else { return searchURLTemplate }
         return searchURLTemplate.replacingOccurrences(of: defaultSite.baseURL.absoluteString, with: baseURL.absoluteString)
-    }
-
-    private func formatReference(_ reference: ScriptureReference) -> String {
-        var result = "\(reference.englishBookName) \(reference.chapter)"
-        if let start = reference.startVerse {
-            result += ":\(start)"
-            if let end = reference.endVerse, end != start { result += "-\(end)" }
-        }
-        return result
     }
 }
 

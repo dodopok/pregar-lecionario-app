@@ -87,6 +87,15 @@ final class AISettingsStore: ObservableObject {
     private var changedKeyProviders = Set<AIProvider>()
 
     init() {
+        if PregarRuntime.isIsolatedTestHost {
+            reviewProvider = .anthropic
+            researchProvider = .perplexity
+            reviewModel = AIProvider.anthropic.suggestedModel
+            researchModel = AIProvider.perplexity.suggestedModel
+            isLoadingKeys = false
+            return
+        }
+
         let defaults = UserDefaults.standard
         let savedReviewProvider = AIProvider(rawValue: defaults.string(forKey: "ai.reviewProvider") ?? "anthropic") ?? .anthropic
         let savedResearchProvider = AIProvider(rawValue: defaults.string(forKey: "ai.researchProvider") ?? "perplexity") ?? .perplexity
