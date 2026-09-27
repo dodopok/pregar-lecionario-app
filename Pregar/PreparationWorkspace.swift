@@ -55,6 +55,14 @@ struct PreparationWorkspace: View {
         day?.date == selectedDayKey ? day : nil
     }
 
+    private var displayedDay: LiturgicalDay? {
+        selectedDay ?? (isLoading ? day : nil)
+    }
+
+    private var displayingPreviousDay: Bool {
+        displayedDay?.date != selectedDayKey
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if isSidebarVisible && !focusMode {
@@ -95,6 +103,8 @@ struct PreparationWorkspace: View {
                             selectedTab: $contextTab,
                             reference: activeDraft?.mainReadingReference ?? "esta preparação",
                             occasion: selectedDay?.sundayName ?? selectedDay?.celebration?.name,
+                            liturgicalDate: selectedDate,
+                            isSunday: selectedDay?.isSunday == true,
                             accent: accentColor,
                             openSettings: openPreferences,
                             openLibrary: { openWindow(id: "library") },
@@ -269,9 +279,9 @@ struct PreparationWorkspace: View {
 
     @ViewBuilder
     private func readingsColumn(for draft: SermonDraft?) -> some View {
-        if let selectedDay {
+        if let displayedDay {
             ScripturePanelView(
-                day: selectedDay,
+                day: displayedDay,
                 mainReference: draft?.mainReadingReference,
                 mainSlot: draft?.mainReadingSlot,
                 primaryBible: settingsStore.settings.bible,
@@ -286,6 +296,23 @@ struct PreparationWorkspace: View {
                 chooseBible: loadTranslation,
                 collapse: { isReadingsVisible = false }
             )
+            .overlay {
+                if displayingPreviousDay {
+                    ZStack {
+                        PrototypeStyle.paper.opacity(0.88)
+                        VStack(spacing: 9) {
+                            ProgressView().controlSize(.small).tint(accentColor)
+                            Text("Atualizando leituras para \(selectedDate.formatted(.dateTime.day().month(.wide).locale(Locale(identifier: "pt_BR"))))…")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(PrototypeStyle.muted)
+                        }
+                        .padding(18)
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .allowsHitTesting(!displayingPreviousDay)
+            .animation(.easeInOut(duration: 0.14), value: displayingPreviousDay)
         } else {
             VStack(spacing: 0) {
                 HStack {

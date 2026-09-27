@@ -203,7 +203,7 @@ enum PDFSectionMatchKind: Int, Sendable {
 }
 
 enum PDFLibraryIndexer {
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     static func index(path: String) -> PDFLibraryRecord? {
         let url = URL(fileURLWithPath: path)
@@ -212,10 +212,9 @@ enum PDFLibraryIndexer {
         let sections = bookmarks.isEmpty ? scanHeadings(document) : bookmarks
         let attributes = document.documentAttributes ?? [:]
         let filename = url.deletingPathExtension().lastPathComponent
-        let fileTitle = cleanFilename(filename)
         let metadataTitle = stringAttribute(PDFDocumentAttribute.titleAttribute, in: attributes)
-        let author = displayAuthors(stringAttribute(PDFDocumentAttribute.authorAttribute, in: attributes), title: metadataTitle ?? fileTitle)
-        let title = metadataTitle.flatMap { isUseful($0) ? $0 : nil } ?? fileTitle
+        let title = displayTitle(metadataTitle: metadataTitle, filename: filename)
+        let author = displayAuthors(stringAttribute(PDFDocumentAttribute.authorAttribute, in: attributes), title: title)
         let copyLabel: String? = {
             guard let regex = try? NSRegularExpression(pattern: #"\s\((\d+)\)$"#),
                   let match = regex.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)),
@@ -358,6 +357,49 @@ enum PDFLibraryIndexer {
 
     private static func isUseful(_ value: String) -> Bool {
         !value.isEmpty && value.lowercased() != "untitled" && value.lowercased() != "unknown"
+    }
+
+    private static func displayTitle(metadataTitle: String?, filename: String) -> String {
+        if let metadataTitle {
+            let normalized = normalizeTitle(metadataTitle)
+            if isUseful(normalized), !isGenericMetadataTitle(normalized) { return normalized }
+        }
+
+        let cleanedFilename = cleanFilename(filename)
+        if let match = firstMatch(#"(?i)feasting[-_ ]on[-_ ]the[-_ ]word.*?year[-_ ]?([abc]).*?volume[-_ ]?([1-4])"#, in: filename),
+           match.count == 2,
+           let year = match.first,
+           let volume = match.last {
+            return "Feasting on the Word: Year \(year.uppercased()), Volume \(volume)"
+        }
+        if cleanedFilename.localizedCaseInsensitiveContains("connections") {
+            return "Connections: A Lectionary Commentary for Preaching and Worship"
+        }
+        return cleanedFilename
+    }
+
+    private static func normalizeTitle(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isGenericMetadataTitle(_ value: String) -> Bool {
+        let normalized = value.lowercased()
+        return normalized.hasPrefix("microsoft word -")
+            || normalized.hasPrefix("about:blank")
+            || normalized.hasSuffix(".indd")
+            || normalized.count > 140
+    }
+
+    private static func firstMatch(_ pattern: String, in value: String) -> [String]? {
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) else { return nil }
+        return (1..<match.numberOfRanges).compactMap { index in
+            guard let range = Range(match.range(at: index), in: value) else { return nil }
+            return String(value[range])
+        }
     }
 
     private static func displayAuthors(_ value: String?, title: String) -> String? {

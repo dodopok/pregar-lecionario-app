@@ -447,6 +447,8 @@ struct ResourceContextPanel: View {
     @Binding var selectedTab: ContextPaneTab
     let reference: String
     let occasion: String?
+    let liturgicalDate: Date
+    let isSunday: Bool
     let accent: Color
     let openSettings: () -> Void
     let openLibrary: () -> Void
@@ -480,7 +482,11 @@ struct ResourceContextPanel: View {
     private var sources: [SourceLink] {
         [
             SourceLink(title: "Working Preacher", detail: "Comentários · Lecionário Comum Revisado", url: FavoriteSourceURLs.workingPreacher(reference: reference)),
-            SourceLink(title: "Anglican Compass", detail: "Today in the Spirit · \(occasion ?? "lecionário")", url: FavoriteSourceURLs.anglicanCompass(reference: reference, occasion: occasion)),
+            SourceLink(
+                title: "Anglican Compass",
+                detail: FavoriteSourceURLs.anglicanCompassDetail(occasion: occasion, date: liturgicalDate, isSunday: isSunday),
+                url: FavoriteSourceURLs.anglicanCompass(reference: reference, occasion: occasion, date: liturgicalDate, isSunday: isSunday)
+            ),
             SourceLink(title: "My Pastoral Ponderings", detail: "Busca por passagem", url: FavoriteSourceURLs.myPastoralPonderings(reference: reference)),
             SourceLink(title: "Ponderings on a Faith Journey", detail: "Bob Cornwall · busca por passagem", url: FavoriteSourceURLs.bobCornwall(reference: reference))
         ]
