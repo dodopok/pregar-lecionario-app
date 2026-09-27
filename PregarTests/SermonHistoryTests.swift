@@ -305,12 +305,14 @@ final class SermonHistoryTests: XCTestCase {
         let draft = SermonDraft(liturgicalDate: .now)
         draft.tabletPDFPath = "/tmp/2026-10-04 - Mateus 21.pdf"
         draft.tabletPDFUpdatedAt = Date(timeIntervalSince1970: 1_790_493_600)
+        draft.googleDriveDraftKey = "draft-key-123"
         container.mainContext.insert(draft)
         try container.mainContext.save()
 
         let restored = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<SermonDraft>()).first)
         XCTAssertEqual(restored.tabletPDFPath, draft.tabletPDFPath)
         XCTAssertEqual(restored.tabletPDFUpdatedAt, draft.tabletPDFUpdatedAt)
+        XCTAssertEqual(restored.googleDriveDraftKey, "draft-key-123")
     }
 
     func testCapturesDistinctVersionsAndReloadsThemFromDisk() async throws {

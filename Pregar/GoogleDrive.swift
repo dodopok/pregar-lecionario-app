@@ -598,12 +598,13 @@ struct GoogleDriveAPI {
     static let driveFilesURL = URL(string: "https://www.googleapis.com/drive/v3/files")!
     static let googleDocMimeType = "application/vnd.google-apps.document"
     static let folderMimeType = "application/vnd.google-apps.folder"
+    private static let sermonDraftPropertyKey = "pregarDraftKey"
 
     var session: URLSession = .shared
     var accessToken: () async throws -> String
 
     func searchFolder(named name: String) async throws -> GoogleDriveFile? {
-        let escaped = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        let escaped = Self.escapeQueryLiteral(name)
         let files = try await listFiles(query: "name = '\(escaped)' and mimeType = '\(Self.folderMimeType)' and trashed = false")
         return files.first
     }
@@ -620,11 +621,18 @@ struct GoogleDriveAPI {
         ])
     }
 
-    func deleteFile(id: String) async throws {
-        var request = URLRequest(url: URL(string: "\(Self.driveFilesURL.absoluteString)/\(id)")!)
-        request.httpMethod = "DELETE"
-        let (data, response) = try await send(request)
-        guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
+    func findOrCreateSermonDocument(named name: String, inFolder folderID: String, draftKey: String) async throws -> GoogleDriveFile {
+        let escapedFolderID = Self.escapeQueryLiteral(folderID)
+        let escapedDraftKey = Self.escapeQueryLiteral(draftKey)
+        let query = "'\(escapedFolderID)' in parents and mimeType = '\(Self.googleDocMimeType)' and appProperties has { key='\(Self.sermonDraftPropertyKey)' and value='\(escapedDraftKey)' } and trashed = false"
+        if let existing = try await listFiles(query: query).first { return existing }
+
+        return try await createFile(metadata: [
+            "name": name,
+            "mimeType": Self.googleDocMimeType,
+            "parents": [folderID],
+            "appProperties": [Self.sermonDraftPropertyKey: draftKey]
+        ])
     }
 
     func getDocument(id: String) async throws -> (revisionID: String, text: String, endIndex: Int) {
@@ -760,6 +768,10 @@ struct GoogleDriveAPI {
         let (data, response) = try await send(request)
         guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
         return try JSONDecoder().decode(GoogleDriveFileList.self, from: data).files
+    }
+
+    private static func escapeQueryLiteral(_ value: String) -> String {
+        value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
     }
 
     private func createFile(metadata: [String: Any]) async throws -> GoogleDriveFile {
@@ -1231,16 +1243,28 @@ final class GoogleDriveStore: ObservableObject {
         defer { isSaving = false }
 
         let api = driveAPI()
-        var createdDocumentID: String?
         do {
             let documentID: String
             if let existingID = draft.googleDriveDocumentID {
                 documentID = existingID
             } else {
                 let folder = try await ensureFolder(named: Self.sermonFolderName, using: api)
-                let file = try await api.createDocument(named: Self.sermonTitle(for: draft), inFolder: folder.id)
-                createdDocumentID = file.id
+                let draftKey: String
+                if let savedKey = draft.googleDriveDraftKey {
+                    draftKey = savedKey
+                } else {
+                    draftKey = UUID().uuidString
+                    draft.googleDriveDraftKey = draftKey
+                    try modelContext.save()
+                }
+                let file = try await api.findOrCreateSermonDocument(
+                    named: Self.sermonTitle(for: draft),
+                    inFolder: folder.id,
+                    draftKey: draftKey
+                )
                 documentID = file.id
+                draft.googleDriveDocumentID = documentID
+                try modelContext.save()
             }
 
             let remote = try await api.getDocument(id: documentID)
@@ -1262,9 +1286,6 @@ final class GoogleDriveStore: ObservableObject {
             draft.googleDriveSyncError = nil
             try modelContext.save()
         } catch {
-            if let createdDocumentID {
-                try? await api.deleteFile(id: createdDocumentID)
-            }
             draft.googleDriveSyncError = error.localizedDescription
             try? modelContext.save()
             errorMessage = error.localizedDescription

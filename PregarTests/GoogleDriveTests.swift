@@ -173,6 +173,53 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(captured?.value(forHTTPHeaderField: "Authorization"), "Bearer test-access-token")
     }
 
+    func testAmbiguousSermonCreateRetryFindsThePrivateDraftKeyInsteadOfCreatingADuplicate() async throws {
+        var searchCount = 0
+        var createCount = 0
+        var remoteDocumentExists = false
+        GoogleDriveStubURLProtocol.setHandler { request in
+            if request.httpMethod == "GET" {
+                searchCount += 1
+                let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "q" })?.value ?? ""
+                XCTAssertTrue(query.contains("'folder-1' in parents"))
+                XCTAssertTrue(query.contains("appProperties has { key='pregarDraftKey' and value='draft-key-123' }"))
+                let files = remoteDocumentExists
+                    ? #"[{"id":"doc-created","name":"Sermão","mimeType":"application/vnd.google-apps.document"}]"#
+                    : "[]"
+                return (200, Data("{\"files\":\(files)}".utf8))
+            }
+
+            createCount += 1
+            let metadata = (try? JSONSerialization.jsonObject(with: Self.bodyData(of: request))) as? [String: Any]
+            let properties = metadata?["appProperties"] as? [String: String]
+            XCTAssertEqual(properties?["pregarDraftKey"], "draft-key-123")
+            XCTAssertEqual(metadata?["parents"] as? [String], ["folder-1"])
+            remoteDocumentExists = true
+            return (503, Data(#"{"error":{"message":"Connection interrupted after creation."}}"#.utf8))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let api = GoogleDriveAPI(session: session, accessToken: { "test-access-token" })
+
+        do {
+            _ = try await api.findOrCreateSermonDocument(named: "Sermão", inFolder: "folder-1", draftKey: "draft-key-123")
+            XCTFail("Expected the ambiguous create response to fail")
+        } catch let error as GoogleDriveError {
+            if case .api(status: 503, message: _) = error {} else { XCTFail("Unexpected error: \(error)") }
+        }
+
+        let recovered = try await api.findOrCreateSermonDocument(
+            named: "Sermão",
+            inFolder: "folder-1",
+            draftKey: "draft-key-123"
+        )
+
+        XCTAssertEqual(recovered.id, "doc-created")
+        XCTAssertEqual(searchCount, 2)
+        XCTAssertEqual(createCount, 1)
+    }
+
     func testStaleGoogleDocsRevisionBecomesConflictWithoutSecondRequest() async throws {
         var requests = 0
         GoogleDriveStubURLProtocol.setHandler { _ in
@@ -290,6 +337,22 @@ final class GoogleDriveTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [GoogleDriveStubURLProtocol.self]
         return URLSession(configuration: configuration)
+    }
+
+    private static func bodyData(of request: URLRequest) -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 4_096)
+        defer { buffer.deallocate() }
+        var body = Data()
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: 4_096)
+            guard count > 0 else { break }
+            body.append(buffer, count: count)
+        }
+        return body
     }
 }
 

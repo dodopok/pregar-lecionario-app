@@ -126,7 +126,8 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 
 - Um teste sintético percorre os comandos reais do editor, serialização RTF, reabertura no editor, conversão para o corpo da Google Docs API e exportação em PDF para tablet. Cobre versos e estrofes, citação inline, citação em bloco com atribuição, lista e nota de rodapé, conferindo texto, itálico, recuo, cor e sobrescrito.
 - Esse percurso encontrou um erro no cursor da nota: a digitação começava antes do espaço após o marcador. O cursor agora fica após o espaço, e o teste confirma que a referência digitada não se cola ao sobrescrito.
-- A suíte completa passou com 63 testes e nenhuma falha em macOS 26.6.2. É validação de formatos e payload local; login Google, sincronização real, conflito por edição externa e leitura no Android/iPad permanecem pendentes.
+- O primeiro Google Doc usa uma chave estável por sermão, salva localmente antes da chamada de rede e associada ao arquivo por `appProperties` privado. O app recupera o documento por essa chave numa nova tentativa e persiste o ID remoto assim que o recebe, antes de atualizar o texto. A recuperação de uma criação com resposta ambígua está coberta por teste de rede simulado; esse mecanismo usa a busca `appProperties has` da [Google Drive API](https://developers.google.com/workspace/drive/api/guides/search-files).
+- A suíte completa passou com 64 testes e nenhuma falha em macOS 26.6.2. `codesign` confirma a build com `Apple Development: DOUGLAS DE ARAUJO SILVA`, `TeamIdentifier=R573HPN65Q`. São validações locais e simuladas; login Google, sincronização real, conflito por edição externa e leitura no Android/iPad permanecem pendentes.
 
 ## Performance
 
