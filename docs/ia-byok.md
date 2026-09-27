@@ -108,18 +108,18 @@ O usuário informou duas ou três revisões por sermão. Para uma ordem de grand
 
 O [sermão amostrado no Drive](analises/sermao-drive.md) tem 2.115 palavras e 11.474 caracteres, incluindo espaços e quebras de linha. Essas medidas não foram convertidas em tokens faturáveis e não validam, por si só, o cenário de 20.000/5.000. A medição futura deve separar manuscrito, passagens, comentários, instruções e saída efetivamente cobrada. Nenhuma chamada paga de revisão foi realizada com essa amostra.
 
-Tarifas padrão consultadas em 26 de setembro de 2026, sem cache, lote, ferramentas de busca ou chamadas adicionais:
+Tarifas padrão consultadas em 27 de setembro de 2026, sem cache, lote, ferramentas de busca ou chamadas adicionais:
 
 | Provedor/modelo | Entrada por milhão | Saída por milhão | Duas revisões | Três revisões |
 | --- | --- | --- | --- | --- |
 | OpenAI / GPT-6 Sol | US$ 2,00 | US$ 10,00 | US$ 0,18 | US$ 0,27 |
 | Anthropic / Claude Sonnet 5 | US$ 2,00 | US$ 10,00 | US$ 0,18 | US$ 0,27 |
 | Google / Gemini 3.8 Flash | US$ 0,75 | US$ 3,75 | US$ 0,0675 | US$ 0,10125 |
-| Perplexity / google/gemini-3.8-flash | US$ 0,75 | US$ 3,75 | US$ 0,0675 | US$ 0,10125 |
+| Perplexity Agent / `perplexity/sonar` | US$ 0,25 | US$ 2,50 | US$ 0,035 | US$ 0,0525 |
 
 Cálculo: revisões × ((tokens de entrada × tarifa de entrada + tokens de saída × tarifa de saída) / 1.000.000).
 
-Fontes das tarifas: [OpenAI](https://developers.openai.com/api/docs/models/gpt-6-sol), [Anthropic](https://platform.claude.com/docs/en/models/overview), [Google](https://ai.google.dev/gemini-api/docs/pricing) e [Perplexity](https://docs.perplexity.ai/docs/agent-api/models). A tabela do Google informa que suas tarifas padrão do Gemini 3.8 Flash passam a US$ 1,50 de entrada e US$ 7,50 de saída por milhão em 1 de janeiro de 2027. Nesse mesmo cenário, duas ou três revisões custariam US$ 0,135 ou US$ 0,2025 diretamente no Google. Essa mudança não foi presumida para a tarifa da Perplexity.
+Fontes das tarifas: [OpenAI](https://developers.openai.com/api/docs/models/gpt-6-sol), [Anthropic](https://platform.claude.com/docs/en/models/overview), [Google](https://ai.google.dev/gemini-api/docs/pricing) e [Perplexity Agent API](https://docs.perplexity.ai/docs/agent-api/models). A linha da Perplexity usa a tarifa publicada pela Agent API para `perplexity/sonar`, não a tarifa do Gemini via Perplexity. A tabela do Google informa que suas tarifas padrão do Gemini 3.8 Flash passam a US$ 1,50 de entrada e US$ 7,50 de saída por milhão em 1 de janeiro de 2027. Nesse mesmo cenário, duas ou três revisões custariam US$ 0,135 ou US$ 0,2025 diretamente no Google. Essa mudança não foi presumida para a tarifa da Perplexity.
 
 A simulação cobre apenas a revisão e não inclui pesquisa de materiais, OCR pago, tentativas adicionais, impostos ou câmbio. O volume de comentários e o raciocínio faturado podem mudar significativamente o resultado. A avaliação deve medir o pacote real e registrar o custo por preparação; não assumir frequência semanal ou um custo mensal sem informação sobre quantos sermões são preparados.
 
