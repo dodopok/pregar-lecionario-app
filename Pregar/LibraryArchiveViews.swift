@@ -1,7 +1,25 @@
+import AppKit
 import PDFKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
+
+private enum PDFLibraryCoverCache {
+    private static let images: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 32
+        return cache
+    }()
+
+    static func image(for record: PDFLibraryRecord) -> NSImage? {
+        guard let data = record.coverJPEG else { return nil }
+        let key = "\(record.id)|\(record.indexVersion ?? 0)|\(data.hashValue)" as NSString
+        if let image = images.object(forKey: key) { return image }
+        guard let image = NSImage(data: data) else { return nil }
+        images.setObject(image, forKey: key)
+        return image
+    }
+}
 
 struct PDFLibraryView: View {
     @EnvironmentObject private var readerSession: ReaderSessionStore
@@ -178,7 +196,7 @@ struct PDFLibraryView: View {
     }
 
     private func outlineTable(_ sections: [PDFSectionLocation]) -> some View {
-        VStack(spacing: 0) {
+        LazyVStack(spacing: 0) {
             HStack {
                 Text("PASSAGEM / SEÇÃO")
                 Spacer()
@@ -226,7 +244,7 @@ struct PDFLibraryView: View {
 
     private func coverImage(_ record: PDFLibraryRecord, width: CGFloat, height: CGFloat) -> some View {
         Group {
-            if let data = record.coverJPEG, let image = NSImage(data: data) {
+            if let image = PDFLibraryCoverCache.image(for: record) {
                 Image(nsImage: image).resizable().scaledToFill()
             } else {
                 Rectangle().fill(coverColor(record.title))
@@ -246,7 +264,13 @@ struct PDFLibraryView: View {
     }
 
     private func openInReader(_ record: PDFLibraryRecord, page: Int, reference: String? = nil) {
-        guard readerSession.openPDF(title: record.title, path: record.path, page: page, reference: reference) else {
+        guard readerSession.openPDF(
+            title: record.title,
+            path: record.path,
+            page: page,
+            reference: reference,
+            indexedSections: record.sections
+        ) else {
             errorMessage = "Este PDF não pôde ser aberto. Verifique se o arquivo ainda está disponível."
             return
         }
@@ -290,7 +314,7 @@ struct PDFLibraryView: View {
         guard !isIndexing, !paths.isEmpty else { return }
         isIndexing = true
         Task {
-            let indexed = await Task.detached(priority: .userInitiated) {
+            let indexed = await Task.detached(priority: .utility) {
                 paths.compactMap { PDFLibraryIndexer.index(path: $0) }
             }.value
             let indexedByPath = Dictionary(uniqueKeysWithValues: indexed.map { ($0.path, $0) })

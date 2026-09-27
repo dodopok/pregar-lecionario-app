@@ -321,6 +321,7 @@ enum PDFLibraryIndexer {
         var entries: [(title: String, page: Int, context: String?, order: Int)] = []
         var seen: Set<String> = []
         for pageNumber in 1...document.pageCount {
+            if pageNumber.isMultiple(of: 32), Task.isCancelled { return [] }
             guard let text = document.page(at: pageNumber - 1)?.string else { continue }
             let lines = text.components(separatedBy: .newlines).prefix(12)
             for line in lines {

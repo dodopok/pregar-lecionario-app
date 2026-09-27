@@ -3,7 +3,12 @@ import SwiftUI
 
 @MainActor
 final class EditorCommands: ObservableObject {
+    @Published private(set) var wordCount = 0
     weak var textView: NSTextView?
+
+    func updateWordCount(from text: String) {
+        wordCount = text.split(whereSeparator: \.isWhitespace).count
+    }
 
     func bold() { toggleFontTrait(.boldFontMask) }
     func italic() { toggleFontTrait(.italicFontMask) }
@@ -165,14 +170,17 @@ struct RichTextEditor: NSViewRepresentable {
                 documentAttributes: nil
             ) {
                 textView.textStorage?.setAttributedString(content)
+                parent.commands.updateWordCount(from: content.string)
             } else if data == nil {
                 textView.string = ""
+                parent.commands.updateWordCount(from: "")
             }
             lastAppliedData = data
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
+            parent.commands.updateWordCount(from: textView.string)
             let range = NSRange(location: 0, length: textView.textStorage?.length ?? 0)
             guard let data = try? textView.attributedString().data(
                 from: range,

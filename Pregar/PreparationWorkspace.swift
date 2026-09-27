@@ -505,7 +505,7 @@ struct PreparationWorkspace: View {
     }
 
     private func statusBar(draft: SermonDraft) -> some View {
-        let words = plainText(from: draft.rtfData).split(whereSeparator: \.isWhitespace).count
+        let words = editorCommands.wordCount
         let pages = Double(words) / 720
         return HStack(spacing: 12) {
             Text("\(words.formatted()) palavras · ≈ \(pages.formatted(.number.precision(.fractionLength(1)))) páginas")
@@ -528,14 +528,6 @@ struct PreparationWorkspace: View {
         .frame(height: 34)
         .background(PrototypeStyle.canvas)
         .overlay(alignment: .top) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
-    }
-
-    private func plainText(from data: Data?) -> String {
-        guard let data,
-              let text = try? NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil) else {
-            return ""
-        }
-        return text.string
     }
 
     private func chooseMainReading(_ reading: LiturgicalReading, for draft: SermonDraft) {

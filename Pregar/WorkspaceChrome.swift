@@ -457,7 +457,9 @@ struct ResourceContextPanel: View {
     let collapse: () -> Void
     @State private var filter: MaterialFilter = .all
     @State private var pdfRecords: [PDFLibraryRecord] = []
-    @State private var isIndexingPDFs = false
+    @State private var pdfRecordsRevision = 0
+    @State private var matchedPDFs: [PDFSectionMatchKind: [MatchedPDF]] = [:]
+    @State private var isMatchingPDFs = false
 
     private enum MaterialFilter: String, CaseIterable {
         case all = "Tudo"
@@ -472,7 +474,7 @@ struct ResourceContextPanel: View {
         var id: String { url.absoluteString }
     }
 
-    private struct MatchedPDF: Identifiable {
+    private struct MatchedPDF: Identifiable, Sendable {
         let record: PDFLibraryRecord
         let section: PDFSectionLocation
         let kind: PDFSectionMatchKind
@@ -490,18 +492,6 @@ struct ResourceContextPanel: View {
             SourceLink(title: "My Pastoral Ponderings", detail: "Busca por passagem", url: FavoriteSourceURLs.myPastoralPonderings(reference: reference)),
             SourceLink(title: "Ponderings on a Faith Journey", detail: "Bob Cornwall · busca por passagem", url: FavoriteSourceURLs.bobCornwall(reference: reference))
         ]
-    }
-
-    private var pdfMatches: [MatchedPDF] {
-        guard let target = ScriptureReference.parse(reference) else { return [] }
-        return pdfRecords.flatMap { record in
-            (record.sections ?? []).compactMap { section in
-                PDFLibraryIndexer.match(section, target: target).map { MatchedPDF(record: record, section: section, kind: $0) }
-            }
-        }.sorted {
-            if $0.kind.rawValue != $1.kind.rawValue { return $0.kind.rawValue < $1.kind.rawValue }
-            return $0.record.title.localizedStandardCompare($1.record.title) == .orderedAscending
-        }
     }
 
     var body: some View {
@@ -557,6 +547,39 @@ struct ResourceContextPanel: View {
         .background(PrototypeStyle.paper)
         .onAppear(perform: restorePDFRecords)
         .onChange(of: savedPDFRecords) { _, _ in restorePDFRecords() }
+        .task(id: "\(reference)|\(pdfRecordsRevision)|\(selectedTab == .materials)|\(filter != .sites)") {
+            matchedPDFs = [:]
+            isMatchingPDFs = false
+            guard selectedTab == .materials, filter != .sites,
+                  let target = ScriptureReference.parse(reference) else { return }
+
+            isMatchingPDFs = true
+            let records = pdfRecords
+            let worker = Task.detached(priority: .utility) { () -> [PDFSectionMatchKind: [MatchedPDF]] in
+                var groups: [PDFSectionMatchKind: [MatchedPDF]] = [:]
+                for record in records {
+                    for section in record.sections ?? [] {
+                        guard !Task.isCancelled else { return [:] }
+                        guard let kind = PDFLibraryIndexer.match(section, target: target) else { continue }
+                        groups[kind, default: []].append(MatchedPDF(record: record, section: section, kind: kind))
+                    }
+                }
+                for kind in Array(groups.keys) {
+                    groups[kind]?.sort {
+                        $0.record.title.localizedStandardCompare($1.record.title) == .orderedAscending
+                    }
+                }
+                return groups
+            }
+            let results = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: {
+                worker.cancel()
+            }
+            guard !Task.isCancelled else { return }
+            matchedPDFs = results
+            isMatchingPDFs = false
+        }
     }
 
     private var materialsContent: some View {
@@ -617,9 +640,9 @@ struct ResourceContextPanel: View {
             }
 
             if filter != .sites {
-                let exact = pdfMatches.filter { $0.kind == .exact }
-                let partial = pdfMatches.filter { $0.kind == .partial }
-                let context = pdfMatches.filter { $0.kind == .context }
+                let exact = matchedPDFs[.exact] ?? []
+                let partial = matchedPDFs[.partial] ?? []
+                let context = matchedPDFs[.context] ?? []
                 if !exact.isEmpty {
                     sectionHeading("SOBRE ESTA PASSAGEM", color: accent)
                     ForEach(exact) { pdfMatchRow($0) }
@@ -632,10 +655,10 @@ struct ResourceContextPanel: View {
                     sectionHeading("A CONFIRMAR", color: PrototypeStyle.muted)
                     ForEach(context) { pdfMatchRow($0) }
                 }
-                if pdfMatches.isEmpty {
+                if matchedPDFs.values.allSatisfy(\.isEmpty) {
                     sectionHeading("BIBLIOTECA", color: accent)
-                    Text(isIndexingPDFs
-                         ? "Indexando passagens dos PDFs…"
+                    Text(isMatchingPDFs
+                         ? "Comparando referências nos PDFs…"
                          : (pdfRecords.isEmpty ? "Importe PDFs para encontrar comentários desta passagem." : "Nenhum PDF indexado corresponde a esta passagem."))
                         .font(.system(size: 11))
                         .foregroundStyle(PrototypeStyle.muted)
@@ -674,7 +697,8 @@ struct ResourceContextPanel: View {
                         title: match.record.title,
                         path: match.record.path,
                         page: match.section.startPage,
-                        reference: reference
+                        reference: reference,
+                        indexedSections: match.record.sections
                     ) else { return }
                     openWindow(id: "reader")
                 }
@@ -695,25 +719,11 @@ struct ResourceContextPanel: View {
     private func restorePDFRecords() {
         guard let decoded = try? JSONDecoder().decode([PDFLibraryRecord].self, from: savedPDFRecords) else {
             pdfRecords = []
+            pdfRecordsRevision += 1
             return
         }
         pdfRecords = decoded.filter { FileManager.default.fileExists(atPath: $0.path) }
-        guard !isIndexingPDFs,
-              pdfRecords.contains(where: { $0.indexVersion != PDFLibraryIndexer.currentVersion || $0.sections == nil }) else { return }
-        isIndexingPDFs = true
-        let recordsToIndex = pdfRecords
-        Task {
-            let indexed = await Task.detached(priority: .utility) {
-                recordsToIndex.map { record in PDFLibraryIndexer.index(path: record.path) ?? record }
-            }.value
-            guard let encoded = try? JSONEncoder().encode(indexed) else {
-                isIndexingPDFs = false
-                return
-            }
-            pdfRecords = indexed
-            savedPDFRecords = encoded
-            isIndexingPDFs = false
-        }
+        pdfRecordsRevision += 1
     }
 
     private var ideasContent: some View {

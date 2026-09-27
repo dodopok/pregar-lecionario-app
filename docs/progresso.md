@@ -1,6 +1,6 @@
 # Progresso de implementação
 
-Atualizado em 26 de setembro de 2026.
+Atualizado em 27 de setembro de 2026.
 
 ## Referência visual
 
@@ -25,7 +25,7 @@ O projeto é um app nativo para macOS, com armazenamento local e consumo da Est�
 - Editor local em RTF, com negrito, itálico, título, citação, lista e inserção de marcador/área de nota de rodapé.
 - Comparação de uma passagem em duas traduções pela Estêvão API v2, com alternância entre perícope e capítulo.
 - Painel contextual com abas Materiais, Ideias e Revisão. PDFs são associados à passagem pela leitura dos bookmarks e agrupados como passagem coincidente, sobreposição ou contexto; abrir um resultado leva o Leitor à página física inicial da seção. Working Preacher abre o arquivo do texto, os dois blogs abrem a busca interna por referência e Anglican Compass abre diretamente “Today in the Spirit: Proper N A” quando a data dominical e o tempo litúrgico permitem determinar o Próprio.
-- Leitor em janela independente: mantém abas web e PDFs, restaura a seleção e a última localização, navega no WebKit, mostra seções com páginas físicas e contexto e permite corrigir página e marcar material para revisão. A seleção textual pode ser copiada com a origem. As seções são relidas do PDF, sem OCR.
+- Leitor em janela independente: mantém abas web e PDFs, restaura a seleção e a última localização, navega no WebKit, mostra seções com páginas físicas e contexto e permite corrigir página e marcar material para revisão. A seleção textual pode ser copiada com a origem. Usa seções já indexadas quando disponíveis e carrega seções ausentes em segundo plano, sem OCR.
 - Biblioteca local importa PDFs, extrai título/autor dos metadados, gera miniatura da capa e indexa bookmarks com intervalo físico até a próxima seção. A Mesa migra importações antigas em segundo plano; em PDFs sem sumário, tenta cabeçalhos textuais. A versão 2 do índice reprocessa registros anteriores para substituir nomes de arquivo por metadados editoriais e gerar as capas. Páginas digitalizadas continuam sem OCR.
 - Biblioteca e Arquivo agora são janelas independentes; Arquivo local lista sermões e busca por título, passagem ou data. Ocasião litúrgica, relações de materiais, comparação/restauração de versões e estado do Drive ainda não estão implementados.
 - Folhas de revisão, perguntas e preparação para tablet representam os limites e opções do protótipo, mas enviar à IA e atualizar o Drive ficam desativados até as integrações BYOK e Google Drive existirem.
@@ -66,6 +66,15 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - O parser aceita referências em português e inglês, ponto ou dois-pontos, diferentes traços, intervalos entre capítulos e listas de versículos no mesmo bookmark. A classificação considera intervalo exato/contido, sobreposição parcial e capítulo/contexto; referências em prosa livre e PDFs digitalizados ainda requerem tratamento adicional.
 - A Mesa e a Bíblia comparativa preservam suas colunas durante buscas; no painel de leituras, traduções já obtidas ficam em cache e as ausentes mostram carregamento localizado. Ao trocar a data enquanto a API responde, o painel de leituras mantém o conteúdo anterior montado, cobre-o com um estado de atualização não interativo e substitui os dados quando chegam; a cena da Bíblia não é remontada ao mudar a referência.
 - As buscas favoritas são URLs específicas: Working Preacher usa o arquivo de comentários por perícope; Anglican Compass consulta o artigo do Próprio por domingo quando identificável; os dois blogs restantes recebem a passagem na busca do próprio site. O app ainda não coleta nem exibe resultados dessas buscas internamente.
+
+## Performance
+
+- Uma amostra de 8 segundos do processo aberto encontrou a thread principal aguardando eventos do AppKit, sem loop ativo durante o intervalo ocioso. O footprint era 68,2 MB naquele instante e o pico desde a abertura era 224,3 MB; é uma fotografia pontual, não um benchmark de rolagem ou troca de abas.
+- A inspeção de código encontrou trabalho repetido na UI: a Mesa recalculava os matches de todos os bookmarks até três vezes por render; Biblioteca construía todas as linhas de seções simultaneamente e decodificava capas novamente; o Leitor restaurava e carregava todas as abas PDF/Web de uma vez, reabria documentos ao selecioná-los e reindexava seções durante renders; a posição do PDF era serializada e gravada a cada mudança de página; o contador de palavras decodificava o RTF em cada atualização.
+- Os matches agora são calculados em tarefa de baixa prioridade, agrupados uma vez e cancelados quando se troca de texto/painel/filtro. Só a Biblioteca reindexa migrações; a Mesa consome o índice salvo.
+- A lista de seções da Biblioteca é virtualizada e as capas usam cache limitado. Abas restauradas são abertas sob demanda, documentos PDF são reutilizados, seções são carregadas em segundo plano e canceladas ao sair da aba; fechar a aba libera seus recursos. O progresso de leitura é salvo após uma pausa curta, e fechar a janela do Leitor força a gravação.
+- O contador de palavras agora lê o texto já carregado no NSTextView em vez de decodificar novamente o RTF. Importação e indexação usam prioridade de utilidade.
+- A build dessas alterações compilou assinada por Apple Development, Team `R573HPN65Q`. O app do usuário já estava aberto com uma sessão de Leitor; não foi encerrado para substituir a build, então o novo fluxo ainda precisa de uma verificação visual em runtime. Não há suíte automatizada no projeto.
 
 ## Próximos passos
 

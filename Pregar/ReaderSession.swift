@@ -43,8 +43,11 @@ final class ReaderSessionStore: ObservableObject {
     private let archiveKey = "reader.session.v1"
     private let linksKey = "reader.section-links.v1"
     private var pdfDocuments: [String: PDFDocument] = [:]
+    private var pdfSections: [String: [PDFSectionLocation]] = [:]
+    private var sectionTasks: [String: Task<[PDFSectionLocation], Never>] = [:]
     private var webSessions: [UUID: ReaderWebSession] = [:]
     private var rememberedPages: [String: Int] = [:]
+    private var pendingPagePersistence: Task<Void, Never>?
 
     init() {
         if let data = UserDefaults.standard.data(forKey: archiveKey),
@@ -63,18 +66,6 @@ final class ReaderSessionStore: ObservableObject {
            let links = try? JSONDecoder().decode([String: Int].self, from: data) {
             rememberedPages = links
         }
-        for tab in tabs {
-            switch tab.kind {
-            case .pdf:
-                if let document = PDFDocument(url: URL(fileURLWithPath: tab.location)) {
-                    pdfDocuments[tab.location] = document
-                }
-            case .web:
-                if let url = URL(string: tab.location) {
-                    webSessions[tab.id] = ReaderWebSession(url: url)
-                }
-            }
-        }
         if selectedID == nil { selectedID = tabs.last?.id }
     }
 
@@ -87,11 +78,24 @@ final class ReaderSessionStore: ObservableObject {
     }
 
     @discardableResult
-    func openPDF(title: String, path: String, page: Int = 1, reference: String? = nil) -> Bool {
+    func openPDF(
+        title: String,
+        path: String,
+        page: Int = 1,
+        reference: String? = nil,
+        indexedSections: [PDFSectionLocation]? = nil
+    ) -> Bool {
         let url = URL(fileURLWithPath: path).standardizedFileURL
-        guard let document = PDFDocument(url: url), document.pageCount > 0 else { return false }
         let location = url.path
-        pdfDocuments[location] = document
+        let document: PDFDocument
+        if let cached = pdfDocuments[location] {
+            document = cached
+        } else {
+            guard let loaded = PDFDocument(url: url), loaded.pageCount > 0 else { return false }
+            document = loaded
+            pdfDocuments[location] = loaded
+        }
+        if let indexedSections { pdfSections[location] = indexedSections }
 
         if let index = tabs.firstIndex(where: { $0.kind == .pdf && $0.location == location }) {
             tabs[index].title = title
@@ -130,7 +134,6 @@ final class ReaderSessionStore: ObservableObject {
             )
             tabs.append(tab)
             selectedID = tab.id
-            webSessions[tab.id] = ReaderWebSession(url: url)
         }
         persist()
         return true
@@ -138,8 +141,18 @@ final class ReaderSessionStore: ObservableObject {
 
     func close(_ id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
-        tabs.remove(at: index)
-        webSessions[id] = nil
+        let closed = tabs.remove(at: index)
+        switch closed.kind {
+        case .pdf:
+            pdfDocuments[closed.location] = nil
+            pdfSections[closed.location] = nil
+            sectionTasks[closed.location]?.cancel()
+            sectionTasks[closed.location] = nil
+        case .web:
+            webSessions[id]?.webView.stopLoading()
+            webSessions[id]?.webView.navigationDelegate = nil
+            webSessions[id] = nil
+        }
         if selectedID == id {
             selectedID = tabs.isEmpty ? nil : tabs[min(index, tabs.count - 1)].id
         }
@@ -163,9 +176,38 @@ final class ReaderSessionStore: ObservableObject {
         return session
     }
 
-    func sections(for tab: ReaderTab) -> [PDFSectionLocation] {
-        guard let document = pdfDocument(for: tab) else { return [] }
-        return PDFLibraryIndexer.sections(for: document)
+    func sections(for tab: ReaderTab) async -> [PDFSectionLocation] {
+        guard tab.kind == .pdf else { return [] }
+        let path = tab.location
+        if let cached = pdfSections[path] { return cached }
+
+        let task: Task<[PDFSectionLocation], Never>
+        if let existing = sectionTasks[path], !existing.isCancelled {
+            task = existing
+        } else {
+            task = Task.detached(priority: .utility) {
+                guard !Task.isCancelled else { return [] }
+                if let data = UserDefaults.standard.data(forKey: "pregar.library.records.v1"),
+                   let records = try? JSONDecoder().decode([PDFLibraryRecord].self, from: data),
+                   let sections = records.first(where: { $0.path == path })?.sections {
+                    return sections
+                }
+                guard !Task.isCancelled else { return [] }
+                guard let document = PDFDocument(url: URL(fileURLWithPath: path)) else { return [] }
+                return PDFLibraryIndexer.sections(for: document)
+            }
+            sectionTasks[path] = task
+        }
+
+        let sections = await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        guard !Task.isCancelled else { return [] }
+        sectionTasks[path] = nil
+        pdfSections[path] = sections
+        return sections
     }
 
     func setPage(_ page: Int, for tabID: UUID) {
@@ -174,7 +216,7 @@ final class ReaderSessionStore: ObservableObject {
         let boundedPage = min(max(page, 1), document.pageCount)
         guard tabs[index].physicalPage != boundedPage else { return }
         tabs[index].physicalPage = boundedPage
-        persist()
+        schedulePagePersistence()
     }
 
     func setReviewInclusion(_ included: Bool, for tabID: UUID) {
@@ -187,6 +229,11 @@ final class ReaderSessionStore: ObservableObject {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }), tabs[index].kind == .web,
               tabs[index].location != location else { return }
         tabs[index].location = location
+        persist()
+    }
+
+    func flushPagePersistence() {
+        guard pendingPagePersistence != nil else { return }
         persist()
     }
 
@@ -210,6 +257,22 @@ final class ReaderSessionStore: ObservableObject {
     }
 
     private func persist() {
+        pendingPagePersistence?.cancel()
+        pendingPagePersistence = nil
+        persistNow()
+    }
+
+    private func schedulePagePersistence() {
+        pendingPagePersistence?.cancel()
+        pendingPagePersistence = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled, let self else { return }
+            self.persistNow()
+            self.pendingPagePersistence = nil
+        }
+    }
+
+    private func persistNow() {
         let archive = ReaderArchive(tabs: tabs, selectedID: selectedID)
         guard let data = try? JSONEncoder().encode(archive) else { return }
         UserDefaults.standard.set(data, forKey: archiveKey)
@@ -272,11 +335,12 @@ struct ReaderWindowView: View {
     @State private var correctionPage = 1
     @State private var selectedText = ""
     @State private var pageField = "1"
+    @State private var sections: [PDFSectionLocation] = []
 
     private var tab: ReaderTab? { reader.selectedTab }
     private var document: PDFDocument? { tab.flatMap { reader.pdfDocument(for: $0) } }
     private var webSession: ReaderWebSession? { tab.flatMap { reader.webSession(for: $0) } }
-    private var sections: [PDFSectionLocation] { tab.map { reader.sections(for: $0) } ?? [] }
+    private var sectionLoadKey: String? { tab?.kind == .pdf ? tab?.location : nil }
     private var activeSection: PDFSectionLocation? {
         guard let tab else { return nil }
         return sections.last { $0.startPage <= tab.physicalPage }
@@ -308,12 +372,18 @@ struct ReaderWindowView: View {
             selectedText = ""
             pageField = String(tab?.physicalPage ?? 1)
         }
+        .onDisappear { reader.flushPagePersistence() }
         .onChange(of: tab?.physicalPage) { _, page in
             pageField = String(page ?? 1)
         }
         .onChange(of: webSession?.currentURL) { _, url in
             guard let tab, let url else { return }
             reader.updateWebLocation(url.absoluteString, for: tab.id)
+        }
+        .task(id: sectionLoadKey) {
+            sections = []
+            guard let tab, tab.kind == .pdf else { return }
+            sections = await reader.sections(for: tab)
         }
         .sheet(isPresented: $showingNewTab) {
             ReaderNewTabSheet { url in
