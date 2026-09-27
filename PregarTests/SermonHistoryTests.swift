@@ -120,7 +120,7 @@ final class SermonHistoryTests: XCTestCase {
     }
 
     @MainActor
-    func testReaderSessionRestoresTabsPDFPageSelectionAndPericopeLink() throws {
+    func testReaderSessionRestoresTabsPDFPageSelectionAndPericopeLink() async throws {
         let suiteName = "Pregar.ReaderSessionTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         let directory = FileManager.default.temporaryDirectory
@@ -154,13 +154,14 @@ final class SermonHistoryTests: XCTestCase {
         var originalWebTabID: UUID?
         do {
             let session = ReaderSessionStore(userDefaults: defaults)
-            XCTAssertTrue(session.openPDF(
+            let openedPDF = await session.openPDF(
                 title: "Comentário",
                 path: pdfURL.path,
                 page: 1,
                 reference: "Mateus 21.33-46",
                 sermonDateKey: "2026-10-04"
-            ))
+            )
+            XCTAssertTrue(openedPDF)
             let pdfTab = try XCTUnwrap(session.tabs.first)
             session.setPage(2, for: pdfTab.id)
             session.flushPagePersistence()
@@ -187,14 +188,58 @@ final class SermonHistoryTests: XCTestCase {
         XCTAssertEqual(restoredPDF.sermonDateKey, "2026-10-04")
 
         if let selectedID = restored.selectedID { restored.close(selectedID) }
-        XCTAssertTrue(restored.openPDF(
+        let reopenedPDF = await restored.openPDF(
             title: "Comentário",
             path: pdfURL.path,
             page: 1,
             reference: "Mateus 21.33-46",
             sermonDateKey: "2026-10-04"
-        ))
+        )
+        XCTAssertTrue(reopenedPDF)
         XCTAssertEqual(restored.selectedTab?.physicalPage, 3)
+    }
+
+    @MainActor
+    func testReaderSessionLoadsPDFAsynchronouslyAndCachesIt() async throws {
+        let suiteName = "Pregar.ReaderPDFLoadTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(suiteName, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let manuscript = NSAttributedString(string: "Comentário temporário para testar a abertura do PDF.")
+        let rtfData = try manuscript.data(
+            from: NSRange(location: 0, length: manuscript.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        let pdfData = try TabletPDFExporter.makePDF(
+            rtfData: rtfData,
+            title: "Teste de carregamento",
+            subtitle: nil,
+            fontName: "Arial",
+            fontSize: 14,
+            includeFootnotes: true
+        )
+        let pdfURL = directory.appendingPathComponent("temporary.pdf")
+        try pdfData.write(to: pdfURL, options: .atomic)
+
+        let session = ReaderSessionStore(userDefaults: defaults)
+        let opened = await session.openPDF(
+            title: "Comentário temporário",
+            path: pdfURL.path,
+            page: 1,
+            reference: "Mateus 21.33-46"
+        )
+
+        XCTAssertTrue(opened)
+        let tab = try XCTUnwrap(session.selectedTab)
+        XCTAssertEqual(tab.kind, .pdf)
+        XCTAssertEqual(tab.title, "Comentário temporário")
+        XCTAssertNotNil(session.pdfDocument(for: tab))
     }
 
     @MainActor

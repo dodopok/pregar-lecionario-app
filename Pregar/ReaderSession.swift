@@ -77,6 +77,14 @@ struct ReaderArchive: Codable, Sendable {
     var selectedID: UUID?
 }
 
+private final class LoadedPDF: @unchecked Sendable {
+    let document: PDFDocument?
+
+    init(_ document: PDFDocument?) {
+        self.document = document
+    }
+}
+
 @MainActor
 final class ReaderSessionStore: ObservableObject {
     @Published private(set) var tabs: [ReaderTab] = []
@@ -86,6 +94,7 @@ final class ReaderSessionStore: ObservableObject {
     private let linksKey = "reader.section-links.v1"
     private let userDefaults: UserDefaults
     private var pdfDocuments: [String: PDFDocument] = [:]
+    private var pdfLoadTasks: [String: Task<LoadedPDF, Never>] = [:]
     private var pdfSections: [String: [PDFSectionLocation]] = [:]
     private var sectionTasks: [String: Task<[PDFSectionLocation], Never>] = [:]
     private var webSessions: [UUID: ReaderWebSession] = [:]
@@ -115,13 +124,34 @@ final class ReaderSessionStore: ObservableObject {
 
     var selectedTab: ReaderTab? { tabs.first { $0.id == selectedID } }
 
+    func preparePDF(for path: String) async -> PDFDocument? {
+        let location = URL(fileURLWithPath: path).standardizedFileURL.path
+        if let cached = pdfDocuments[location] { return cached }
+
+        let task: Task<LoadedPDF, Never>
+        if let existing = pdfLoadTasks[location] {
+            task = existing
+        } else {
+            let url = URL(fileURLWithPath: location)
+            task = Task.detached(priority: .userInitiated) {
+                LoadedPDF(PDFDocument(url: url))
+            }
+            pdfLoadTasks[location] = task
+        }
+
+        let loaded = await task.value
+        pdfLoadTasks[location] = nil
+        guard let document = loaded.document, document.pageCount > 0 else { return nil }
+        pdfDocuments[location] = document
+        return document
+    }
+
     func select(_ id: UUID) {
         guard tabs.contains(where: { $0.id == id }) else { return }
         selectedID = id
         persist()
     }
 
-    @discardableResult
     func openPDF(
         title: String,
         path: String,
@@ -129,17 +159,28 @@ final class ReaderSessionStore: ObservableObject {
         reference: String? = nil,
         sermonDateKey: String? = nil,
         indexedSections: [PDFSectionLocation]? = nil
+    ) async -> Bool {
+        guard let document = await preparePDF(for: path) else { return false }
+        return registerPDF(
+            title: title,
+            location: URL(fileURLWithPath: path).standardizedFileURL.path,
+            page: page,
+            reference: reference,
+            sermonDateKey: sermonDateKey,
+            indexedSections: indexedSections,
+            document: document
+        )
+    }
+
+    private func registerPDF(
+        title: String,
+        location: String,
+        page: Int,
+        reference: String?,
+        sermonDateKey: String?,
+        indexedSections: [PDFSectionLocation]?,
+        document: PDFDocument
     ) -> Bool {
-        let url = URL(fileURLWithPath: path).standardizedFileURL
-        let location = url.path
-        let document: PDFDocument
-        if let cached = pdfDocuments[location] {
-            document = cached
-        } else {
-            guard let loaded = PDFDocument(url: url), loaded.pageCount > 0 else { return false }
-            document = loaded
-            pdfDocuments[location] = loaded
-        }
         if let indexedSections { pdfSections[location] = indexedSections }
 
         if let index = tabs.firstIndex(where: { $0.kind == .pdf && $0.location == location }) {
@@ -210,10 +251,7 @@ final class ReaderSessionStore: ObservableObject {
 
     func pdfDocument(for tab: ReaderTab) -> PDFDocument? {
         guard tab.kind == .pdf else { return nil }
-        if let document = pdfDocuments[tab.location] { return document }
-        guard let document = PDFDocument(url: URL(fileURLWithPath: tab.location)) else { return nil }
-        pdfDocuments[tab.location] = document
-        return document
+        return pdfDocuments[URL(fileURLWithPath: tab.location).standardizedFileURL.path]
     }
 
     func webSession(for tab: ReaderTab) -> ReaderWebSession? {
@@ -478,11 +516,15 @@ struct ReaderWindowView: View {
     @State private var selectedText = ""
     @State private var pageField = "1"
     @State private var sections: [PDFSectionLocation] = []
+    @State private var loadingPDFTabID: UUID?
+    @State private var failedPDFTabID: UUID?
+    @State private var pdfLoadRevision = 0
 
     private var tab: ReaderTab? { reader.selectedTab }
     private var document: PDFDocument? { tab.flatMap { reader.pdfDocument(for: $0) } }
     private var webSession: ReaderWebSession? { tab.flatMap { reader.webSession(for: $0) } }
     private var sectionLoadKey: String? { tab?.kind == .pdf ? tab?.location : nil }
+    private var pdfLoadKey: String { "\(sectionLoadKey ?? "")|\(pdfLoadRevision)" }
     private var activeSection: PDFSectionLocation? {
         guard let tab else { return nil }
         return sections.last { $0.startPage <= tab.physicalPage }
@@ -529,6 +571,19 @@ struct ReaderWindowView: View {
             sections = []
             guard let tab, tab.kind == .pdf else { return }
             sections = await reader.sections(for: tab)
+        }
+        .task(id: pdfLoadKey) {
+            guard let tab, tab.kind == .pdf else {
+                loadingPDFTabID = nil
+                failedPDFTabID = nil
+                return
+            }
+            loadingPDFTabID = tab.id
+            failedPDFTabID = nil
+            let loaded = await reader.preparePDF(for: tab.location)
+            guard !Task.isCancelled else { return }
+            loadingPDFTabID = nil
+            if loaded == nil { failedPDFTabID = tab.id }
         }
         .sheet(isPresented: $showingNewTab) {
             ReaderNewTabSheet { url in
@@ -668,35 +723,54 @@ struct ReaderWindowView: View {
 
     @ViewBuilder
     private func documentPane(_ tab: ReaderTab) -> some View {
-        if tab.kind == .pdf, let document {
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text("Página").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-                    TextField("1", text: $pageField)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 58)
-                        .onSubmit { commitPageField(document, tab: tab) }
-                    Text("de \(document.pageCount)")
-                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-                    if let printed = reader.printedPageLabel(tab.physicalPage, in: document) {
-                        Text("impressa \(printed)").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+        if tab.kind == .pdf {
+            if let document {
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Text("Página").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                        TextField("1", text: $pageField)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 58)
+                            .onSubmit { commitPageField(document, tab: tab) }
+                        Text("de \(document.pageCount)")
+                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                        if let printed = reader.printedPageLabel(tab.physicalPage, in: document) {
+                            Text("impressa \(printed)").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                        }
+                        Spacer()
+                        if let activeSection {
+                            Label(tab.reference == nil ? activeSection.title : "Mesma passagem · seção \(activeSection.title)", systemImage: "text.book.closed")
+                                .font(.system(size: 11, weight: .medium)).foregroundStyle(PrototypeStyle.green)
+                                .lineLimit(1)
+                        }
                     }
-                    Spacer()
-                    if let activeSection {
-                        Label(tab.reference == nil ? activeSection.title : "Mesma passagem · seção \(activeSection.title)", systemImage: "text.book.closed")
-                            .font(.system(size: 11, weight: .medium)).foregroundStyle(PrototypeStyle.green)
-                            .lineLimit(1)
-                    }
-                }
-                .padding(.horizontal, 15).frame(height: 47).background(PrototypeStyle.canvas)
-                Divider()
-                ReaderPDFView(
-                    document: document,
-                    pageNumber: tab.physicalPage,
-                    onPageChange: { reader.setPage($0, for: tab.id) },
-                    onSelectionChange: { selectedText = $0 }
-                )
+                    .padding(.horizontal, 15).frame(height: 47).background(PrototypeStyle.canvas)
+                    Divider()
+                    ReaderPDFView(
+                        document: document,
+                        pageNumber: tab.physicalPage,
+                        onPageChange: { reader.setPage($0, for: tab.id) },
+                        onSelectionChange: { selectedText = $0 }
+                    )
                     .background(Color(red: 0.49, green: 0.48, blue: 0.45))
+                }
+            } else if failedPDFTabID == tab.id {
+                ContentUnavailableView {
+                    Label("PDF indisponível", systemImage: "doc.questionmark")
+                } description: {
+                    Text("O arquivo não pôde ser aberto. Confira se ele ainda está disponível neste Mac.")
+                } actions: {
+                    Button("Tentar novamente", systemImage: "arrow.clockwise") { pdfLoadRevision += 1 }
+                        .buttonStyle(.bordered)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(spacing: 9) {
+                    ProgressView()
+                    Text(loadingPDFTabID == tab.id ? "Abrindo PDF…" : "Preparando PDF…")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else if tab.kind == .web, let session = reader.webSession(for: tab) {
             VStack(spacing: 0) {
@@ -742,6 +816,7 @@ struct ReaderWindowView: View {
                     showingPageCorrection = true
                 }
                 .buttonStyle(.bordered).font(.system(size: 12))
+                .disabled(document == nil)
                 Button("Lembrar este vínculo", systemImage: "bookmark") {
                     reader.rememberLink(for: tab, section: activeSection)
                 }

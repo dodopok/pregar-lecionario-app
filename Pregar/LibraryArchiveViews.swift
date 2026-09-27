@@ -41,6 +41,7 @@ struct PDFLibraryView: View {
     @State private var ocrOperationID: UUID?
     @State private var ocrTask: Task<PDFLibraryOCRResult?, Never>?
     @State private var metadataRecord: PDFLibraryRecord?
+    @State private var openingPDFRecordID: String?
 
     private var selectedRecord: PDFLibraryRecord? {
         records.first { $0.id == selectedID }
@@ -166,10 +167,17 @@ struct PDFLibraryView: View {
                             .buttonStyle(.bordered)
                             .help("Descartar as correções e voltar aos metadados do arquivo")
                         }
-                        Button("Abrir no leitor", systemImage: "book") {
+                        Button {
                             openInReader(selectedRecord, page: 1)
+                        } label: {
+                            if openingPDFRecordID == selectedRecord.id {
+                                Label("Abrindo PDF…", systemImage: "book")
+                            } else {
+                                Label("Abrir no leitor", systemImage: "book")
+                            }
                         }
                             .buttonStyle(.bordered)
+                            .disabled(openingPDFRecordID != nil)
                         if let ocrProgress, ocrTargetID == selectedRecord.id {
                             HStack(spacing: 7) {
                                 ProgressView().controlSize(.small)
@@ -293,6 +301,7 @@ struct PDFLibraryView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .disabled(openingPDFRecordID != nil)
                 .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
             }
         }
@@ -327,17 +336,24 @@ struct PDFLibraryView: View {
     }
 
     private func openInReader(_ record: PDFLibraryRecord, page: Int, reference: String? = nil) {
-        guard readerSession.openPDF(
-            title: record.displayTitle,
-            path: record.path,
-            page: page,
-            reference: reference,
-            indexedSections: record.sections
-        ) else {
-            errorMessage = "Este PDF não pôde ser aberto. Verifique se o arquivo ainda está disponível."
-            return
+        guard openingPDFRecordID == nil else { return }
+        openingPDFRecordID = record.id
+        Task { @MainActor in
+            let opened = await readerSession.openPDF(
+                title: record.displayTitle,
+                path: record.path,
+                page: page,
+                reference: reference,
+                indexedSections: record.sections
+            )
+            guard openingPDFRecordID == record.id else { return }
+            openingPDFRecordID = nil
+            guard opened else {
+                errorMessage = "Este PDF não pôde ser aberto. Verifique se o arquivo ainda está disponível."
+                return
+            }
+            openWindow(id: "reader")
         }
-        openWindow(id: "reader")
     }
 
     private func coverColor(_ title: String) -> Color {

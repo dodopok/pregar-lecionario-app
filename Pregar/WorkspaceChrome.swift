@@ -533,6 +533,7 @@ struct ResourceContextPanel: View {
     @State private var favoriteSiteSearchInProgressReference: String?
     @State private var isPreparingIdeas = false
     @State private var ideasError: String?
+    @State private var openingPDFPath: String?
 
     private enum MaterialFilter: String, CaseIterable {
         case all = "Tudo"
@@ -1092,20 +1093,22 @@ struct ResourceContextPanel: View {
                 }
             }
             HStack(spacing: 8) {
-                Button("Ir para a aba") {
-                    guard readerSession.openPDF(
-                        title: match.record.displayTitle,
-                        path: match.record.path,
-                        page: match.section.startPage,
-                        reference: reference,
-                        sermonDateKey: SermonDateKey.string(from: liturgicalDate),
-                        indexedSections: match.record.sections
-                    ) else { return }
-                    openWindow(id: "reader")
+                Button {
+                    openPDFMatch(match)
+                } label: {
+                    if openingPDFPath == match.record.path {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Abrindo PDF…")
+                        }
+                    } else {
+                        Text("Ir para a aba")
+                    }
                 }
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(accent)
                 .buttonStyle(.plain)
+                .disabled(openingPDFPath != nil)
                 Spacer(minLength: 0)
                 Text(match.kind == .exact ? "alta" : match.kind == .partial ? "média" : "confirmar")
                     .font(.system(size: 10, weight: .medium))
@@ -1115,6 +1118,24 @@ struct ResourceContextPanel: View {
         }
         .padding(.vertical, 9)
         .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+    }
+
+    private func openPDFMatch(_ match: MatchedPDF) {
+        guard openingPDFPath == nil else { return }
+        openingPDFPath = match.record.path
+        Task { @MainActor in
+            let opened = await readerSession.openPDF(
+                title: match.record.displayTitle,
+                path: match.record.path,
+                page: match.section.startPage,
+                reference: reference,
+                sermonDateKey: SermonDateKey.string(from: liturgicalDate),
+                indexedSections: match.record.sections
+            )
+            guard openingPDFPath == match.record.path else { return }
+            openingPDFPath = nil
+            if opened { openWindow(id: "reader") }
+        }
     }
 
     private func restorePDFRecords() {
