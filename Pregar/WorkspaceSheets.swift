@@ -717,18 +717,110 @@ struct EmergencyQuestionsSheet: View {
     }
 }
 
+struct GoogleDriveConnectionSheet: View {
+    let accent: Color
+    @EnvironmentObject private var googleDrive: GoogleDriveStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var clientID: String
+
+    init(accent: Color) {
+        self.accent = accent
+        _clientID = State(initialValue: UserDefaults.standard.string(forKey: "drive.oauthClientID") ?? "")
+    }
+
+    private var clientIDIsValid: Bool {
+        clientID.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix(".apps.googleusercontent.com")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 12) {
+                Image(systemName: googleDrive.isConnected ? "checkmark.icloud.fill" : "icloud")
+                    .font(.system(size: 24)).foregroundStyle(accent)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Google Drive").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+                    Text(googleDrive.isConnected ? "Conectado neste Mac" : "Integração da preparação")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                }
+                Spacer()
+            }
+
+            if googleDrive.isConnected {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle.fill").foregroundStyle(accent)
+                    Text("Google Drive conectado").font(.system(size: 13, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
+                    Spacer()
+                    Button("Desconectar", role: .destructive) {
+                        Task { await googleDrive.disconnect() }
+                    }
+                    .disabled(googleDrive.isConnecting || googleDrive.isSaving)
+                }
+                .padding(14)
+                .background(.white, in: RoundedRectangle(cornerRadius: 8))
+                Text("Os documentos ligados continuam identificados nos sermões deste Mac. Ao reconectar, use a mesma conta Google.")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("OAuth Client ID").font(.system(size: 12, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
+                    TextField("000000000000-….apps.googleusercontent.com", text: $clientID)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12, design: .monospaced))
+                    Text("Identificador público do app para OAuth de desktop. Não use client secret.")
+                        .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                }
+                .padding(14)
+                .background(.white, in: RoundedRectangle(cornerRadius: 8))
+                Text("A autorização abre no navegador padrão e retorna para esta janela. O token de renovação fica no Acesso às Chaves deste Mac.")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+            }
+
+            if let error = googleDrive.errorMessage {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12)).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+            HStack {
+                Spacer()
+                Button("Fechar") { dismiss() }.keyboardShortcut(.cancelAction)
+                if !googleDrive.isConnected {
+                    Button {
+                        Task {
+                            await googleDrive.connect(clientID: clientID)
+                            if googleDrive.isConnected { dismiss() }
+                        }
+                    } label: {
+                        if googleDrive.isConnecting { ProgressView().controlSize(.small) }
+                        else { Label("Conectar", systemImage: "person.crop.circle.badge.checkmark") }
+                    }
+                    .buttonStyle(.borderedProminent).tint(accent)
+                    .disabled(!clientIDIsValid || googleDrive.isConnecting || googleDrive.isLoading)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .padding(22)
+        .frame(width: 560, height: 340)
+        .background(PrototypeStyle.canvas)
+        .preferredColorScheme(.light)
+    }
+}
+
 struct TabletPreparationSheet: View {
     let draft: SermonDraft?
     let accent: Color
-    let openSettings: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var googleDrive: GoogleDriveStore
     @AppStorage("drive.lastTabletFolder") private var lastTabletFolder = ""
     @AppStorage("drive.font") private var readingFont = "Arial"
     @AppStorage("drive.fontSize") private var readingSize = 14.0
     @State private var format = "PDF"
     @State private var includeFootnotes = true
     @State private var isExporting = false
+    @State private var showingDriveConnection = false
+    @State private var showingOverwriteConfirmation = false
     @State private var alertMessage: String?
 
     private var manuscript: String {
@@ -768,8 +860,28 @@ struct TabletPreparationSheet: View {
                 Text(format == "PDF" ? "CÓPIA PDF PARA O TABLET" : "GOOGLE DOC")
                     .font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
                 if format == "Google Doc" {
-                    Text("Google Docs não conectado.")
-                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                    if googleDrive.isLoading {
+                        Label("Verificando conexão…", systemImage: "hourglass")
+                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                    } else if !googleDrive.isConnected {
+                        Label("Google Drive não conectado.", systemImage: "icloud")
+                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                    } else if let draft, let syncedAt = draft.googleDriveSyncedAt {
+                        Label("Documento vinculado · atualizado \(syncedAt.formatted(date: .omitted, time: .shortened))", systemImage: "checkmark.icloud.fill")
+                            .font(.system(size: 12)).foregroundStyle(accent)
+                    } else {
+                        Label("O Google Doc será criado na pasta de sermões.", systemImage: "doc.badge.plus")
+                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                    }
+                    if let error = draft?.googleDriveSyncError {
+                        Text(error).font(.system(size: 11)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let id = draft?.googleDriveDocumentID, let url = googleDrive.documentURL(for: id) {
+                        Button("Abrir no Google Docs", systemImage: "arrow.up.right.square") {
+                            NSWorkspace.shared.open(url)
+                        }
+                        .buttonStyle(.plain).foregroundStyle(accent)
+                    }
                 } else if let path = draft?.tabletPDFPath, FileManager.default.fileExists(atPath: path) {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.text.fill").foregroundStyle(accent)
@@ -815,21 +927,26 @@ struct TabletPreparationSheet: View {
             .background(.white, in: RoundedRectangle(cornerRadius: 8))
 
             HStack {
-                Button("Configurar Drive") { openSettings() }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(accent)
+                if format == "Google Doc" && !googleDrive.isConnected {
+                    Button("Conectar Google Drive", systemImage: "icloud") { showingDriveConnection = true }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(accent)
+                }
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button {
-                    exportPDF()
+                    if format == "Google Doc" { saveGoogleDoc() }
+                    else { exportPDF() }
                 } label: {
-                    if isExporting { ProgressView().controlSize(.small) }
-                    else { Label("Exportar PDF", systemImage: "square.and.arrow.up") }
+                    if isExporting || googleDrive.isSaving { ProgressView().controlSize(.small) }
+                    else if format == "Google Doc" {
+                        Label(draft?.googleDriveDocumentID == nil ? "Criar Google Doc" : "Atualizar Google Doc", systemImage: "arrow.up.doc")
+                    } else { Label("Exportar PDF", systemImage: "square.and.arrow.up") }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(accent)
-                .disabled(isExporting || manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || format != "PDF")
-                .help(format == "PDF" ? "Salvar uma cópia paginada para leitura no tablet" : "Google Docs ainda não está conectado")
+                .disabled(isExporting || googleDrive.isSaving || manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (format == "Google Doc" && !googleDrive.isConnected))
+                .help(format == "PDF" ? "Salvar uma cópia paginada para leitura no tablet" : "Criar ou atualizar o manuscrito no Google Drive")
             }
         }
         .font(.system(size: 12))
@@ -843,6 +960,33 @@ struct TabletPreparationSheet: View {
             Button("OK") { alertMessage = nil }
         } message: {
             Text(alertMessage ?? "")
+        }
+        .confirmationDialog("O Google Doc mudou desde a última sincronização.", isPresented: $showingOverwriteConfirmation, titleVisibility: .visible) {
+            if let id = draft?.googleDriveDocumentID, let url = googleDrive.documentURL(for: id) {
+                Button("Abrir Google Doc para comparar") { NSWorkspace.shared.open(url) }
+            }
+            Button("Substituir versão do Drive", role: .destructive) { saveGoogleDoc(overwriteRemote: true) }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("A versão local foi preservada. Só substitua a cópia do Drive depois de comparar as alterações.")
+        }
+        .sheet(isPresented: $showingDriveConnection) {
+            GoogleDriveConnectionSheet(accent: accent)
+        }
+    }
+
+    @MainActor
+    private func saveGoogleDoc(overwriteRemote: Bool = false) {
+        guard let draft else { return }
+        Task {
+            do {
+                try await googleDrive.saveSermon(draft, modelContext: modelContext, overwriteRemote: overwriteRemote)
+            } catch let error as GoogleDriveError {
+                if case .documentConflict = error { showingOverwriteConfirmation = true }
+                else { alertMessage = error.localizedDescription }
+            } catch {
+                alertMessage = error.localizedDescription
+            }
         }
     }
 

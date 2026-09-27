@@ -24,6 +24,11 @@ final class SermonDraft {
     var mainReadingSlot: String?
     var tabletPDFPath: String?
     var tabletPDFUpdatedAt: Date?
+    var googleDriveDocumentID: String?
+    var googleDriveRevisionID: String?
+    var googleDriveSyncedAt: Date?
+    var googleDriveSyncedContentHash: String?
+    var googleDriveSyncError: String?
     var modifiedAt: Date
     @Attribute(.externalStorage) var rtfData: Data?
 
@@ -38,6 +43,11 @@ final class SermonDraft {
         self.mainReadingSlot = nil
         self.tabletPDFPath = nil
         self.tabletPDFUpdatedAt = nil
+        self.googleDriveDocumentID = nil
+        self.googleDriveRevisionID = nil
+        self.googleDriveSyncedAt = nil
+        self.googleDriveSyncedContentHash = nil
+        self.googleDriveSyncError = nil
         self.modifiedAt = .now
         self.rtfData = nil
     }

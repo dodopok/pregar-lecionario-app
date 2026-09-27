@@ -443,6 +443,7 @@ struct ScripturePanelView: View {
 struct ResourceContextPanel: View {
     @EnvironmentObject private var readerSession: ReaderSessionStore
     @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var googleDrive: GoogleDriveStore
     @Environment(\.openWindow) private var openWindow
     @AppStorage("pregar.library.records.v1") private var savedPDFRecords = Data()
     @AppStorage("pregar.material-research.reports.v1") private var savedResearchReports = Data()
@@ -455,9 +456,11 @@ struct ResourceContextPanel: View {
     let manuscript: String
     let accent: Color
     let openSettings: () -> Void
+    let openDriveConnection: () -> Void
     let openLibrary: () -> Void
     let newReview: () -> Void
     let selectQuote: (String) -> Void
+    let insertText: (String) -> Void
     let emergencyQuestions: () -> Void
     let collapse: () -> Void
     @State private var filter: MaterialFilter = .all
@@ -469,6 +472,8 @@ struct ResourceContextPanel: View {
     @State private var researchInProgressReference: String?
     @State private var researchErrorReference: String?
     @State private var researchError: String?
+    @State private var isPreparingIdeas = false
+    @State private var ideasError: String?
 
     private enum MaterialFilter: String, CaseIterable {
         case all = "Tudo"
@@ -513,7 +518,7 @@ struct ResourceContextPanel: View {
                         HStack(spacing: 5) {
                             Text(tab.rawValue)
                                 .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .medium))
-                            if tab == .ideas { badge("0", color: Color(red: 0.78, green: 0.65, blue: 0.29)) }
+                            if tab == .ideas { badge("\(ideaNotes.count)", color: Color(red: 0.78, green: 0.65, blue: 0.29)) }
                             if tab == .review { badge("\(reviewReports.last?.findings.count ?? 0)", color: accent) }
                         }
                         .foregroundStyle(selectedTab == tab ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.75))
@@ -560,6 +565,15 @@ struct ResourceContextPanel: View {
         }
         .onChange(of: savedPDFRecords) { _, _ in restorePDFRecords() }
         .onChange(of: savedResearchReports) { _, _ in restoreResearchReports() }
+        .onChange(of: selectedTab) { _, tab in
+            if tab == .ideas { Task { await refreshIdeasIfLinked() } }
+        }
+        .onChange(of: googleDrive.isConnected) { _, connected in
+            if connected && selectedTab == .ideas { Task { await refreshIdeasIfLinked() } }
+        }
+        .onChange(of: googleDrive.ideasDocumentID) { _, id in
+            if id != nil && selectedTab == .ideas { Task { await refreshIdeasIfLinked() } }
+        }
         .task(id: "\(reference)|\(pdfRecordsRevision)|\(selectedTab == .materials)|\(filter != .sites)") {
             matchedPDFs = [:]
             isMatchingPDFs = false
@@ -890,12 +904,113 @@ struct ResourceContextPanel: View {
     private var ideasContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Ideias do iPhone").font(PrototypeStyle.serif(17, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-            Text("O documento separado de ideias do Drive ainda não está conectado.")
-                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
-            Button("Configurar Drive", systemImage: "arrow.up.doc", action: openSettings)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(accent)
-                .buttonStyle(.plain)
+            if googleDrive.isLoading {
+                ProgressView("Verificando Google Drive…").font(.system(size: 12)).tint(accent)
+            } else if !googleDrive.isConnected {
+                Text("Conecte o Google Drive para usar seu documento separado de ideias.")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
+                Button("Conectar Google Drive", systemImage: "icloud", action: openDriveConnection)
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(accent).buttonStyle(.plain)
+            } else if googleDrive.ideasDocumentID == nil {
+                Text("Crie um Google Doc independente para continuar anotando pelo iPhone.")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { await createIdeasDocument() }
+                } label: {
+                    if isPreparingIdeas { ProgressView().controlSize(.small) }
+                    else { Label("Criar documento de ideias", systemImage: "doc.badge.plus") }
+                }
+                .font(.system(size: 12, weight: .medium)).foregroundStyle(accent).buttonStyle(.plain)
+                .disabled(isPreparingIdeas)
+            } else {
+                HStack(spacing: 12) {
+                    Button {
+                        if let id = googleDrive.ideasDocumentID, let url = googleDrive.documentURL(for: id) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    } label: {
+                        Label("Abrir no Google Docs", systemImage: "arrow.up.right.square")
+                    }
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(accent).buttonStyle(.plain)
+                    Button {
+                        Task { await refreshIdeasIfLinked() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain).foregroundStyle(PrototypeStyle.muted)
+                    .help("Atualizar ideias do Google Drive")
+                    if isPreparingIdeas { ProgressView().controlSize(.small) }
+                }
+                Text(googleDrive.ideasUpdatedAt.map { "Atualizado \($0.formatted(date: .omitted, time: .shortened))" } ?? "Documento de ideias")
+                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                if ideaNotes.isEmpty {
+                    Text("Nenhuma ideia anotada ainda.")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                } else {
+                    ForEach(Array(ideaNotes.enumerated()), id: \.offset) { item in
+                        let note = item.element
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(note)
+                                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                            HStack {
+                                Spacer()
+                                Button {
+                                    insertText(note)
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .frame(width: 24, height: 24)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain).foregroundStyle(accent)
+                                .help("Inserir esta ideia no manuscrito")
+                            }
+                        }
+                        .padding(10)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(PrototypeStyle.line.opacity(0.6), lineWidth: 1))
+                    }
+                }
+            }
+            if let ideasError {
+                Text(ideasError).font(.system(size: 11)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var ideaNotes: [String] {
+        googleDrive.ideasText
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    @MainActor
+    private func refreshIdeasIfLinked() async {
+        guard selectedTab == .ideas, googleDrive.isConnected, googleDrive.ideasDocumentID != nil, !isPreparingIdeas else { return }
+        isPreparingIdeas = true
+        defer { isPreparingIdeas = false }
+        do {
+            try await googleDrive.refreshIdeas()
+            ideasError = nil
+        } catch {
+            ideasError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func createIdeasDocument() async {
+        guard googleDrive.isConnected, !isPreparingIdeas else { return }
+        isPreparingIdeas = true
+        defer { isPreparingIdeas = false }
+        do {
+            try await googleDrive.ensureIdeasDocument()
+            ideasError = nil
+        } catch {
+            ideasError = error.localizedDescription
         }
     }
 

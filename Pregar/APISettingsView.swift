@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 private enum PreferencesSection: String, CaseIterable, Identifiable {
     case api = "Estêvão API"
     case intelligence = "Inteligência artificial"
-    case drive = "Drive e tablet"
+    case tablet = "Tablet"
     case library = "Biblioteca"
 
     var id: String { rawValue }
@@ -12,7 +12,7 @@ private enum PreferencesSection: String, CaseIterable, Identifiable {
         switch self {
         case .api: "plus"
         case .intelligence: "sparkle"
-        case .drive: "square.and.arrow.down"
+        case .tablet: "ipad.landscape"
         case .library: "book.closed"
         }
     }
@@ -35,8 +35,6 @@ struct APISettingsView: View {
     @State private var resultMessage: String?
     @State private var testSucceeded = false
 
-    @AppStorage("drive.sermonFolder") private var sermonFolder = "Sermões"
-    @AppStorage("drive.ideasDocument") private var ideasDocument = "Ideias de sermões"
     @AppStorage("drive.targets") private var tabletTargets = "Android e iPad"
     @AppStorage("drive.font") private var tabletFont = "Arial"
     @AppStorage("drive.fontSize") private var tabletFontSize = 14.0
@@ -121,7 +119,7 @@ struct APISettingsView: View {
         switch section {
         case .api: apiContent
         case .intelligence: intelligenceContent
-        case .drive: driveContent
+        case .tablet: tabletContent
         case .library: libraryContent
         }
     }
@@ -229,29 +227,8 @@ struct APISettingsView: View {
         .onChange(of: researchProvider) { _, provider in researchModel = provider.suggestedModel }
     }
 
-    private var driveContent: some View {
+    private var tabletContent: some View {
         VStack(alignment: .leading, spacing: 22) {
-            PreferenceGroup {
-                HStack(spacing: 12) {
-                    Image(systemName: "person.crop.circle.badge.questionmark").font(.system(size: 24)).foregroundStyle(PrototypeStyle.muted)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Google Drive não conectado").font(.system(size: 15, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
-                        Text("A autenticação e a sincronização ainda não estão disponíveis.").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-                    }
-                    Spacer()
-                    Button("Conectar") {}.disabled(true)
-                }
-            }
-            Text("DOCUMENTOS").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
-                .padding(.bottom, -12)
-            PreferenceGroup {
-                PreferenceRow(label: "Pasta dos sermões") {
-                    TextField("Sermões", text: $sermonFolder).textFieldStyle(.roundedBorder).frame(maxWidth: 270)
-                }
-                PreferenceRow(label: "Documento de ideias") {
-                    TextField("Ideias de sermões", text: $ideasDocument).textFieldStyle(.roundedBorder).frame(maxWidth: 270)
-                }
-            }
             Text("TABLET").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
                 .padding(.bottom, -12)
             PreferenceGroup {
@@ -272,8 +249,6 @@ struct APISettingsView: View {
                     }
                 }
             }
-            Text("PDFs podem ser salvos em uma pasta local ou sincronizada pelo Google Drive para computador. Google Docs e o documento de ideias dependem da autenticação Google.")
-                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
         }
     }
 
@@ -335,7 +310,7 @@ struct APISettingsView: View {
         switch section {
         case .api: "A conexão usa sempre a Estêvão API v2."
         case .intelligence: "Provedores externos com suas próprias chaves."
-        case .drive: "Sincronização e formato de leitura."
+        case .tablet: "Formato de leitura no tablet."
         case .library: "Comentários em PDF e fontes de pesquisa."
         }
     }
@@ -344,7 +319,7 @@ struct APISettingsView: View {
         switch section {
         case .api: "A chave fica salva no Acesso às Chaves deste Mac."
         case .intelligence: "Credenciais no Acesso às Chaves; preferências neste Mac."
-        case .drive: "Preferências locais; Google Drive ainda não conectado."
+        case .tablet: "Preferências locais de leitura no tablet."
         case .library: "Os arquivos PDF permanecem na pasta original."
         }
     }

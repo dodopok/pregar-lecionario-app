@@ -21,6 +21,13 @@ final class EditorCommands: ObservableObject {
         return true
     }
 
+    func insertText(_ text: String) {
+        guard let textView, !text.isEmpty else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.insertText(text, replacementRange: textView.selectedRange())
+        textView.didChangeText()
+    }
+
     func bold() { toggleFontTrait(.boldFontMask) }
     func italic() { toggleFontTrait(.italicFontMask) }
 

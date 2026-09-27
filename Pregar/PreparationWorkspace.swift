@@ -6,6 +6,7 @@ struct PreparationWorkspace: View {
     @EnvironmentObject private var settingsStore: APISettingsStore
     @EnvironmentObject private var appearanceStore: AppAppearanceStore
     @EnvironmentObject private var bibleSession: BibleWindowSession
+    @EnvironmentObject private var googleDrive: GoogleDriveStore
     @Environment(\.openWindow) private var openWindow
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SermonDraft.modifiedAt, order: .reverse) private var drafts: [SermonDraft]
@@ -19,10 +20,12 @@ struct PreparationWorkspace: View {
     @State private var showingReview = false
     @State private var showingQuestions = false
     @State private var showingTablet = false
+    @State private var showingDriveConnection = false
     @State private var showingHistory = false
     @State private var historyRevisions: [SermonRevision] = []
     @State private var historyDirty = false
     @State private var historySaveTask: Task<Void, Never>?
+    @State private var driveSyncTask: Task<Void, Never>?
     @State private var historyErrorMessage: String?
     @State private var reviewReports: [SermonReviewReport] = []
     @State private var isSidebarVisible = true
@@ -112,9 +115,11 @@ struct PreparationWorkspace: View {
                             manuscript: activeDraft.map { SermonReviewText.plainText(from: $0.rtfData) } ?? "",
                             accent: accentColor,
                             openSettings: openPreferences,
+                            openDriveConnection: { showingDriveConnection = true },
                             openLibrary: { openWindow(id: "library") },
                             newReview: { showingReview = true },
                             selectQuote: { editorCommands.selectQuote($0) },
+                            insertText: { editorCommands.insertText($0) },
                             emergencyQuestions: { showingQuestions = true },
                             collapse: { isContextVisible = false }
                         )
@@ -173,7 +178,10 @@ struct PreparationWorkspace: View {
             }
         }
         .sheet(isPresented: $showingTablet) {
-            TabletPreparationSheet(draft: activeDraft, accent: accentColor, openSettings: openPreferences)
+            TabletPreparationSheet(draft: activeDraft, accent: accentColor)
+        }
+        .sheet(isPresented: $showingDriveConnection) {
+            GoogleDriveConnectionSheet(accent: accentColor)
         }
         .sheet(isPresented: $showingHistory) {
             if let draft = activeDraft {
@@ -203,6 +211,7 @@ struct PreparationWorkspace: View {
         }
         .onChange(of: selectedDayKey) { _, _ in
             historySaveTask?.cancel()
+            driveSyncTask?.cancel()
             historyRevisions = []
             historyDirty = false
             ensureDraft(for: selectedDate)
@@ -212,7 +221,13 @@ struct PreparationWorkspace: View {
                 calendarMonth = selectedDate
             }
         }
-        .onChange(of: activeDraft?.modifiedAt) { _, _ in scheduleHistorySnapshot() }
+        .onChange(of: activeDraft?.modifiedAt) { _, _ in
+            scheduleHistorySnapshot()
+            scheduleDriveSync()
+        }
+        .onChange(of: googleDrive.isConnected) { _, connected in
+            if connected { scheduleDriveSync() }
+        }
         .onChange(of: showingSettingsOnLaunch) { _, shouldPresent in
             if shouldPresent {
                 openPreferences()
@@ -559,15 +574,32 @@ struct PreparationWorkspace: View {
     private func statusBar(draft: SermonDraft) -> some View {
         let words = editorCommands.wordCount
         let pages = Double(words) / 720
+        let driveStatus: String = {
+            if googleDrive.isLoading { return "Drive · verificando" }
+            if googleDrive.isSaving { return "Drive · salvando" }
+            if !googleDrive.isConnected { return "Drive não conectado" }
+            if let error = draft.googleDriveSyncError {
+                return error.localizedCaseInsensitiveContains("mudou fora") ? "Drive · conflito" : "Drive · erro"
+            }
+            if let syncedAt = draft.googleDriveSyncedAt { return "Drive · atualizado \(syncedAt.formatted(date: .omitted, time: .shortened))" }
+            if draft.googleDriveDocumentID != nil { return "Drive · aguardando sincronização" }
+            return "Drive · sem documento"
+        }()
+        let driveColor: Color = draft.googleDriveSyncError == nil ? accentColor : .orange
         return HStack(spacing: 12) {
             Text("\(words.formatted()) palavras · ≈ \(pages.formatted(.number.precision(.fractionLength(1)))) páginas")
                 .foregroundStyle(PrototypeStyle.muted)
             Text("seu habitual: 3 páginas ≈ 20–24 min")
                 .foregroundStyle(PrototypeStyle.muted.opacity(0.72))
             Spacer()
-            Circle().fill(PrototypeStyle.muted.opacity(0.42)).frame(width: 6, height: 6)
-            Text("Drive não conectado")
-                .foregroundStyle(PrototypeStyle.muted)
+            Button { showingDriveConnection = true } label: {
+                HStack(spacing: 6) {
+                    Circle().fill(googleDrive.isConnected ? driveColor : PrototypeStyle.muted.opacity(0.42)).frame(width: 6, height: 6)
+                    Text(driveStatus).foregroundStyle(googleDrive.isConnected ? driveColor : PrototypeStyle.muted)
+                }
+            }
+            .buttonStyle(.plain)
+            .help(googleDrive.isConnected ? "Gerenciar conexão com o Google Drive" : "Conectar Google Drive")
             Button("v\(currentRevisionNumber) · histórico") {
                 showingHistory = true
             }
@@ -621,6 +653,31 @@ struct PreparationWorkspace: View {
                 return
             } catch {
                 historyErrorMessage = "Não foi possível salvar uma versão local: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    @MainActor
+    private func scheduleDriveSync() {
+        driveSyncTask?.cancel()
+        guard googleDrive.isConnected,
+              let draft = activeDraft,
+              googleDrive.hasUnsyncedChanges(draft) else { return }
+        let draftID = draft.persistentModelID
+        driveSyncTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(2))
+                try Task.checkCancellation()
+                while googleDrive.isSaving {
+                    try await Task.sleep(for: .milliseconds(300))
+                    try Task.checkCancellation()
+                }
+                guard let latest = activeDraft, latest.persistentModelID == draftID else { return }
+                try await googleDrive.saveSermon(latest, modelContext: modelContext)
+                if googleDrive.hasUnsyncedChanges(latest) { scheduleDriveSync() }
+            } catch is CancellationError {
+            } catch {
+                // The draft keeps the sync error; the status bar exposes it without interrupting writing.
             }
         }
     }

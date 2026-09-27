@@ -8,6 +8,7 @@ struct PregarApp: App {
     @StateObject private var appearance = AppAppearanceStore()
     @StateObject private var readerSession = ReaderSessionStore()
     @StateObject private var bibleSession = BibleWindowSession()
+    @StateObject private var googleDrive = GoogleDriveStore()
 
     var body: some Scene {
         WindowGroup {
@@ -17,6 +18,7 @@ struct PregarApp: App {
                 .environmentObject(appearance)
                 .environmentObject(readerSession)
                 .environmentObject(bibleSession)
+                .environmentObject(googleDrive)
                 .frame(minWidth: 1220, minHeight: 740)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
