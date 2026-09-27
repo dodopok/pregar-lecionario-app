@@ -31,6 +31,7 @@ struct FavoriteSite: Codable, Equatable, Identifiable, Sendable {
     var baseURL: URL
     var detail: String
     var language: String
+    var tradition: String
     var adapter: FavoriteSiteAdapter
     var searchURLTemplate: String
     var feedURL: URL?
@@ -120,20 +121,22 @@ struct FavoriteSite: Codable, Equatable, Identifiable, Sendable {
         language: String,
         adapter: FavoriteSiteAdapter,
         searchURLTemplate: String,
-        feedURL: URL? = nil
+        feedURL: URL? = nil,
+        tradition: String = ""
     ) {
         self.id = id
         self.title = title
         self.baseURL = baseURL
         self.detail = detail
         self.language = language
+        self.tradition = tradition
         self.adapter = adapter
         self.searchURLTemplate = searchURLTemplate
         self.feedURL = feedURL
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, baseURL, detail, language, adapter, searchURLTemplate, feedURL
+        case id, title, baseURL, detail, language, tradition, adapter, searchURLTemplate, feedURL
     }
 
     init(from decoder: Decoder) throws {
@@ -147,6 +150,7 @@ struct FavoriteSite: Codable, Equatable, Identifiable, Sendable {
         baseURL = try container.decode(URL.self, forKey: .baseURL)
         detail = try container.decodeIfPresent(String.self, forKey: .detail) ?? ""
         language = try container.decodeIfPresent(String.self, forKey: .language) ?? ""
+        tradition = try container.decodeIfPresent(String.self, forKey: .tradition) ?? ""
         adapter = try container.decodeIfPresent(FavoriteSiteAdapter.self, forKey: .adapter) ?? .websiteSearch
         searchURLTemplate = try container.decodeIfPresent(String.self, forKey: .searchURLTemplate) ?? "\(baseURL.absoluteString)?s={query}"
         feedURL = try container.decodeIfPresent(URL.self, forKey: .feedURL)
@@ -159,6 +163,7 @@ struct FavoriteSite: Codable, Equatable, Identifiable, Sendable {
         try container.encode(baseURL, forKey: .baseURL)
         try container.encode(detail, forKey: .detail)
         try container.encode(language, forKey: .language)
+        try container.encode(tradition, forKey: .tradition)
         try container.encode(adapter, forKey: .adapter)
         try container.encode(searchURLTemplate, forKey: .searchURLTemplate)
         try container.encodeIfPresent(feedURL, forKey: .feedURL)

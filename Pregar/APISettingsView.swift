@@ -1117,6 +1117,7 @@ private struct FavoriteSiteEditor: View {
                 TextField("Nome", text: $site.title)
                 TextField("Endereço base (HTTPS)", text: $baseURLText)
                 TextField("Descrição", text: $site.detail)
+                TextField("Tradição / jurisdição (opcional)", text: $site.tradition)
                 TextField("Idioma", text: $site.language)
                 Picker("Tipo de site", selection: $site.adapter) {
                     ForEach(FavoriteSiteAdapter.allCases) { adapter in
@@ -1147,7 +1148,7 @@ private struct FavoriteSiteEditor: View {
             }
         }
         .padding(20)
-        .frame(width: 590, height: 510)
+        .frame(width: 590, height: 550)
         .background(PrototypeStyle.canvas)
         .preferredColorScheme(.light)
     }
@@ -1182,6 +1183,7 @@ private struct FavoriteSiteEditor: View {
         site.title = site.title.trimmingCharacters(in: .whitespacesAndNewlines)
         site.detail = site.detail.trimmingCharacters(in: .whitespacesAndNewlines)
         site.language = site.language.trimmingCharacters(in: .whitespacesAndNewlines)
+        site.tradition = site.tradition.trimmingCharacters(in: .whitespacesAndNewlines)
         onSave(site)
         dismiss()
     }

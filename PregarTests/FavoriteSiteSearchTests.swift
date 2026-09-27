@@ -48,10 +48,17 @@ final class FavoriteSiteSearchTests: XCTestCase {
             detail: "Comentários",
             language: "português",
             adapter: .wordpress,
-            searchURLTemplate: "https://example.org/?s={query}"
+            searchURLTemplate: "https://example.org/?s={query}",
+            tradition: "Anglicana · ACNA"
         )
         let restored = try JSONDecoder().decode(FavoriteSite.self, from: JSONEncoder().encode(custom))
         XCTAssertEqual(restored, custom)
+
+        let olderProfile = Data("""
+        {"id":"older","title":"Site antigo","baseURL":"https://example.org","detail":"Comentários","language":"inglês","adapter":"wordpress","searchURLTemplate":"https://example.org/?s={query}"}
+        """.utf8)
+        let migrated = try JSONDecoder().decode(FavoriteSite.self, from: olderProfile)
+        XCTAssertEqual(migrated.tradition, "")
     }
 
     func testBuiltInSiteOverridesUseEditedDestinationWhenBaseURLChanges() throws {
