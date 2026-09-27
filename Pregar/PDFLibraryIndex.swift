@@ -385,6 +385,13 @@ enum PDFLibraryIndexer {
         return match(section, target: target)
     }
 
+    static func matchingSectionCount(in records: [PDFLibraryRecord], reference: String?) -> Int {
+        guard let reference, let target = ScriptureReference.parse(reference) else { return 0 }
+        return records.reduce(0) { count, record in
+            count + (record.sections ?? []).filter { match($0, target: target) != nil }.count
+        }
+    }
+
     static func match(_ section: PDFSectionLocation, target: ScriptureReference) -> PDFSectionMatchKind? {
         let candidates = [section.title, section.context].compactMap { $0 }.flatMap(ScriptureReference.parseAll)
         var hasPartial = false

@@ -59,6 +59,7 @@ struct PregarApp: App {
 
         Window("Arquivo de sermões", id: "archive") {
             SermonArchiveView()
+                .environmentObject(readerSession)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
         .defaultSize(width: 1000, height: 600)

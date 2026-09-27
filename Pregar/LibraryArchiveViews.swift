@@ -25,6 +25,7 @@ struct PDFLibraryView: View {
     @EnvironmentObject private var readerSession: ReaderSessionStore
     @Environment(\.openWindow) private var openWindow
     @AppStorage("pregar.library.records.v1") private var savedRecords = Data()
+    @AppStorage("pregar.library.records.revision.v1") private var savedLibraryRevision = 0
     @State private var records: [PDFLibraryRecord] = []
     @State private var selectedID: String?
     @State private var isImporting = false
@@ -380,6 +381,7 @@ struct PDFLibraryView: View {
 
     private func persistRecords() {
         savedRecords = (try? JSONEncoder().encode(records)) ?? Data()
+        savedLibraryRevision += 1
     }
 }
 
@@ -513,13 +515,33 @@ enum ArchiveSearchMode: String, CaseIterable {
     }
 }
 
+private struct ArchiveMaterialCountRequest: Sendable {
+    let key: String
+    let reference: String?
+}
+
 struct SermonArchiveView: View {
+    @EnvironmentObject private var readerSession: ReaderSessionStore
     @Query(sort: \SermonDraft.liturgicalDate, order: .reverse) private var drafts: [SermonDraft]
+    @AppStorage("pregar.library.records.v1") private var savedPDFRecords = Data()
+    @AppStorage("pregar.library.records.revision.v1") private var savedLibraryRevision = 0
     @State private var searchMode: ArchiveSearchMode = .passage
     @State private var searchText = ""
+    @State private var pdfMatchCounts: [String: Int] = [:]
 
     private var results: [SermonDraft] {
         drafts.filter { searchMode.matches($0, query: searchText) }
+    }
+
+    private var materialCountTaskID: String {
+        let draftStamp = drafts.map {
+            "\(archiveKey(for: $0)):\($0.mainReadingReference ?? "")"
+        }.joined(separator: "|")
+        return "\(savedLibraryRevision)|\(draftStamp)"
+    }
+
+    private func archiveKey(for draft: SermonDraft) -> String {
+        String(Int64(draft.liturgicalDate.timeIntervalSince1970))
     }
 
     var body: some View {
@@ -580,8 +602,23 @@ struct SermonArchiveView: View {
                                 Text(draft.mainReadingReference == nil ? "—" : "passagem principal")
                                     .font(.system(size: 12, weight: .medium)).foregroundStyle(draft.mainReadingReference == nil ? PrototypeStyle.muted : PrototypeStyle.green)
                                     .frame(width: 190, alignment: .leading)
-                                Text("—").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                                if let reference = draft.mainReadingReference {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(pdfMatchCounts[archiveKey(for: draft)] ?? 0) PDFs")
+                                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                                        let reviewedCount = readerSession.tabs.filter {
+                                            $0.isIncludedForReview && $0.reference == reference
+                                        }.count
+                                        if reviewedCount > 0 {
+                                            Text("\(reviewedCount) na revisão")
+                                                .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                                        }
+                                    }
                                     .frame(width: 80, alignment: .leading)
+                                } else {
+                                    Text("—").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                                        .frame(width: 80, alignment: .leading)
+                                }
                                 Text("local").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                                     .frame(width: 110, alignment: .leading)
                             }
@@ -596,6 +633,18 @@ struct SermonArchiveView: View {
         .frame(minWidth: 1000, minHeight: 600)
         .background(PrototypeStyle.paper)
         .preferredColorScheme(.light)
+        .task(id: materialCountTaskID) {
+            let data = savedPDFRecords
+            let requests = drafts.map { ArchiveMaterialCountRequest(key: archiveKey(for: $0), reference: $0.mainReadingReference) }
+            let counts = await Task.detached(priority: .utility) {
+                let records = (try? JSONDecoder().decode([PDFLibraryRecord].self, from: data)) ?? []
+                return Dictionary(uniqueKeysWithValues: requests.map { request in
+                    (request.key, PDFLibraryIndexer.matchingSectionCount(in: records, reference: request.reference))
+                })
+            }.value
+            guard !Task.isCancelled else { return }
+            pdfMatchCounts = counts
+        }
     }
 
     private func archiveHeader(_ title: String, width: CGFloat? = nil, flexible: Bool = false) -> some View {

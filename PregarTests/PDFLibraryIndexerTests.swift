@@ -97,6 +97,24 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertNil(record.displayAuthor)
     }
 
+    func testArchiveCountsPDFSectionsRelatedToTheMainReading() {
+        let matching = PDFSectionLocation(title: "Matthew 21:33-46", startPage: 91, endPage: 97)
+        let partial = PDFSectionLocation(title: "Matthew 21:23-40", startPage: 88, endPage: 90)
+        let unrelated = PDFSectionLocation(title: "Romans 13:8-14", startPage: 96, endPage: 102)
+        let record = PDFLibraryRecord(
+            id: "commentary",
+            title: "Commentary",
+            path: "/tmp/commentary.pdf",
+            pageCount: 120,
+            bookmarkCount: 3,
+            sections: [matching, partial, unrelated]
+        )
+
+        XCTAssertEqual(PDFLibraryIndexer.matchingSectionCount(in: [record], reference: "Mateus 21.33-46"), 2)
+        XCTAssertEqual(PDFLibraryIndexer.matchingSectionCount(in: [record], reference: nil), 0)
+        XCTAssertEqual(PDFLibraryIndexer.matchingSectionCount(in: [record], reference: "invalid"), 0)
+    }
+
     func testManualMetadataSurvivesReindexAndPersistence() throws {
         let metadata = PDFLibraryMetadataOverrides(
             title: "Matthew for Everyone, Part 2",
