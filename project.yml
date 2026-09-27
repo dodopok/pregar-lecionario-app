@@ -20,3 +20,7 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         SWIFT_VERSION: "5.0"
         ENABLE_APP_SANDBOX: NO
+        # Stable app identity keeps Keychain trust across local rebuilds.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: Apple Development
+        DEVELOPMENT_TEAM: R573HPN65Q

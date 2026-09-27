@@ -5,6 +5,7 @@ import SwiftUI
 struct PreparationWorkspace: View {
     @EnvironmentObject private var settingsStore: APISettingsStore
     @EnvironmentObject private var appearanceStore: AppAppearanceStore
+    @EnvironmentObject private var bibleSession: BibleWindowSession
     @Environment(\.openWindow) private var openWindow
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SermonDraft.modifiedAt, order: .reverse) private var drafts: [SermonDraft]
@@ -15,18 +16,16 @@ struct PreparationWorkspace: View {
     @State private var loadError: String?
     @State private var isLoading = false
     @State private var showingSettingsOnLaunch = false
-    @State private var showingBible = false
     @State private var showingReview = false
     @State private var showingQuestions = false
     @State private var showingTablet = false
-    @State private var showingArchive = false
-    @State private var showingLibrary = false
     @State private var isSidebarVisible = true
     @State private var isReadingsVisible = true
     @State private var isContextVisible = true
     @State private var focusMode = false
     @State private var selectedBible = "nvt"
-    @State private var alternativeTexts: [String: BiblePassageText] = [:]
+    @State private var alternativeTexts: [String: [String: BiblePassageText]] = [:]
+    @State private var loadingTranslations: Set<String> = []
     @State private var expandedReadingIDs: Set<String> = []
     @State private var contextTab: ContextPaneTab = .materials
     @StateObject private var editorCommands = EditorCommands()
@@ -52,16 +51,20 @@ struct PreparationWorkspace: View {
         LiturgicalColor.resolve(day?.color)
     }
 
+    private var selectedDay: LiturgicalDay? {
+        day?.date == selectedDayKey ? day : nil
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if isSidebarVisible && !focusMode {
                 CalendarSidebarView(
                     selectedDate: $selectedDate,
                     calendarMonth: $calendarMonth,
-                    liturgicalDay: day,
+                    liturgicalDay: selectedDay,
                     accent: accentColor,
-                    openArchive: { showingArchive = true },
-                    openLibrary: { showingLibrary = true }
+                    openArchive: { openWindow(id: "archive") },
+                    openLibrary: { openWindow(id: "library") }
                 )
                 .frame(width: 236)
                 Divider()
@@ -69,80 +72,43 @@ struct PreparationWorkspace: View {
 
             VStack(spacing: 0) {
                 workspaceToolbar
-                Rectangle().fill(accentColor).frame(height: 2)
                 dayHeader
                 Divider()
 
-                if let loadError {
-                    ContentUnavailableView {
-                        Label("Não foi possível carregar o dia", systemImage: "calendar.badge.exclamationmark")
-                    } description: {
-                        Text(loadError).frame(maxWidth: 440)
-                    } actions: {
-                        Button("Configurar conexão", action: openPreferences)
-                        Button("Tentar novamente") { Task { await loadDay() } }
+                HStack(spacing: 0) {
+                    if isReadingsVisible && !focusMode {
+                        readingsColumn(for: activeDraft)
+                            .frame(width: 300)
+                        Rectangle().fill(PrototypeStyle.line).frame(width: 1)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if isLoading || day == nil {
-                    VStack(spacing: 12) {
-                        if settingsStore.isLoadingCredential || (settingsStore.hasAPIKey && isLoading) {
-                            ProgressView().tint(accentColor)
-                        } else {
-                            Image(systemName: "key.horizontal")
-                                .font(.system(size: 22))
-                                .foregroundStyle(PrototypeStyle.muted)
-                        }
-                        Text(settingsStore.isLoadingCredential ? "Preparando a conexão…" : (settingsStore.hasAPIKey ? "Consultando o calendário…" : "Configure sua chave da Estêvão API"))
-                            .font(.system(size: 13)).foregroundStyle(PrototypeStyle.muted)
-                        if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey {
-                            Button("Configurar Estêvão API", action: openPreferences)
-                                .buttonStyle(.borderedProminent)
-                                .tint(accentColor)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(PrototypeStyle.canvas)
-                } else if let day, let draft = activeDraft {
-                    HSplitView {
-                        if isReadingsVisible && !focusMode {
-                            ScripturePanelView(
-                                day: day,
-                                mainReference: draft.mainReadingReference,
-                                mainSlot: draft.mainReadingSlot,
-                                primaryBible: settingsStore.settings.bible,
-                                selectedBible: selectedBible,
-                                displayedTexts: alternativeTexts,
-                                accent: accentColor,
-                                expandedReadingIDs: $expandedReadingIDs,
-                                chooseReading: { chooseMainReading($0, for: draft) },
-                                chooseBible: loadTranslation,
-                                collapse: { isReadingsVisible = false }
-                            )
-                            .frame(minWidth: 260, idealWidth: 320, maxWidth: 400)
-                        }
 
+                    if let draft = activeDraft {
                         sermonEditor(draft: draft)
                             .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
-
-                        if isContextVisible && !focusMode {
-                            ResourceContextPanel(
-                                selectedTab: $contextTab,
-                                reference: draft.mainReadingReference ?? "esta preparação",
-                                accent: accentColor,
-                                openSettings: openPreferences,
-                                openLibrary: { showingLibrary = true },
-                                newReview: { showingReview = true },
-                                emergencyQuestions: { showingQuestions = true },
-                                collapse: { isContextVisible = false }
-                            )
-                            .frame(minWidth: 290, idealWidth: 345, maxWidth: 430)
-                        }
+                    } else {
+                        editorPlaceholder
                     }
-                    .background(PrototypeStyle.canvas)
-                    .tint(accentColor)
-                }
 
-                if let draft = activeDraft, day != nil {
+                    if isContextVisible && !focusMode {
+                        Rectangle().fill(PrototypeStyle.line).frame(width: 1)
+                        ResourceContextPanel(
+                            selectedTab: $contextTab,
+                            reference: activeDraft?.mainReadingReference ?? "esta preparação",
+                            occasion: selectedDay?.sundayName ?? selectedDay?.celebration?.name,
+                            accent: accentColor,
+                            openSettings: openPreferences,
+                            openLibrary: { openWindow(id: "library") },
+                            newReview: { showingReview = true },
+                            emergencyQuestions: { showingQuestions = true },
+                            collapse: { isContextVisible = false }
+                        )
+                        .frame(width: 320)
+                    }
+                }
+                .background(PrototypeStyle.canvas)
+                .tint(accentColor)
+
+                if let draft = activeDraft {
                     statusBar(draft: draft)
                 }
             }
@@ -153,15 +119,6 @@ struct PreparationWorkspace: View {
         .background(PrototypeStyle.canvas)
         .preferredColorScheme(.light)
         .tint(accentColor)
-        .toolbar(.hidden, for: .windowToolbar)
-        .sheet(isPresented: $showingBible) {
-            BibleComparisonView(
-                reference: activeDraft?.mainReadingReference ?? "",
-                settings: settingsStore.settings,
-                apiKey: settingsStore.credential ?? "",
-                accent: accentColor
-            )
-        }
         .sheet(isPresented: $showingReview) {
             ReviewRequestSheet(accent: accentColor) {
                 showingReview = false
@@ -176,12 +133,6 @@ struct PreparationWorkspace: View {
         }
         .sheet(isPresented: $showingTablet) {
             TabletPreparationSheet(draft: activeDraft, accent: accentColor, openSettings: openPreferences)
-        }
-        .sheet(isPresented: $showingArchive) {
-            SermonArchiveView()
-        }
-        .sheet(isPresented: $showingLibrary) {
-            PDFLibraryView()
         }
         .task(id: requestKey) { await loadDay() }
         .onAppear {
@@ -260,10 +211,12 @@ struct PreparationWorkspace: View {
 
             Spacer(minLength: 8)
 
-            toolbarAction("book.closed", title: "Bíblia") { showingBible = true }
+            toolbarAction("book.closed", title: "Bíblia") {
+                bibleSession.reference = activeDraft?.mainReadingReference ?? ""
+                openWindow(id: "bible")
+            }
             toolbarAction("doc.text", title: "Leitor") {
-                isContextVisible = true
-                contextTab = .materials
+                openWindow(id: "reader")
             }
             toolbarAction("ipad.landscape", title: "Tablet") { showingTablet = true }
 
@@ -304,13 +257,83 @@ struct PreparationWorkspace: View {
             .help("Preferências")
         }
         .padding(.horizontal, 18)
-        .frame(height: 48)
+        .frame(height: 52)
         .background(PrototypeStyle.canvas)
+        .overlay(alignment: .top) { Rectangle().fill(accentColor).frame(height: 2) }
     }
 
     private var toolbarSubtitle: String {
         let date = selectedDate.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "pt_BR")))
-        return [date, day?.sundayName].compactMap { $0 }.joined(separator: " · ")
+        return [date, selectedDay?.sundayName].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private func readingsColumn(for draft: SermonDraft?) -> some View {
+        if let selectedDay {
+            ScripturePanelView(
+                day: selectedDay,
+                mainReference: draft?.mainReadingReference,
+                mainSlot: draft?.mainReadingSlot,
+                primaryBible: settingsStore.settings.bible,
+                selectedBible: selectedBible,
+                displayedTexts: alternativeTexts[selectedBible] ?? [:],
+                isLoadingTranslation: loadingTranslations.contains(selectedBible),
+                accent: accentColor,
+                expandedReadingIDs: $expandedReadingIDs,
+                chooseReading: { reading in
+                    if let draft { chooseMainReading(reading, for: draft) }
+                },
+                chooseBible: loadTranslation,
+                collapse: { isReadingsVisible = false }
+            )
+        } else {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("LEITURAS")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(1)
+                        .foregroundStyle(PrototypeStyle.muted)
+                    Spacer()
+                    if settingsStore.hasAPIKey, isLoading { ProgressView().controlSize(.small).tint(accentColor) }
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 45)
+                VStack(spacing: 10) {
+                    if settingsStore.isLoadingCredential || isLoading {
+                        ProgressView().tint(accentColor)
+                        Text(settingsStore.isLoadingCredential ? "Preparando a conexão…" : "Consultando o calendário…")
+                    } else if let loadError {
+                        Image(systemName: "calendar.badge.exclamationmark")
+                        Text("Não foi possível carregar este dia")
+                        Text(loadError).multilineTextAlignment(.center).lineLimit(4)
+                        Button("Tentar novamente") { Task { await loadDay() } }
+                            .buttonStyle(.bordered)
+                    } else {
+                        Image(systemName: "key.horizontal")
+                        Text("Configure sua chave da Estêvão API")
+                        Button("Configurar") { openPreferences() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(accentColor)
+                    }
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(PrototypeStyle.muted)
+                .padding(18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(PrototypeStyle.paper)
+            }
+            .background(PrototypeStyle.paper)
+        }
+    }
+
+    private var editorPlaceholder: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "text.alignleft").font(.system(size: 22)).foregroundStyle(PrototypeStyle.muted)
+            Text("Preparando o manuscrito").font(PrototypeStyle.serif(18, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+            if isLoading { ProgressView().controlSize(.small).tint(accentColor) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(PrototypeStyle.editorSurface)
     }
 
     private func openPreferences() {
@@ -333,24 +356,24 @@ struct PreparationWorkspace: View {
                 .frame(width: 14, height: 14)
                 .overlay(Circle().strokeBorder(PrototypeStyle.ink.opacity(0.14), lineWidth: 1))
             Text(selectedDate.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "pt_BR"))).lowercased())
-                .font(PrototypeStyle.serif(27, weight: .semibold))
+                .font(PrototypeStyle.serif(24, weight: .semibold))
                 .foregroundStyle(PrototypeStyle.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Text(selectedDate.formatted(.dateTime.year().locale(Locale(identifier: "pt_BR"))))
-                .font(PrototypeStyle.serif(25))
+                .font(PrototypeStyle.serif(24))
                 .foregroundStyle(PrototypeStyle.muted.opacity(0.64))
                 .lineLimit(1)
-            Text([day?.season?.name, day?.sundayName].compactMap { $0 }.joined(separator: " · "))
-                .font(.system(size: 12))
+            Text([selectedDay?.season?.name, selectedDay?.sundayName].compactMap { $0 }.joined(separator: " · "))
+                .font(.system(size: 13))
                 .foregroundStyle(PrototypeStyle.muted)
                 .lineLimit(1)
-            Text(day?.color ?? "")
+            Text(selectedDay?.color ?? "")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(accentColor)
             Spacer(minLength: 8)
             if isLoading { ProgressView().controlSize(.small).tint(accentColor) }
-            if let celebration = day?.celebration {
+            if let celebration = selectedDay?.celebration {
                 HStack(spacing: 7) {
                     Image(systemName: "sparkle").font(.system(size: 12)).foregroundStyle(accentColor)
                     Text(celebration.name)
@@ -363,9 +386,9 @@ struct PreparationWorkspace: View {
                 .lineLimit(1)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-        .frame(height: 63)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 14)
+        .frame(height: 56)
         .background(PrototypeStyle.canvas)
     }
 
@@ -375,23 +398,23 @@ struct PreparationWorkspace: View {
                 editorButton("bold", title: "Negrito", action: editorCommands.bold)
                 editorButton("italic", title: "Itálico", action: editorCommands.italic)
                 Divider().frame(height: 22).padding(.horizontal, 6)
-                editorTextButton("Título", symbol: "textformat.size", action: editorCommands.heading)
-                editorTextButton("Citação", symbol: "text.quote", action: editorCommands.quotation)
-                editorTextButton("Lista", symbol: "list.bullet", action: editorCommands.bulletedList)
-                editorTextButton("Nota", symbol: "text.badge.plus", action: editorCommands.footnote)
+                editorTextButton("Título", action: editorCommands.heading)
+                editorTextButton("Citação", action: editorCommands.quotation)
+                editorTextButton("Lista", action: editorCommands.bulletedList)
+                editorTextButton("Nota", action: editorCommands.footnote)
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(.white.opacity(0.93), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(PrototypeStyle.line, lineWidth: 1))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .background(PrototypeStyle.paper.opacity(0.92), in: RoundedRectangle(cornerRadius: 10))
+            .shadow(color: .black.opacity(0.08), radius: 16, y: 5)
             .padding(.top, 14)
             .padding(.bottom, 12)
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     TextField("Título do sermão", text: Bindable(draft).title)
-                        .font(PrototypeStyle.serif(29, weight: .semibold))
+                        .font(PrototypeStyle.serif(28, weight: .semibold))
                         .foregroundStyle(PrototypeStyle.ink)
                         .textFieldStyle(.plain)
                         .onChange(of: draft.title) { _, _ in draft.modifiedAt = .now }
@@ -409,7 +432,7 @@ struct PreparationWorkspace: View {
                 .font(.system(size: 11))
                 .foregroundStyle(PrototypeStyle.muted)
                 .padding(.horizontal, 46)
-                .padding(.bottom, 13)
+                .padding(.bottom, 12)
 
                 Divider().padding(.horizontal, 46)
 
@@ -422,16 +445,16 @@ struct PreparationWorkspace: View {
                 .padding(.horizontal, 28)
                 .padding(.bottom, 24)
             }
-            .frame(maxWidth: 760, maxHeight: .infinity)
+            .frame(maxWidth: 640, maxHeight: .infinity)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(PrototypeStyle.paper, in: RoundedRectangle(cornerRadius: 3))
-            .overlay(RoundedRectangle(cornerRadius: 3).stroke(PrototypeStyle.line.opacity(0.65), lineWidth: 1))
-            .shadow(color: .black.opacity(0.035), radius: 12, y: 3)
+            .background(PrototypeStyle.manuscript, in: RoundedRectangle(cornerRadius: 3))
+            .overlay(RoundedRectangle(cornerRadius: 3).stroke(PrototypeStyle.line.opacity(0.35), lineWidth: 1))
+            .shadow(color: .black.opacity(0.05), radius: 16, y: 5)
             .padding(.horizontal, 32)
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(PrototypeStyle.canvas)
+        .background(PrototypeStyle.editorSurface)
     }
 
     private func editorButton(_ symbol: String, title: String, action: @escaping () -> Void) -> some View {
@@ -444,11 +467,11 @@ struct PreparationWorkspace: View {
         .accessibilityLabel(title)
     }
 
-    private func editorTextButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+    private func editorTextButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: symbol)
+            Text(title)
                 .font(.system(size: 12))
-                .padding(.horizontal, 5)
+                .padding(.horizontal, 8)
                 .frame(height: 27)
         }
         .help(title)
@@ -467,7 +490,7 @@ struct PreparationWorkspace: View {
             Text("Drive não conectado")
                 .foregroundStyle(PrototypeStyle.muted)
             Button("\(draft.modifiedAt.formatted(date: .omitted, time: .shortened)) · local") {
-                showingArchive = true
+                openWindow(id: "archive")
             }
             .buttonStyle(.plain)
             .foregroundStyle(accentColor)
@@ -514,16 +537,19 @@ struct PreparationWorkspace: View {
 
     private func loadTranslation(_ bible: String) {
         selectedBible = bible
-        alternativeTexts = [:]
         guard bible != settingsStore.settings.bible,
-              let day,
+              let day = selectedDay,
               let key = settingsStore.credential else { return }
+        let missingReadings = (day.readings ?? []).filter { alternativeTexts[bible]?[$0.id] == nil }
+        guard !missingReadings.isEmpty, !loadingTranslations.contains(bible) else { return }
+        loadingTranslations.insert(bible)
         Task { @MainActor in
+            defer { loadingTranslations.remove(bible) }
             let client = LiturgicalAPIClient(settings: settingsStore.settings, apiKey: key)
-            for reading in day.readings ?? [] {
+            for reading in missingReadings {
                 do {
                     let text = try await client.fetchPassage(reference: reading.reference, bible: bible)
-                    alternativeTexts[reading.id] = text
+                    alternativeTexts[bible, default: [:]][reading.id] = text
                 } catch {
                     continue
                 }
@@ -537,17 +563,14 @@ struct PreparationWorkspace: View {
             isLoading = true
             return
         }
+        selectedBible = settingsStore.settings.bible
         guard settingsStore.hasAPIKey, let key = settingsStore.credential else {
-            day = nil
             loadError = nil
             isLoading = false
             return
         }
         isLoading = true
         loadError = nil
-        day = nil
-        alternativeTexts = [:]
-        selectedBible = settingsStore.settings.bible
         do {
             let loadedDay = try await LiturgicalAPIClient(settings: settingsStore.settings, apiKey: key).fetchDay(selectedDate)
             try Task.checkCancellation()
@@ -579,7 +602,7 @@ struct PreparationWorkspace: View {
 private enum LiturgicalColor {
     static func resolve(_ value: String?) -> Color {
         switch value?.lowercased().folding(options: [.diacriticInsensitive], locale: .current) {
-        case "verde", "green": return Color(red: 0.22, green: 0.56, blue: 0.36)
+        case "verde", "green": return PrototypeStyle.green
         case "roxo", "violeta", "purple", "violet": return Color(red: 0.47, green: 0.34, blue: 0.67)
         case "vermelho", "red": return Color(red: 0.76, green: 0.25, blue: 0.23)
         case "rosa", "rose", "pink": return Color(red: 0.83, green: 0.43, blue: 0.57)

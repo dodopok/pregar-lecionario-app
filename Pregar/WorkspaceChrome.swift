@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import WebKit
 
 enum ContextPaneTab: String, CaseIterable, Identifiable {
     case materials = "Materiais"
@@ -45,16 +44,16 @@ struct CalendarSidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Spacer().frame(height: 36)
+            Spacer().frame(height: 40)
 
             HStack(spacing: 9) {
                 Image(systemName: "cross.fill")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 25, height: 25)
+                    .frame(width: 24, height: 24)
                     .background(PrototypeStyle.green, in: RoundedRectangle(cornerRadius: 7))
                 Text("Pregar")
-                    .font(PrototypeStyle.serif(20, weight: .semibold))
+                    .font(PrototypeStyle.serif(17, weight: .semibold))
                     .foregroundStyle(PrototypeStyle.ink)
             }
             .padding(.horizontal, 4)
@@ -62,7 +61,7 @@ struct CalendarSidebarView: View {
             VStack(spacing: 8) {
                 HStack {
                     Text(monthTitle)
-                        .font(PrototypeStyle.serif(16, weight: .semibold))
+                        .font(PrototypeStyle.serif(15, weight: .semibold))
                         .foregroundStyle(PrototypeStyle.ink)
                     Spacer()
                     monthButton("chevron.left", accessibility: "Mês anterior", amount: -1)
@@ -73,16 +72,16 @@ struct CalendarSidebarView: View {
                 LazyVGrid(columns: columns, spacing: 1) {
                     ForEach(Array(weekdays.enumerated()), id: \.offset) { index, label in
                         Text(label)
-                            .font(.system(size: 10, weight: index == 0 ? .bold : .medium))
+                            .font(.system(size: 9, weight: index == 0 ? .bold : .medium))
                             .foregroundStyle(index == 0 ? accent : PrototypeStyle.muted.opacity(0.75))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 17)
+                            .frame(height: 13)
                     }
                     ForEach(Array(calendarCells.enumerated()), id: \.offset) { _, date in
                         if let date {
                             calendarDay(date)
                         } else {
-                            Color.clear.frame(height: 29)
+                            Color.clear.frame(height: 26)
                         }
                     }
                 }
@@ -90,6 +89,7 @@ struct CalendarSidebarView: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 10)
             .background(PrototypeStyle.paper, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(PrototypeStyle.line, lineWidth: 1))
 
             HStack(spacing: 6) {
                 weekButton("chevron.left", accessibility: "Semana anterior", days: -7)
@@ -99,7 +99,7 @@ struct CalendarSidebarView: View {
                     calendarMonth = today
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 29)
+                .frame(height: 26)
                 .background(PrototypeStyle.paper, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
                 weekButton("chevron.right", accessibility: "Próxima semana", days: 7)
@@ -146,7 +146,7 @@ struct CalendarSidebarView: View {
                 calendarMonth = date
             }
         } label: {
-            Image(systemName: symbol).font(.system(size: 11, weight: .medium)).frame(width: 23, height: 23)
+            Image(systemName: symbol).font(.system(size: 11, weight: .medium)).frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
         .foregroundStyle(PrototypeStyle.muted)
@@ -169,7 +169,7 @@ struct CalendarSidebarView: View {
                     .frame(width: 3, height: 3)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 29)
+            .frame(height: 26)
             .background(selected ? accent : .clear, in: RoundedRectangle(cornerRadius: 7))
             .contentShape(Rectangle())
         }
@@ -185,7 +185,7 @@ struct CalendarSidebarView: View {
             }
         } label: {
             Image(systemName: symbol)
-                .frame(width: 31, height: 29)
+                .frame(width: 28, height: 26)
                 .background(PrototypeStyle.paper, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
         }
@@ -212,7 +212,7 @@ struct CalendarSidebarView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 7)
-            .frame(height: 27)
+            .frame(height: 26)
             .background(selected ? accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
             .contentShape(Rectangle())
         }
@@ -239,6 +239,7 @@ struct ScripturePanelView: View {
     let primaryBible: String
     let selectedBible: String
     let displayedTexts: [String: BiblePassageText]
+    let isLoadingTranslation: Bool
     let accent: Color
     @Binding var expandedReadingIDs: Set<String>
     let chooseReading: (LiturgicalReading) -> Void
@@ -251,7 +252,8 @@ struct ScripturePanelView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("LEITURAS")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1)
                     .foregroundStyle(PrototypeStyle.muted)
                 Spacer()
                 Menu {
@@ -270,22 +272,23 @@ struct ScripturePanelView: View {
                     }
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(PrototypeStyle.ink)
-                    .padding(.horizontal, 9)
-                    .frame(height: 27)
+                    .padding(.horizontal, 8)
+                    .frame(height: 22)
                     .background(.white, in: RoundedRectangle(cornerRadius: 7))
                     .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
                 }
                 .menuStyle(.borderlessButton)
                 Button(action: collapse) {
                     Image(systemName: "chevron.left").font(.system(size: 11, weight: .medium))
-                        .frame(width: 26, height: 26)
+                        .frame(width: 24, height: 22)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(PrototypeStyle.muted)
                 .help("Recolher leituras")
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
@@ -322,11 +325,11 @@ struct ScripturePanelView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 6)
                 .padding(.bottom, 18)
             }
         }
-        .background(PrototypeStyle.paper.opacity(0.74))
+        .background(PrototypeStyle.paper)
     }
 
     private func readingRow(_ reading: LiturgicalReading) -> some View {
@@ -352,7 +355,7 @@ struct ScripturePanelView: View {
                             }
                         }
                         Text(reading.reference)
-                            .font(PrototypeStyle.serif(18, weight: .semibold))
+                            .font(PrototypeStyle.serif(16, weight: .semibold))
                             .foregroundStyle(PrototypeStyle.ink)
                             .multilineTextAlignment(.leading)
                         if let alternatives = reading.alternatives, !alternatives.isEmpty {
@@ -395,7 +398,7 @@ struct ScripturePanelView: View {
                                     .foregroundStyle(accent.opacity(0.88))
                                     .frame(width: 17, alignment: .trailing)
                                 Text(verse.text)
-                                    .font(PrototypeStyle.serif(15))
+                                    .font(PrototypeStyle.serif(15.5))
                                     .foregroundStyle(PrototypeStyle.ink.opacity(0.90))
                                     .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -405,10 +408,17 @@ struct ScripturePanelView: View {
                     .padding(.top, 2)
                 } else if let content = text?.content {
                     Text(content)
-                        .font(PrototypeStyle.serif(15))
+                        .font(PrototypeStyle.serif(15.5))
                         .foregroundStyle(PrototypeStyle.ink.opacity(0.9))
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
+                } else if selectedBible != primaryBible && isLoadingTranslation {
+                    HStack(spacing: 7) {
+                        ProgressView().controlSize(.small).tint(accent)
+                        Text("Buscando em \(selectedBible.uppercased())…")
+                            .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                    }
+                    .padding(.vertical, 8)
                 } else {
                     Text("O texto desta leitura não está disponível nesta tradução.")
                         .font(.system(size: 11))
@@ -416,7 +426,7 @@ struct ScripturePanelView: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(primary ? accent.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 9))
@@ -431,16 +441,21 @@ struct ScripturePanelView: View {
 }
 
 struct ResourceContextPanel: View {
+    @EnvironmentObject private var readerSession: ReaderSessionStore
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage("pregar.library.records.v1") private var savedPDFRecords = Data()
     @Binding var selectedTab: ContextPaneTab
     let reference: String
+    let occasion: String?
     let accent: Color
     let openSettings: () -> Void
     let openLibrary: () -> Void
     let newReview: () -> Void
     let emergencyQuestions: () -> Void
     let collapse: () -> Void
-    @State private var selectedSite: SourceLink?
     @State private var filter: MaterialFilter = .all
+    @State private var pdfRecords: [PDFLibraryRecord] = []
+    @State private var isIndexingPDFs = false
 
     private enum MaterialFilter: String, CaseIterable {
         case all = "Tudo"
@@ -455,12 +470,33 @@ struct ResourceContextPanel: View {
         var id: String { url.absoluteString }
     }
 
-    private let sources = [
-        SourceLink(title: "Working Preacher", detail: "Comentário · RCL", url: URL(string: "https://www.workingpreacher.org/commentaries/revised-common-lectionary")!),
-        SourceLink(title: "Anglican Compass", detail: "Recursos e lecionário · ACNA", url: URL(string: "https://anglicancompass.com/")!),
-        SourceLink(title: "My Pastoral Ponderings", detail: "Sermões e reflexões", url: URL(string: "https://mypastoralponderings.com/")!),
-        SourceLink(title: "Ponderings on a Faith Journey", detail: "Bob Cornwall · blog", url: URL(string: "https://www.bobcornwall.com/")!)
-    ]
+    private struct MatchedPDF: Identifiable {
+        let record: PDFLibraryRecord
+        let section: PDFSectionLocation
+        let kind: PDFSectionMatchKind
+        var id: String { "\(record.id)|\(section.id)" }
+    }
+
+    private var sources: [SourceLink] {
+        [
+            SourceLink(title: "Working Preacher", detail: "Comentários · Lecionário Comum Revisado", url: FavoriteSourceURLs.workingPreacher(reference: reference)),
+            SourceLink(title: "Anglican Compass", detail: "Today in the Spirit · \(occasion ?? "lecionário")", url: FavoriteSourceURLs.anglicanCompass(reference: reference, occasion: occasion)),
+            SourceLink(title: "My Pastoral Ponderings", detail: "Busca por passagem", url: FavoriteSourceURLs.myPastoralPonderings(reference: reference)),
+            SourceLink(title: "Ponderings on a Faith Journey", detail: "Bob Cornwall · busca por passagem", url: FavoriteSourceURLs.bobCornwall(reference: reference))
+        ]
+    }
+
+    private var pdfMatches: [MatchedPDF] {
+        guard let target = ScriptureReference.parse(reference) else { return [] }
+        return pdfRecords.flatMap { record in
+            (record.sections ?? []).compactMap { section in
+                PDFLibraryIndexer.match(section, target: target).map { MatchedPDF(record: record, section: section, kind: $0) }
+            }
+        }.sorted {
+            if $0.kind.rawValue != $1.kind.rawValue { return $0.kind.rawValue < $1.kind.rawValue }
+            return $0.record.title.localizedStandardCompare($1.record.title) == .orderedAscending
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -479,6 +515,7 @@ struct ResourceContextPanel: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 31)
                         .background(selectedTab == tab ? .white : .clear, in: RoundedRectangle(cornerRadius: 7))
+                        .shadow(color: selectedTab == tab ? .black.opacity(0.10) : .clear, radius: 2, y: 1)
                     }
                     .buttonStyle(.plain)
                 }
@@ -494,8 +531,8 @@ struct ResourceContextPanel: View {
                 .help("Recolher painel")
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(PrototypeStyle.canvas)
+            .padding(.vertical, 3)
+            .background(PrototypeStyle.ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
 
             Divider().overlay(PrototypeStyle.line)
 
@@ -507,21 +544,20 @@ struct ResourceContextPanel: View {
                     case .review: reviewContent
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 14)
             }
         }
-        .background(PrototypeStyle.paper.opacity(0.72))
-        .sheet(item: $selectedSite) { site in
-            WebReaderSheet(title: site.title, url: site.url)
-        }
+        .background(PrototypeStyle.paper)
+        .onAppear(perform: restorePDFRecords)
+        .onChange(of: savedPDFRecords) { _, _ in restorePDFRecords() }
     }
 
     private var materialsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Sobre \(reference.isEmpty ? "esta passagem" : reference)")
-                    .font(PrototypeStyle.serif(17, weight: .semibold))
+                    .font(PrototypeStyle.serif(15, weight: .semibold))
                     .foregroundStyle(PrototypeStyle.ink)
                 Spacer(minLength: 4)
             }
@@ -532,7 +568,7 @@ struct ResourceContextPanel: View {
                         .font(.system(size: 11, weight: filter == option ? .medium : .regular))
                         .foregroundStyle(filter == option ? .white : PrototypeStyle.ink.opacity(0.72))
                         .padding(.horizontal, 10)
-                        .frame(height: 23)
+                        .frame(height: 22)
                         .background(filter == option ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.06), in: Capsule())
                         .buttonStyle(.plain)
                 }
@@ -540,14 +576,11 @@ struct ResourceContextPanel: View {
 
             if filter != .library {
                 sectionHeading("FONTES FAVORITAS", color: accent)
-                Text("Os resultados por passagem aparecem aqui quando indexados. Por enquanto, abra uma fonte e navegue no leitor.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(PrototypeStyle.muted)
-                    .fixedSize(horizontal: false, vertical: true)
 
                 ForEach(sources) { source in
                     Button {
-                        selectedSite = source
+                        _ = readerSession.openWeb(title: source.title, url: source.url, reference: reference)
+                        openWindow(id: "reader")
                     } label: {
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: "globe")
@@ -557,19 +590,19 @@ struct ResourceContextPanel: View {
                                 .padding(.top, 3)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(source.title)
-                                    .font(PrototypeStyle.serif(15, weight: .semibold))
+                                    .font(PrototypeStyle.serif(14, weight: .semibold))
                                     .foregroundStyle(PrototypeStyle.ink)
                                     .multilineTextAlignment(.leading)
                                 Text(source.detail)
                                     .font(.system(size: 11))
                                     .foregroundStyle(PrototypeStyle.muted)
-                                Text("Abrir no leitor")
+                                Text("Buscar esta passagem")
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(accent)
                             }
                             Spacer(minLength: 0)
                         }
-                        .padding(.vertical, 7)
+                        .padding(.vertical, 10)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -578,15 +611,102 @@ struct ResourceContextPanel: View {
             }
 
             if filter != .sites {
-                sectionHeading("BIBLIOTECA", color: accent)
-                Text("Nenhum PDF indexado para esta passagem ainda.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(PrototypeStyle.muted)
+                let exact = pdfMatches.filter { $0.kind == .exact }
+                let partial = pdfMatches.filter { $0.kind == .partial }
+                let context = pdfMatches.filter { $0.kind == .context }
+                if !exact.isEmpty {
+                    sectionHeading("SOBRE ESTA PASSAGEM", color: accent)
+                    ForEach(exact) { pdfMatchRow($0) }
+                }
+                if !partial.isEmpty {
+                    sectionHeading("SOBREPOSIÇÃO PARCIAL", color: Color(red: 0.62, green: 0.43, blue: 0.04))
+                    ForEach(partial) { pdfMatchRow($0) }
+                }
+                if !context.isEmpty {
+                    sectionHeading("A CONFIRMAR", color: PrototypeStyle.muted)
+                    ForEach(context) { pdfMatchRow($0) }
+                }
+                if pdfMatches.isEmpty {
+                    sectionHeading("BIBLIOTECA", color: accent)
+                    Text(isIndexingPDFs
+                         ? "Indexando passagens dos PDFs…"
+                         : (pdfRecords.isEmpty ? "Importe PDFs para encontrar comentários desta passagem." : "Nenhum PDF indexado corresponde a esta passagem."))
+                        .font(.system(size: 11))
+                        .foregroundStyle(PrototypeStyle.muted)
+                }
                 Button("Abrir biblioteca de PDFs", systemImage: "book.closed", action: openLibrary)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(accent)
                     .buttonStyle(.plain)
             }
+        }
+    }
+
+    private func pdfMatchRow(_ match: MatchedPDF) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 12))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .frame(width: 15)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(match.section.title)
+                        .font(PrototypeStyle.serif(14, weight: .semibold))
+                        .foregroundStyle(PrototypeStyle.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text([match.record.title, match.record.author].compactMap { $0 }.joined(separator: " · "))
+                        .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("PDF · físicas \(match.section.startPage)–\(match.section.endPage) · \(match.section.context ?? "sumário")")
+                        .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                }
+            }
+            HStack(spacing: 8) {
+                Button("Ir para a aba") {
+                    guard readerSession.openPDF(
+                        title: match.record.title,
+                        path: match.record.path,
+                        page: match.section.startPage,
+                        reference: reference
+                    ) else { return }
+                    openWindow(id: "reader")
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(accent)
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                Text(match.kind == .exact ? "alta" : match.kind == .partial ? "média" : "confirmar")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(match.kind == .exact ? accent : PrototypeStyle.muted)
+            }
+            .padding(.leading, 23)
+        }
+        .padding(.vertical, 9)
+        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+    }
+
+    private func restorePDFRecords() {
+        guard let decoded = try? JSONDecoder().decode([PDFLibraryRecord].self, from: savedPDFRecords) else {
+            pdfRecords = []
+            return
+        }
+        pdfRecords = decoded.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !isIndexingPDFs,
+              pdfRecords.contains(where: { $0.indexVersion != PDFLibraryIndexer.currentVersion || $0.sections == nil }) else { return }
+        isIndexingPDFs = true
+        let recordsToIndex = pdfRecords
+        Task {
+            let indexed = await Task.detached(priority: .utility) {
+                recordsToIndex.map { record in PDFLibraryIndexer.index(path: record.path) ?? record }
+            }.value
+            guard let encoded = try? JSONEncoder().encode(indexed) else {
+                isIndexingPDFs = false
+                return
+            }
+            pdfRecords = indexed
+            savedPDFRecords = encoded
+            isIndexingPDFs = false
         }
     }
 
@@ -643,43 +763,5 @@ struct ResourceContextPanel: View {
             Rectangle().fill(PrototypeStyle.line).frame(height: 1)
         }
         .padding(.top, 4)
-    }
-}
-
-struct WebReaderSheet: View {
-    let title: String
-    let url: URL
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 9) {
-                Image(systemName: "globe").foregroundStyle(PrototypeStyle.muted)
-                Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Spacer()
-                Button("Concluído") { dismiss() }.keyboardShortcut(.cancelAction)
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 43)
-            .background(PrototypeStyle.canvas)
-            Divider()
-            EmbeddedWebView(url: url)
-        }
-        .frame(width: 1040, height: 760)
-    }
-}
-
-private struct EmbeddedWebView: NSViewRepresentable {
-    let url: URL
-
-    func makeNSView(context: Context) -> WKWebView {
-        let view = WKWebView()
-        view.load(URLRequest(url: url))
-        return view
-    }
-
-    func updateNSView(_ view: WKWebView, context: Context) {
-        guard view.url != url else { return }
-        view.load(URLRequest(url: url))
     }
 }

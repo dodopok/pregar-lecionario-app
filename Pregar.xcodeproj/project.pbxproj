@@ -14,8 +14,12 @@
 		39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */; };
 		3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495567BA510561B3883455A /* LibraryArchiveViews.swift */; };
 		515BA5D71E86AA58E543FE54 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */; };
+		545D1E4BC97796B726BB67B2 /* PDFLibraryIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */; };
+		5791E5B8E6B99C8CF7C942D1 /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */; };
 		68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */; };
+		70F9C5A32F020FED083C6C2E /* FavoriteSourceURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */; };
 		7DF5C8B29B917622A6B03CAA /* WorkspaceSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */; };
+		863FED12B32D3E5372DCC462 /* ReaderSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB73D3027C252959FB7E759 /* ReaderSession.swift */; };
 		99645F1CBB2F74C88E281950 /* PregarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478AAAADD24805C4AAF1C997 /* PregarApp.swift */; };
 		AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D8516E9667268B7075CEB2 /* APISettings.swift */; };
 		FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */; };
@@ -31,10 +35,14 @@
 		547C3A36015E310F5E8EDD26 /* Pregar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pregar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettingsView.swift; sourceTree = "<group>"; };
 		74D8516E9667268B7075CEB2 /* APISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettings.swift; sourceTree = "<group>"; };
+		8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChrome.swift; sourceTree = "<group>"; };
 		9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparationWorkspace.swift; sourceTree = "<group>"; };
 		9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSheets.swift; sourceTree = "<group>"; };
+		9FB73D3027C252959FB7E759 /* ReaderSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSession.swift; sourceTree = "<group>"; };
 		A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiturgicalAPI.swift; sourceTree = "<group>"; };
 		A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChrome.swift; sourceTree = "<group>"; };
+		CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFLibraryIndex.swift; sourceTree = "<group>"; };
+		D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSourceURLs.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -60,13 +68,17 @@
 				3DCCDA011317AD64332990C8 /* AISettings.swift */,
 				74D8516E9667268B7075CEB2 /* APISettings.swift */,
 				62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */,
+				D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */,
 				2495567BA510561B3883455A /* LibraryArchiveViews.swift */,
 				A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */,
+				CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */,
 				478AAAADD24805C4AAF1C997 /* PregarApp.swift */,
 				9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */,
 				39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */,
+				9FB73D3027C252959FB7E759 /* ReaderSession.swift */,
 				0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */,
 				4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */,
+				8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */,
 				A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */,
 				9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */,
 			);
@@ -102,6 +114,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					B87ECA0DD05097023864D227 = {
+						DevelopmentTeam = R573HPN65Q;
+						ProvisioningStyle = Manual;
+					};
 				};
 			};
 			buildConfigurationList = F46BCBC3F166AB2A30D9F4A4 /* Build configuration list for PBXProject "Pregar" */;
@@ -131,13 +147,17 @@
 				0B931865BC2CBFCE6E3D9D9C /* AISettings.swift in Sources */,
 				AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */,
 				39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */,
+				70F9C5A32F020FED083C6C2E /* FavoriteSourceURLs.swift in Sources */,
 				3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */,
 				00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */,
+				545D1E4BC97796B726BB67B2 /* PDFLibraryIndex.swift in Sources */,
 				99645F1CBB2F74C88E281950 /* PregarApp.swift in Sources */,
 				FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */,
 				2236BE23F5A46EA6012ECFD1 /* PrototypeStyle.swift in Sources */,
+				863FED12B32D3E5372DCC462 /* ReaderSession.swift in Sources */,
 				515BA5D71E86AA58E543FE54 /* RichTextEditor.swift in Sources */,
 				68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */,
+				5791E5B8E6B99C8CF7C942D1 /* WindowChrome.swift in Sources */,
 				11DF447737C4F2F6B3A484EE /* WorkspaceChrome.swift in Sources */,
 				7DF5C8B29B917622A6B03CAA /* WorkspaceSheets.swift in Sources */,
 			);
@@ -150,7 +170,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = R573HPN65Q;
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Pregar;
@@ -171,7 +194,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = R573HPN65Q;
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Pregar;

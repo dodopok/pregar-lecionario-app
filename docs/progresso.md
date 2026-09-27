@@ -24,15 +24,16 @@ O projeto é um app nativo para macOS, com armazenamento local e consumo da Est�
 - Leituras, coletas, comemorações e cor vêm da API. O acento litúrgico é aplicado dinamicamente.
 - Editor local em RTF, com negrito, itálico, título, citação, lista e inserção de marcador/área de nota de rodapé.
 - Comparação de uma passagem em duas traduções pela Estêvão API v2, com alternância entre perícope e capítulo.
-- Painel contextual com abas Materiais, Ideias e Revisão. As quatro fontes favoritas abrem num WKWebView embutido; ainda não há busca automática por passagem nem leitor web com abas persistentes.
-- Biblioteca local permite importar PDFs, ler páginas com PDFKit, mostrar metadados básicos e bookmarks do sumário. Ainda não indexa referências bíblicas por texto/cabeçalho, corrige páginas nem faz OCR.
-- Arquivo local lista sermões e busca por título, passagem ou data. Ocasião litúrgica, relações de materiais, comparação/restauração de versões e estado do Drive ainda não estão implementados.
+- Painel contextual com abas Materiais, Ideias e Revisão. PDFs são associados à passagem pela leitura dos bookmarks e agrupados como passagem coincidente, sobreposição ou contexto; abrir um resultado leva o Leitor à página física inicial da seção. As quatro fontes favoritas agora abrem um destino de busca por passagem; Anglican Compass inclui “Today in the Spirit” e o Próprio/domingo.
+- Leitor em janela independente: mantém abas web e PDFs, restaura a seleção e a última localização, navega no WebKit, mostra seções com páginas físicas e contexto e permite corrigir página e marcar material para revisão. A seleção textual pode ser copiada com a origem. As seções são relidas do PDF, sem OCR.
+- Biblioteca local importa PDFs, extrai título/autor dos metadados, gera miniatura da primeira página e indexa bookmarks com intervalo físico até a próxima seção. A Mesa migra importações antigas em segundo plano; em PDFs sem sumário, tenta cabeçalhos textuais. Páginas digitalizadas continuam sem OCR.
+- Biblioteca e Arquivo agora são janelas independentes; Arquivo local lista sermões e busca por título, passagem ou data. Ocasião litúrgica, relações de materiais, comparação/restauração de versões e estado do Drive ainda não estão implementados.
 - Folhas de revisão, perguntas e preparação para tablet representam os limites e opções do protótipo, mas enviar à IA e atualizar o Drive ficam desativados até as integrações BYOK e Google Drive existirem.
 - Preferências em quatro áreas conforme a tela 3d. A Estêvão API permanece fixa; livro, idioma, tradução principal e modalidade de leituras ficam localmente.
 - Chaves BYOK para OpenAI, Anthropic, Google e Perplexity podem ser guardadas/removidas no Acesso às Chaves. Provedor/modelo de revisão e pesquisa são preferências locais, sem chamadas aos provedores ainda.
 - Drive e tablet deixam configurar pasta/documento de ideias, dispositivos e apresentação (Arial 10). OAuth e sincronização ainda não estão ativos. A Biblioteca mostra a pasta de PDFs e os quatro sites favoritos; indexação por passagem e OCR continuam pendentes.
 
-Ainda faltam a navegação de materiais em abas como na tela 3b; indexação de capítulos/passagens dos PDFs, correção manual e OCR; pesquisa e curadoria reais de sites; persistência de ideias; histórico recuperável; chamadas BYOK e revisão segura com evidências; autenticação/sincronização Google Drive e saída de leitura para tablet.
+Ainda faltam OCR e correção manual da localização/metadados dos PDFs; apresentar resultados dos sites dentro do app em vez de abrir suas buscas no Leitor; persistência de ideias; histórico recuperável; chamadas BYOK e revisão segura com evidências; autenticação/sincronização Google Drive e saída de leitura para tablet.
 
 ## Host da API
 
@@ -47,16 +48,26 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - Não há suíte automatizada de testes.
 - Na primeira tentativa, a cena do SwiftUI não aparecia porque `APISettingsStore.init()` lia o Acesso às Chaves sincronamente no ator principal. A amostragem do processo mostrou a thread principal parada em `SecItemCopyMatching`/descriptografia do chaveiro durante a criação da janela.
 - O carregamento de credenciais continua assíncrono, fora da thread principal, com limite de três segundos para a inicialização. Uma tentativa de migrar as consultas para o Data Protection Keychain retornou `errSecMissingEntitlement` na build local ao salvar; essa rota foi removida. O app voltou ao chaveiro padrão que já continha a credencial, sem apagar ou migrar segredos.
+- A build estava assinada ad hoc. A permissão “Permitir sempre” do Keychain fica associada à identidade do código; o requisito ad hoc dependia do `cdhash` e mudava ao recompilar. O projeto agora assina com a identidade Apple Development existente e o Team ID do certificado (`R573HPN65Q`); `codesign` confirmou requisito designado estável pelo bundle ID e certificado. A build padrão passou. Como a assinatura mudou, o Keychain pode pedir autorização mais uma vez para cada credencial já salva; deve-se escolher “Permitir sempre” nessa primeira abertura da nova assinatura. A reabertura após essa autorização ainda precisa ser confirmada em runtime.
 - A Mesa abre numa janela dimensionada para os três painéis (mínimo 1220×740; abertura inicial 1600×980). Preferências deixou de ser uma folha limitada pela janela da Mesa: é uma janela nativa própria, inicial de 1120×900, redimensionável e com conteúdo rolável.
 - A build atual compilou e abriu via LaunchServices. A inspeção em runtime confirmou a Mesa completa, sem recorte nos três painéis, e Preferências em janela separada com o estado “Chave salva neste Mac”.
 - A credencial preexistente no chaveiro padrão foi lida e usada na consulta autenticada: a Mesa carregou as leituras do LOC 2027 para 2026-09-27 e o teste de conexão das Preferências confirmou resposta para 2026-09-26. Não foi possível determinar se a chave digitada pelo usuário na tentativa anterior era uma rotação; portanto, a verificação comprova a credencial preexistente, não uma eventual chave nova.
+- Leitor, Biblioteca e Arquivo foram registrados como cenas de janela independentes, com dimensões iniciais amplas e redimensionáveis. O menu de janelas mostra as cenas disponíveis.
+- Teste em runtime: a nova aba web abriu Anglican Compass no WebKit; uma segunda aba preservou sua própria URL e conteúdo. O teste encontrou reutilização visual incorreta do WebView entre abas; a identidade da view foi vinculada ao ID da aba e, após recompilar/reabrir, ambas as páginas e a aba selecionada foram restauradas corretamente.
+- Teste em runtime: uma fonte favorita aberta a partir da Mesa trouxe a janela do Leitor à frente e associou a leitura principal à aba. O endereço genérico inicialmente usado para Working Preacher retornou 404 e foi trocado pela página inicial do site; busca por artigo específico continua pendente.
+- Teste em runtime: Biblioteca abre em janela própria e mostra seu estado vazio sem recorte; o carregamento de um PDF real nessa janela ainda aguarda importação explícita pelo usuário.
 - O erro `kLSNoExecutableErr` observado ao executar `open` sem elevação era do sandbox de execução: o mesmo erro ocorreu com o app Calculadora do sistema; a abertura elevada da build funcionou.
 - O protótipo web publicado foi navegado; nenhuma ação de enviar revisão ou alterar dados externos foi acionada.
+- A biblioteca persistida continha 10 PDFs, e os 10 caminhos locais foram abertos pelo indexador. As obras textuais devolveram título editorial, contagem de páginas/bookmarks e miniatura JPEG da primeira página; as três cópias do Feasting v. 1 foram mantidas separadas e identificáveis.
+- A referência `Mateus 21.33-46` foi encontrada nos bookmarks do Feasting on the Word v. 4, com páginas físicas 314–327 sob `Proper 22`, e em Connections, páginas 669–676. O intervalo do Feasting termina antes do próximo bookmark, na página 328.
+- O parser aceita referências em português e inglês, ponto ou dois-pontos, diferentes traços, intervalos entre capítulos e listas de versículos no mesmo bookmark. A classificação considera intervalo exato/contido, sobreposição parcial e capítulo/contexto; referências em prosa livre e PDFs digitalizados ainda requerem tratamento adicional.
+- A Mesa e a Bíblia comparativa preservam suas colunas durante buscas; no painel de leituras, traduções já obtidas ficam em cache e as ausentes mostram carregamento localizado. A cena da Bíblia não é remontada ao mudar a referência.
+- As buscas favoritas são URLs específicas: Working Preacher usa o arquivo de comentários por perícope; Anglican Compass consulta “Today in the Spirit” com ocasião e texto; os dois blogs restantes recebem a passagem na busca do próprio site. O app ainda não coleta nem exibe resultados dessas buscas internamente.
 
 ## Próximos passos
 
-1. Implementar o Leitor da tela 3b com abas simultâneas, PDF aberto em página física e navegação web persistente.
-2. Fazer Biblioteca e Arquivo janelas independentes e aproximar os estados das telas 3e e 3f.
-3. Indexar capítulos/passagens dos PDFs, corrigir localizações manualmente e adicionar OCR sob demanda.
+1. Completar a localização de PDFs com mais abreviações, correção manual e OCR sob demanda, usando os casos já analisados como testes.
+2. Avaliar a exibição de resultados de sites dentro do app e completar a correspondência por data, sobreposição parcial e fontes de contexto.
+3. Aproximar os estados de Biblioteca e Arquivo das telas 3e e 3f, incluindo metadados editáveis, ocasião litúrgica e relações de materiais.
 4. Implementar chamadas de revisão e Drive, documento de ideias e histórico após validar modelos/contratos e as proteções que impedem alteração do texto do usuário.
 5. Validar o fluxo completo numa preparação real e registrar as diferenças restantes contra o protótipo.

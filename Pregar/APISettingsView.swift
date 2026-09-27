@@ -64,15 +64,15 @@ struct APISettingsView: View {
                     sectionContent
                 }
                 .frame(maxWidth: 980, alignment: .leading)
-                .padding(.horizontal, 34)
-                .padding(.vertical, 26)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 20)
                 .frame(maxWidth: .infinity, alignment: .center)
             }
-            .background(PrototypeStyle.canvas.opacity(0.56))
+            .background(PrototypeStyle.canvas)
             Divider()
             footer
         }
-        .frame(minWidth: 780, minHeight: 600)
+        .frame(minWidth: 620, minHeight: 640)
         .background(PrototypeStyle.canvas)
         .preferredColorScheme(.light)
         .tint(accent)
@@ -88,28 +88,31 @@ struct APISettingsView: View {
                     section = item
                     resultMessage = nil
                 } label: {
-                    VStack(spacing: 7) {
-                        Image(systemName: item.symbol).font(.system(size: 19, weight: .regular))
+                    VStack(spacing: 6) {
+                        Image(systemName: item.symbol).font(.system(size: 18, weight: .regular))
                         Text(item.rawValue).font(.system(size: 12, weight: section == item ? .semibold : .regular))
                             .lineLimit(1).minimumScaleFactor(0.85)
                     }
                     .foregroundStyle(section == item ? accent : PrototypeStyle.muted)
-                    .frame(maxWidth: .infinity).frame(height: 68)
-                    .background(section == item ? accent.opacity(0.11) : .clear, in: RoundedRectangle(cornerRadius: 12))
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 12)
+                    .frame(height: 48)
+                    .background(section == item ? accent.opacity(0.11) : .clear, in: RoundedRectangle(cornerRadius: 10))
+                    .contentShape(RoundedRectangle(cornerRadius: 10))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(section == item ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.leading, 82)
+        .padding(.trailing, 22)
+        .padding(.vertical, 7)
     }
 
     private var pageHeading: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(section.rawValue).font(PrototypeStyle.serif(28, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-            Text(sectionSubtitle).font(.system(size: 14)).foregroundStyle(PrototypeStyle.muted)
+            Text(section.rawValue).font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+            Text(sectionSubtitle).font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
         }
     }
 
@@ -324,7 +327,7 @@ struct APISettingsView: View {
             }
             Button("Concluído") { dismiss() }.keyboardShortcut(.cancelAction)
         }
-        .padding(.horizontal, 28).padding(.vertical, 17)
+        .padding(.horizontal, 22).padding(.vertical, 12)
         .background(PrototypeStyle.canvas)
     }
 
@@ -496,9 +499,9 @@ private struct PreferenceGroup<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) { content }
-            .padding(.horizontal, 18).padding(.vertical, 6)
-            .background(.white.opacity(0.93), in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(PrototypeStyle.line, lineWidth: 1))
+            .padding(.horizontal, 14).padding(.vertical, 4)
+            .background(.white, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(PrototypeStyle.line, lineWidth: 1))
     }
 }
 
@@ -508,10 +511,10 @@ private struct PreferenceRow<Control: View>: View {
 
     var body: some View {
         HStack(spacing: 20) {
-            Text(label).font(.system(size: 14)).foregroundStyle(PrototypeStyle.muted).frame(width: 220, alignment: .leading)
+            Text(label).font(.system(size: 13)).foregroundStyle(PrototypeStyle.muted).frame(width: 150, alignment: .leading)
             control.frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minHeight: 54)
+        .frame(minHeight: 49)
         .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
     }
 }
