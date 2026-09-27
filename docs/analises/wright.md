@@ -58,7 +58,7 @@ A página física 102 foi renderizada e inspecionada. Ela começa com o final do
 
 O fallback para PDFs sem bookmarks agora reconhece referências no início da linha, descarta páginas com densidade de referências típica de sumário e não trata citações em prosa como cabeçalhos. A ocorrência do corpo prevalece sobre a lista do sumário, e o cabeçalho da próxima perícope fecha o intervalo. A suíte automatizada usa o PDF local Romans Part 2 para confirmar Romanos 13:8–14 nas páginas físicas 102–107, correspondentes às impressas 88–93, antes do início de 14:1–6 na física 108. O Leitor registra esse método como cabeçalho textual e indica confiança média, não a origem bookmark.
 
-Essa validação cobre o caso amostrado, não todos os layouts da série. Detecção de OCR, página impressa automática, citações acidentais que imitem títulos e correção manual continuam pendentes.
+Essa validação cobre o caso amostrado, não todos os layouts da série. Um teste rasteriza temporariamente as páginas físicas 102–108 deste exemplar e confirma que o OCR localiza a seção Romanos 13:8–14 nas páginas 1–6 do derivado image-only, antes do cabeçalho de 14:1–6 na página 7. Isso valida a extração OCR sobre o layout real do livro, mas não equivale a um comentário originalmente digitalizado. Página impressa automática e citações acidentais que imitem títulos continuam pendentes.
 
 ## Método e limites
 

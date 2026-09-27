@@ -287,6 +287,52 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url), original, "OCR must not modify the downloaded source")
     }
 
+    func testRasterizedWrightRomansSectionIsLocatedByOCRWhenAvailable() throws {
+        guard let sourceURL = downloadedPDF(containing: "Romans Part 2") else {
+            throw XCTSkip("Wright Romans Part 2 is not in ~/Downloads")
+        }
+        let source = try XCTUnwrap(PDFDocument(url: sourceURL))
+        let scan = PDFDocument()
+        for physicalPage in 102...108 {
+            let sourcePage = try XCTUnwrap(source.page(at: physicalPage - 1))
+            let bounds = sourcePage.bounds(for: .mediaBox)
+            let scale = 1800 / max(bounds.width, bounds.height)
+            let image = sourcePage.thumbnail(
+                of: CGSize(width: bounds.width * scale, height: bounds.height * scale),
+                for: .mediaBox
+            )
+            scan.insert(try XCTUnwrap(PDFPage(image: image)), at: scan.pageCount)
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PregarWrightOCR-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let scanURL = directory.appendingPathComponent("wright-commentary-scan.pdf")
+        XCTAssertTrue(scan.write(to: scanURL))
+
+        let imageOnlySource = try Data(contentsOf: scanURL)
+        let imageOnlyDocument = try XCTUnwrap(PDFDocument(url: scanURL))
+        XCTAssertEqual(imageOnlyDocument.pageCount, 7)
+        XCTAssertTrue((0..<imageOnlyDocument.pageCount).allSatisfy { pageNumber in
+            imageOnlyDocument.page(at: pageNumber)?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+        })
+
+        let result = try XCTUnwrap(PDFLibraryIndexer.recognizeScannedPages(path: scanURL.path, previousRecord: nil))
+        let matches = (result.record.sections ?? []).filter {
+            PDFLibraryIndexer.match($0, reference: "Romans 13:8-14") == .exact
+        }
+
+        XCTAssertEqual(result.candidatePageCount, 7)
+        XCTAssertEqual(result.scannedPageCount, 7)
+        XCTAssertEqual(matches.count, 1)
+        let section = try XCTUnwrap(matches.first)
+        XCTAssertEqual(section.startPage, 1)
+        XCTAssertEqual(section.endPage, 6)
+        XCTAssertEqual(section.findingMethod, .ocrHeading)
+        XCTAssertEqual(try Data(contentsOf: scanURL), imageOnlySource, "OCR must not modify the rasterized source")
+    }
+
     func testRealFeastingVolumeFourRomansUnitWhenAvailable() throws {
         guard let url = downloadedPDF(startingWith: "Feasting-on-the-Word_-Year-A_-Volume-4") else {
             throw XCTSkip("Feasting Year A Volume 4 is not in ~/Downloads")
