@@ -58,6 +58,8 @@ O app inicialmente usava `https://estevao.caminhoanglicano.com.br`, domínio do 
 
 O host é uma constante do app e a tela da Estêvão API não permite editá-lo. Um 404 sem corpo JSON informa que a rota v2 não foi encontrada, distinguindo-o de erros JSON produzidos pela própria API.
 
+- A API classificava 27/09/2026 como “17º Domingo no Tempo Comum” no LOC 2027, apesar de a leitura pertencer ao Próprio 21 e o protótipo contar os domingos depois de Pentecostes. A regra do LOC agora retorna 18º Domingo após Pentecostes em 27/09 e 19º em 04/10; os outros livros mantêm sua nomenclatura. As chaves das respostas diárias e do calendário anual foram versionadas para não reaproveitar nomes antigos em cache. Os testes focados da API passaram (264 exemplos); a alteração está somente no checkout local `estevao-api-bible-verse` e ainda precisa ser implantada para aparecer no app.
+
 ## Verificação
 
 - Na execução mais recente, em 27 de setembro de 2026, a suíte completa passou em macOS 26.6.2: 90 testes aprovados, um teste de integração opt-in pulado e nenhuma falha (91 no total). Casos cobrem metadados editoriais explícitos da pesquisa, tradição/jurisdição opcional de sites favoritos, ausência sem inferência, perfis antigos e erro de autoria do WordPress sem perda do artigo. Nenhum manuscrito ou segredo foi enviado a um provedor.
