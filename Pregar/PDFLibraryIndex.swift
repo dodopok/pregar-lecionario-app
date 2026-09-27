@@ -33,6 +33,12 @@ enum PDFSectionComponentKind: String, Codable, Sendable {
     case homiletical
 }
 
+enum PDFSectionFindingMethod: String, Codable, Sendable {
+    case bookmark
+    case textHeading
+    case unknown
+}
+
 struct PDFSectionComponent: Codable, Equatable, Identifiable, Sendable {
     var id: String { "\(kind.rawValue)|\(location.start.page)|\(location.start.utf16Offset)" }
 
@@ -243,7 +249,7 @@ enum PDFSectionMatchKind: Int, Sendable {
 }
 
 enum PDFLibraryIndexer {
-    static let currentVersion = 3
+    static let currentVersion = 4
 
     static func index(path: String) -> PDFLibraryRecord? {
         let url = URL(fileURLWithPath: path)
@@ -295,6 +301,24 @@ enum PDFLibraryIndexer {
         return version < currentVersion && (isFeastingTitle(record.title) || record.bookmarkCount == 0)
     }
 
+    static func backfillingBookmarkMethod(
+        in sections: [PDFSectionLocation],
+        bookmarkCount: Int
+    ) -> [PDFSectionLocation] {
+        guard bookmarkCount > 0 else { return sections }
+        return sections.map { section in
+            guard section.findingMethod == nil || section.findingMethod == .unknown else { return section }
+            return PDFSectionLocation(
+                title: section.title,
+                startPage: section.startPage,
+                endPage: section.endPage,
+                context: section.context,
+                components: section.components,
+                findingMethod: .bookmark
+            )
+        }
+    }
+
     static func match(_ section: PDFSectionLocation, reference: String) -> PDFSectionMatchKind? {
         guard let target = ScriptureReference.parse(reference) else { return nil }
         return match(section, target: target)
@@ -329,7 +353,7 @@ enum PDFLibraryIndexer {
 
     private static func flatten(_ root: PDFOutline?, document: PDFDocument) -> [PDFSectionLocation] {
         guard let root else { return [] }
-        var entries: [(title: String, page: Int, context: String?, order: Int)] = []
+        var entries: [(title: String, page: Int, context: String?, method: PDFSectionFindingMethod, order: Int)] = []
         var order = 0
         func walk(_ node: PDFOutline, ancestors: [String]) {
             for index in 0..<node.numberOfChildren {
@@ -337,7 +361,7 @@ enum PDFLibraryIndexer {
                 let title = child.label?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let page = child.destination?.page.map { document.index(for: $0) + 1 }
                 if let title, !title.isEmpty, let page, page > 0 {
-                    entries.append((title, page, ancestors.last, order))
+                    entries.append((title, page, ancestors.last, .bookmark, order))
                     order += 1
                 }
                 walk(child, ancestors: title.map { ancestors + [$0] } ?? ancestors)
@@ -362,11 +386,17 @@ enum PDFLibraryIndexer {
         }
     }
 
-    private static func addPageRanges(_ entries: [(title: String, page: Int, context: String?, order: Int)], pageCount: Int) -> [PDFSectionLocation] {
+    private static func addPageRanges(_ entries: [(title: String, page: Int, context: String?, method: PDFSectionFindingMethod, order: Int)], pageCount: Int) -> [PDFSectionLocation] {
         let sorted = entries.sorted { $0.page == $1.page ? $0.order < $1.order : $0.page < $1.page }
         return sorted.enumerated().map { index, entry in
             let nextPage = index + 1 < sorted.count ? sorted[index + 1].page : pageCount + 1
-            return PDFSectionLocation(title: entry.title, startPage: entry.page, endPage: max(entry.page, nextPage - 1), context: entry.context)
+            return PDFSectionLocation(
+                title: entry.title,
+                startPage: entry.page,
+                endPage: max(entry.page, nextPage - 1),
+                context: entry.context,
+                findingMethod: entry.method
+            )
         }
     }
 
@@ -421,7 +451,8 @@ enum PDFLibraryIndexer {
                 startPage: section.startPage,
                 endPage: max(section.endPage, lastIncludedPage),
                 context: section.context,
-                components: components
+                components: components,
+                findingMethod: section.findingMethod
             )
         }
     }
@@ -553,7 +584,7 @@ enum PDFLibraryIndexer {
     }
 
     private static func scanHeadings(_ document: PDFDocument) -> [PDFSectionLocation] {
-        var entries: [(title: String, page: Int, context: String?, order: Int)] = []
+        var entries: [(title: String, page: Int, context: String?, method: PDFSectionFindingMethod, order: Int)] = []
         var seen: Set<String> = []
         for pageNumber in 1...document.pageCount {
             if pageNumber.isMultiple(of: 32), Task.isCancelled { return [] }
@@ -574,7 +605,7 @@ enum PDFLibraryIndexer {
                 let parsed = entry.reference
                 let key = "\(parsed.book)|\(parsed.chapter)|\(parsed.startVerse ?? 0)|\(parsed.endChapter ?? parsed.chapter)|\(parsed.endVerse ?? parsed.startVerse ?? 0)"
                 guard seen.insert(key).inserted else { continue }
-                entries.append((entry.title, pageNumber, nil, entries.count))
+                entries.append((entry.title, pageNumber, nil, .textHeading, entries.count))
             }
         }
         return addPageRanges(entries, pageCount: document.pageCount)

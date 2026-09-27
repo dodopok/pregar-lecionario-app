@@ -29,7 +29,7 @@ Todos são letter. As contagens são páginas físicas do PDF, não páginas imp
 
 ## Indexação implementada e validada na amostra
 
-O índice versão 3 representa o texto bíblico e as quatro perspectivas como componentes separados. Cada componente guarda página física e offset UTF-16 de início/fim, além da autoria identificada no fechamento do ensaio. A seção bíblica e o conteúdo do ensaio não incluem o cabeçalho do próximo texto nem a linha do autor como prosa. Quando a leitura seguinte começa na mesma página, o intervalo termina no offset exato desse cabeçalho e a página compartilhada permanece no alcance da unidade.
+O índice versão 4 representa o texto bíblico e as quatro perspectivas como componentes separados. Cada componente guarda página física e offset UTF-16 de início/fim, além da autoria identificada no fechamento do ensaio. A seção mantém também o método de localização; no volume amostrado, os bookmarks dão confiança alta. O texto bíblico e os ensaios não incluem o cabeçalho do próximo texto nem a linha do autor como prosa. Quando a leitura seguinte começa na mesma página, o intervalo termina no offset exato desse cabeçalho e a página compartilhada permanece no alcance da unidade.
 
 Testes automatizados contra os PDFs locais confirmam Romanos 13:8–14 no Volume 4, páginas físicas 96–108, com as quatro autorias documentadas, e Romanos 13:11–14 no Volume 1 como sobreposição parcial. Um caso sintético cobre os limites dentro da página e a decodificação de registros antigos sem componentes. A indexação não altera os arquivos PDF e não envia conteúdo à rede.
 

@@ -22,19 +22,40 @@ struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
     let endPage: Int
     let context: String?
     let components: [PDFSectionComponent]?
+    let findingMethod: PDFSectionFindingMethod?
+
+    var findingMethodLabel: String {
+        switch findingMethod {
+        case .bookmark: "bookmark do PDF"
+        case .textHeading: "cabeçalho textual"
+        case .unknown, nil: "não identificado"
+        }
+    }
+
+    var confidenceLabel: String {
+        switch findingMethod {
+        case .bookmark: "alta"
+        case .textHeading: "média"
+        case .unknown, nil: "não verificada"
+        }
+    }
+
+    var hasHighConfidence: Bool { findingMethod == .bookmark }
 
     init(
         title: String,
         startPage: Int,
         endPage: Int,
         context: String? = nil,
-        components: [PDFSectionComponent]? = nil
+        components: [PDFSectionComponent]? = nil,
+        findingMethod: PDFSectionFindingMethod? = .unknown
     ) {
         self.title = title
         self.startPage = startPage
         self.endPage = endPage
         self.context = context
         self.components = components
+        self.findingMethod = findingMethod
     }
 }
 
@@ -592,8 +613,8 @@ struct ReaderWindowView: View {
                 }
                 if let section = activeSection {
                     locationRow("Páginas", value: pageRange(section, document: document))
-                    locationRow("Achado por", value: "bookmark do PDF")
-                    locationRow("Confiança", value: "alta", green: true)
+                    locationRow("Achado por", value: section.findingMethodLabel)
+                    locationRow("Confiança", value: section.confidenceLabel, green: section.hasHighConfidence)
                 } else {
                     Text("Nenhuma seção foi detectada neste ponto do PDF.")
                         .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)

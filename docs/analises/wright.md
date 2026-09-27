@@ -56,7 +56,7 @@ A página física 102 foi renderizada e inspecionada. Ela começa com o final do
 
 ## Estado da implementação
 
-O fallback para PDFs sem bookmarks agora reconhece referências no início da linha, descarta páginas com densidade de referências típica de sumário e não trata citações em prosa como cabeçalhos. A ocorrência do corpo prevalece sobre a lista do sumário, e o cabeçalho da próxima perícope fecha o intervalo. A suíte automatizada usa o PDF local Romans Part 2 para confirmar Romanos 13:8–14 nas páginas físicas 102–107, correspondentes às impressas 88–93, antes do início de 14:1–6 na física 108.
+O fallback para PDFs sem bookmarks agora reconhece referências no início da linha, descarta páginas com densidade de referências típica de sumário e não trata citações em prosa como cabeçalhos. A ocorrência do corpo prevalece sobre a lista do sumário, e o cabeçalho da próxima perícope fecha o intervalo. A suíte automatizada usa o PDF local Romans Part 2 para confirmar Romanos 13:8–14 nas páginas físicas 102–107, correspondentes às impressas 88–93, antes do início de 14:1–6 na física 108. O Leitor registra esse método como cabeçalho textual e indica confiança média, não a origem bookmark.
 
 Essa validação cobre o caso amostrado, não todos os layouts da série. Detecção de OCR, página impressa automática, citações acidentais que imitem títulos e correção manual continuam pendentes.
 

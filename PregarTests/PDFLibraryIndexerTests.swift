@@ -88,6 +88,24 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertFalse(PDFLibraryIndexer.requiresReindex(legacyBookmarked))
     }
 
+    func testLegacyBookmarkMethodBackfillPreservesKnownOrigins() throws {
+        let legacyJSON = #"{"title":"Romans 13:8-14","startPage":102,"endPage":107,"context":null}"#
+        let legacy = try JSONDecoder().decode(PDFSectionLocation.self, from: Data(legacyJSON.utf8))
+        let heading = PDFSectionLocation(
+            title: "Romans 14:1-6",
+            startPage: 108,
+            endPage: 112,
+            findingMethod: .textHeading
+        )
+
+        let recovered = PDFLibraryIndexer.backfillingBookmarkMethod(in: [legacy, heading], bookmarkCount: 60)
+        XCTAssertEqual(recovered[0].findingMethod, .bookmark)
+        XCTAssertEqual(recovered[1].findingMethod, .textHeading)
+
+        let unbookmarked = PDFLibraryIndexer.backfillingBookmarkMethod(in: [legacy], bookmarkCount: 0)
+        XCTAssertNil(unbookmarked.first?.findingMethod)
+    }
+
     func testRealFeastingVolumeFourRomansUnitWhenAvailable() throws {
         guard let url = downloadedPDF(startingWith: "Feasting-on-the-Word_-Year-A_-Volume-4") else {
             throw XCTSkip("Feasting Year A Volume 4 is not in ~/Downloads")
@@ -101,6 +119,8 @@ final class PDFLibraryIndexerTests: XCTestCase {
         let section = try XCTUnwrap(matching.first)
         XCTAssertEqual(section.startPage, 96)
         XCTAssertEqual(section.endPage, 108)
+        XCTAssertEqual(section.findingMethod, .bookmark)
+        XCTAssertEqual(section.confidenceLabel, "alta")
         XCTAssertEqual(section.components?.map(\.author), [
             nil,
             "ELEAZAR S. FERNANDEZ",
@@ -135,6 +155,8 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertEqual(matches.count, 1)
         let section = try XCTUnwrap(matches.first)
         XCTAssertEqual(section.startPage, 102)
+        XCTAssertEqual(section.findingMethod, .textHeading)
+        XCTAssertEqual(section.confidenceLabel, "média")
         let indexedSections = (record.sections ?? []).map {
             "\($0.title) p.\($0.startPage)-\($0.endPage)"
         }.joined(separator: "; ")

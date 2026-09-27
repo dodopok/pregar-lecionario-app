@@ -305,6 +305,12 @@ struct PDFLibraryView: View {
         records = records.map { record in
             guard !pathsToReindex.contains(record.path) else { return record }
             var current = record
+            if let sections = current.sections {
+                current.sections = PDFLibraryIndexer.backfillingBookmarkMethod(
+                    in: sections,
+                    bookmarkCount: current.bookmarkCount
+                )
+            }
             current.indexVersion = PDFLibraryIndexer.currentVersion
             return current
         }
