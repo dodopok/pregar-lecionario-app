@@ -372,6 +372,9 @@ struct ReaderWindowView: View {
             selectedText = ""
             pageField = String(tab?.physicalPage ?? 1)
         }
+        .onAppear {
+            pageField = String(tab?.physicalPage ?? 1)
+        }
         .onDisappear { reader.flushPagePersistence() }
         .onChange(of: tab?.physicalPage) { _, page in
             pageField = String(page ?? 1)
