@@ -124,7 +124,7 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - Livros sem imagem usam uma capa tipográfica de reserva com identificação, ano e monograma da jurisdição; ela não se apresenta como reprodução da capa oficial. A imagem real da API continua tendo prioridade. O registro atual de REB 2027 na Estêvão API não publica `thumbnail_url` nem `image_url`, então a miniatura real aparecerá quando esse metadado for adicionado ao catálogo.
 - O seletor não mostra códigos técnicos como substituto para metadados ausentes; testes cobrem título/descrição/subtítulo de reserva e os dados visuais do LOC 2027.
 - A seleção mostra uma orientação quando ainda não há chave e oferece nova tentativa em caso de falha de rede. A consulta solicita apenas os campos usados pelo seletor.
-- A suíte completa passou com 66 testes; os casos do catálogo cobrem metadados do LOC, monograma e ausência de códigos técnicos na interface. A build de teste está assinada com `Apple Development: DOUGLAS DE ARAUJO SILVA`, `TeamIdentifier=R573HPN65Q`; nenhuma janela do app foi aberta.
+- A suíte completa passou com 75 testes; os casos do catálogo cobrem metadados do LOC, monograma e ausência de códigos técnicos na interface. A build de teste está assinada com `Apple Development: DOUGLAS DE ARAUJO SILVA`, `TeamIdentifier=R573HPN65Q`. O catálogo atual do LOC 2027 não publica imagem oficial; o seletor mostra a capa de reserva até a API fornecer `thumbnail_url` ou `image_url`.
 
 ## Escrita, Drive e PDF
 
