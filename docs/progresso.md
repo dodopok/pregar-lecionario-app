@@ -12,6 +12,7 @@ O projeto começou como um protótipo nativo para macOS, mantendo a implementaç
 - Chave da API guardada no Acesso às Chaves do macOS; as demais preferências ficam localmente.
 - Exibição das leituras, coletas, comemorações e cores do dia.
 - Rascunho de sermão local por data, com editor formatado básico e salvamento automático.
+- Cliente da API v2 preparado para buscar uma passagem bíblica isolada por tradução, base da comparação futura.
 - Projeto gerado pelo XcodeGen, com a definição versionada em `project.yml`.
 
 O app ainda não inclui biblioteca de PDFs, leitores de sites, revisão por IA, integração com Google Drive nem importação das ideias do iPhone. Esses itens continuam no escopo documentado, mas serão construídos depois de validar a base e seus contratos.
@@ -32,7 +33,7 @@ O host agora é uma constante do app. Um 404 sem corpo JSON da API informa que a
 
 ## Próximos passos
 
-1. Adicionar comparação de traduções e consulta de capítulos completos para uma passagem.
+1. Implementar a comparação de traduções e consulta de capítulos completos. O cliente de passagens está pronto; a tela aguarda a referência visual do protótipo, solicitada em 26/09/2026.
 2. Completar o editor local e acertar recuperação e apresentação do manuscrito.
 3. Importar os PDFs, localizar capítulos por passagem e abrir na página física correta.
 4. Integrar os sites favoritos num espaço de pesquisa com navegação interna.

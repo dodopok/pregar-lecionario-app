@@ -4,6 +4,12 @@ struct APIEnvelope<Value: Decodable>: Decodable {
     let data: Value
 }
 
+struct BiblePassage: Decodable {
+    let reference: String
+    let bible: String
+    let text: BiblePassageText?
+}
+
 struct LiturgicalDay: Decodable {
     let date: String
     let dayOfWeek: String?
@@ -91,7 +97,18 @@ struct LiturgicalAPIClient {
     let apiKey: String
 
     func fetchDay(_ date: Date) async throws -> LiturgicalDay {
-        let url = try dayURL(date)
+        try await get(APIEnvelope<LiturgicalDay>.self, from: dayURL(date)).data
+    }
+
+    func fetchPassage(reference: String, bible: String) async throws -> BiblePassageText {
+        let passage = try await get(APIEnvelope<BiblePassage>.self, from: passageURL(reference: reference, bible: bible)).data
+        guard let text = passage.text else {
+            throw LiturgicalAPIError(message: "A passagem \(reference) não está disponível em \(bible.uppercased()).")
+        }
+        return text
+    }
+
+    private func get<Value: Decodable>(_ type: Value.Type, from url: URL) async throws -> Value {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 30
@@ -118,9 +135,9 @@ struct LiturgicalAPIClient {
         do {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            return try decoder.decode(APIEnvelope<LiturgicalDay>.self, from: data).data
+            return try decoder.decode(type, from: data)
         } catch {
-            throw LiturgicalAPIError(message: "A resposta da Estêvão API não corresponde ao formato esperado da v2. Confira se essa versão já está publicada no servidor.")
+            throw LiturgicalAPIError(message: "A resposta da Estêvão API não corresponde ao formato esperado da v2.")
         }
     }
 
@@ -149,6 +166,22 @@ struct LiturgicalAPIClient {
         components.queryItems = query
         guard let url = components.url else {
             throw LiturgicalAPIError(message: "Não foi possível montar o endereço da Estêvão API.")
+        }
+        return url
+    }
+
+    private func passageURL(reference: String, bible: String) throws -> URL {
+        guard var components = URLComponents(string: settings.baseURL) else {
+            throw LiturgicalAPIError(message: "Endereço inválido da Estêvão API.")
+        }
+        components.path = "/api/v2/passages"
+        components.queryItems = [
+            URLQueryItem(name: "ref", value: reference),
+            URLQueryItem(name: "bible", value: bible),
+            URLQueryItem(name: "text_format", value: "verses")
+        ]
+        guard let url = components.url else {
+            throw LiturgicalAPIError(message: "Não foi possível montar o endereço da passagem bíblica.")
         }
         return url
     }
