@@ -284,6 +284,9 @@ final class PDFLibraryIndexerTests: XCTestCase {
             $0.book == "romans" && $0.chapter == 7 && $0.startVerse == 15
                 && ($0.endChapter ?? $0.chapter) == 7 && $0.endVerse == 25
         }, "OCR should locate the LOC's Romans 7:15-25 reading on physical page 1")
+        XCTAssertFalse((result.record.sections ?? []).contains {
+            PDFLibraryIndexer.match($0, reference: "Romans 7:15-25") == .exact
+        }, "A liturgical table reference must not be promoted to a commentary section")
         XCTAssertEqual(try Data(contentsOf: url), original, "OCR must not modify the downloaded source")
     }
 
@@ -330,6 +333,88 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertEqual(section.startPage, 1)
         XCTAssertEqual(section.endPage, 6)
         XCTAssertEqual(section.findingMethod, .ocrHeading)
+        XCTAssertEqual(try Data(contentsOf: scanURL), imageOnlySource, "OCR must not modify the rasterized source")
+    }
+
+    func testRasterizedFeastingMatthewComponentsAreExtractedByOCRWhenAvailable() throws {
+        guard let sourceURL = downloadedPDF(startingWith: "Feasting-on-the-Word_-Year-A_-Volume-4") else {
+            throw XCTSkip("Feasting Year A Volume 4 is not in ~/Downloads")
+        }
+        let source = try XCTUnwrap(PDFDocument(url: sourceURL))
+        let scan = PDFDocument()
+        for physicalPage in 314...328 {
+            let sourcePage = try XCTUnwrap(source.page(at: physicalPage - 1))
+            let bounds = sourcePage.bounds(for: .mediaBox)
+            let scale = 1800 / max(bounds.width, bounds.height)
+            let image = sourcePage.thumbnail(
+                of: CGSize(width: bounds.width * scale, height: bounds.height * scale),
+                for: .mediaBox
+            )
+            scan.insert(try XCTUnwrap(PDFPage(image: image)), at: scan.pageCount)
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PregarFeastingOCR-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let scanURL = directory.appendingPathComponent("Feasting-on-the-Word-Year-A-Volume-4-scan.pdf")
+        XCTAssertTrue(scan.write(to: scanURL))
+
+        let imageOnlySource = try Data(contentsOf: scanURL)
+        let imageOnlyDocument = try XCTUnwrap(PDFDocument(url: scanURL))
+        XCTAssertEqual(imageOnlyDocument.pageCount, 15)
+        XCTAssertTrue((0..<imageOnlyDocument.pageCount).allSatisfy { pageNumber in
+            imageOnlyDocument.page(at: pageNumber)?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+        })
+
+        let result = try XCTUnwrap(PDFLibraryIndexer.recognizeScannedPages(path: scanURL.path, previousRecord: nil))
+        let matching = (result.record.sections ?? []).filter {
+            PDFLibraryIndexer.match($0, reference: "Matthew 21:33-46") == .exact
+        }
+
+        XCTAssertEqual(result.candidatePageCount, 15)
+        XCTAssertEqual(result.scannedPageCount, 15)
+        XCTAssertEqual(result.recognizedTextPageCount, 15)
+        XCTAssertEqual(matching.count, 1)
+        let section = try XCTUnwrap(matching.first)
+        XCTAssertEqual(section.startPage, 1)
+        XCTAssertEqual(section.endPage, 15)
+        XCTAssertEqual(section.findingMethod, .ocrHeading)
+        XCTAssertEqual(section.components?.count, 5)
+        XCTAssertEqual(section.components?.map(\.author), [
+            nil,
+            "ANDREW PURVES",
+            "RICHARD E. SPALDING",
+            "SUSAN GROVE EASTMAN",
+            "MARVIN A. MCMICKLE"
+        ])
+
+        let ocrText = try XCTUnwrap(result.record.ocrTextByPage)
+        let scripture = try XCTUnwrap(section.components?.first)
+        let scriptureText = PDFLibraryIndexer.extractedText(
+            in: scripture.content,
+            from: imageOnlyDocument,
+            ocrTextByPage: ocrText
+        )
+        XCTAssertTrue(scriptureText.localizedCaseInsensitiveContains("listen to another parable"))
+        XCTAssertFalse(scriptureText.localizedCaseInsensitiveContains("nathan eddy"))
+
+        let homiletical = try XCTUnwrap(section.components?.last)
+        let homileticalText = PDFLibraryIndexer.extractedText(
+            in: homiletical.content,
+            from: imageOnlyDocument,
+            ocrTextByPage: ocrText
+        )
+        XCTAssertTrue(homileticalText.localizedCaseInsensitiveContains("must be read as an allegory"))
+        XCTAssertFalse(homileticalText.localizedCaseInsensitiveContains("marvin a. mcmickle"))
+        XCTAssertFalse(homileticalText.localizedCaseInsensitiveContains("isaiah 25:1-9"))
+
+        let reindexed = try XCTUnwrap(PDFLibraryIndexer.index(path: scanURL.path, previousRecord: result.record))
+        let reindexedSection = try XCTUnwrap(reindexed.sections?.first {
+            PDFLibraryIndexer.match($0, reference: "Matthew 21:33-46") == .exact
+        })
+        XCTAssertEqual(reindexedSection.components?.map(\.author), section.components?.map(\.author))
+        XCTAssertEqual(reindexed.ocrTextByPage, ocrText)
         XCTAssertEqual(try Data(contentsOf: scanURL), imageOnlySource, "OCR must not modify the rasterized source")
     }
 

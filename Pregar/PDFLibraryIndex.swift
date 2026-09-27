@@ -383,12 +383,18 @@ enum PDFLibraryIndexer {
 
         let recognizedSections = recognizedText.isEmpty
             ? []
-            : scanHeadings(document, ocrTextByPage: recognizedText)
+            : scanHeadings(document, ocrTextByPage: recognizedText, documentTitle: record.title)
         let previousSectionCount = record.sections?.count ?? 0
         let mergedSections = mergingOCRSections(recognizedSections, into: record.sections ?? [])
-        record.sections = enrichFeastingSections(mergedSections, document: document, title: record.title)
+        let allOCRText = (record.ocrTextByPage ?? [:]).merging(recognizedText) { _, new in new }
+        record.sections = enrichFeastingSections(
+            mergedSections,
+            document: document,
+            title: record.title,
+            ocrTextByPage: allOCRText
+        )
         record.ocrPageNumbers = attemptedPages.sorted()
-        record.ocrTextByPage = (record.ocrTextByPage ?? [:]).merging(recognizedText) { _, new in new }
+        record.ocrTextByPage = allOCRText
         return PDFLibraryOCRResult(
             record: record,
             candidatePageCount: candidatePages.count,
@@ -414,7 +420,10 @@ enum PDFLibraryIndexer {
         let textSections = bookmarks.isEmpty ? scanHeadings(document) : bookmarks
         let rawSections = ocrTextByPage.isEmpty
             ? textSections
-            : mergingOCRSections(scanHeadings(document, ocrTextByPage: ocrTextByPage), into: textSections)
+            : mergingOCRSections(
+                scanHeadings(document, ocrTextByPage: ocrTextByPage, documentTitle: title),
+                into: textSections
+            )
         let sections = enrichFeastingSections(rawSections, document: document, title: title)
         let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
         let copyLabel: String? = {
@@ -448,7 +457,12 @@ enum PDFLibraryIndexer {
                 (previousRecord.sections ?? []).filter { $0.findingMethod == .ocrHeading },
                 into: record.sections ?? []
             )
-            record.sections = enrichFeastingSections(mergedSections, document: document, title: title)
+            record.sections = enrichFeastingSections(
+                mergedSections,
+                document: document,
+                title: title,
+                ocrTextByPage: previousRecord.ocrTextByPage ?? [:]
+            )
         }
         return record
     }
@@ -654,7 +668,8 @@ enum PDFLibraryIndexer {
     private static func enrichFeastingSections(
         _ sections: [PDFSectionLocation],
         document: PDFDocument,
-        title: String
+        title: String,
+        ocrTextByPage: [Int: String] = [:]
     ) -> [PDFSectionLocation] {
         guard isFeastingTitle(title) else { return sections }
         var pageTextCache: [Int: String] = [:]
@@ -669,7 +684,8 @@ enum PDFLibraryIndexer {
             for pageNumber in section.startPage...lastPage {
                 if let cached = pageTextCache[pageNumber] {
                     pageTexts[pageNumber] = cached
-                } else if let text = document.page(at: pageNumber - 1)?.string {
+                } else if let text = nonempty(document.page(at: pageNumber - 1)?.string)
+                    ?? nonempty(ocrTextByPage[pageNumber]) {
                     pageTextCache[pageNumber] = text
                     pageTexts[pageNumber] = text
                 }
@@ -833,7 +849,8 @@ enum PDFLibraryIndexer {
 
     private static func scanHeadings(
         _ document: PDFDocument,
-        ocrTextByPage: [Int: String] = [:]
+        ocrTextByPage: [Int: String] = [:],
+        documentTitle: String? = nil
     ) -> [PDFSectionLocation] {
         var entries: [(title: String, page: Int, context: String?, method: PDFSectionFindingMethod, order: Int)] = []
         var seen: Set<String> = []
@@ -841,7 +858,9 @@ enum PDFLibraryIndexer {
             if pageNumber.isMultiple(of: 32), Task.isCancelled { return [] }
             guard let text = ocrTextByPage[pageNumber] ?? document.page(at: pageNumber - 1)?.string else { continue }
             let findingMethod: PDFSectionFindingMethod = ocrTextByPage[pageNumber] == nil ? .textHeading : .ocrHeading
-            let lines = text.components(separatedBy: .newlines).prefix(12)
+            let usesOCR = ocrTextByPage[pageNumber] != nil
+            let lineLimit = usesOCR && documentTitle.map(isFeastingTitle) == true ? 48 : 12
+            let lines = text.components(separatedBy: .newlines).prefix(lineLimit)
             var pageEntries: [(title: String, reference: ScriptureReference)] = []
             for line in lines {
                 let candidate = line.trimmingCharacters(in: .whitespacesAndNewlines)

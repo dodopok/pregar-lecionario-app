@@ -419,6 +419,9 @@ final class GoogleDriveTests: XCTestCase {
 
         let pdfData = Data("%PDF-1.7\npublic folder fixture".utf8)
         let checksum = Insecure.MD5.hash(data: pdfData).map { String(format: "%02x", $0) }.joined()
+        let keyReadStarted = expectation(description: "A leitura inicial da chave começou.")
+        let keyReadGate = DispatchSemaphore(value: 0)
+        defer { keyReadGate.signal() }
         var requests: [URLRequest] = []
         GoogleDriveStubURLProtocol.setHandler { request in
             requests.append(request)
@@ -440,9 +443,14 @@ final class GoogleDriveTests: XCTestCase {
         let importer = GoogleDrivePublicPDFImporter(
             session: session,
             applicationSupportRoot: applicationSupport,
-            readAPIKey: { nil },
+            readAPIKey: {
+                keyReadStarted.fulfill()
+                keyReadGate.wait()
+                return nil
+            },
             saveAPIKey: { _ in }
         )
+        await fulfillment(of: [keyReadStarted], timeout: 2)
 
         let result = try await importer.importPDFs(
             from: "https://drive.google.com/drive/folders/folder-public?resourcekey=folder-key",
@@ -457,6 +465,9 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertTrue(result.localURLs[0].path.hasPrefix(applicationSupport.path))
         XCTAssertEqual(importer.status, "1 PDF(s) baixado(s)")
         XCTAssertTrue(importer.savedAPIKeyExists)
+        keyReadGate.signal()
+        while importer.isLoadingKey { await Task.yield() }
+        XCTAssertTrue(importer.savedAPIKeyExists, "A leitura inicial atrasada não pode apagar a chave salva pela importação.")
         XCTAssertEqual(requests.count, 3)
         XCTAssertTrue(requests.allSatisfy {
             URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "key" && $0.value == "test-api-key" }) == true

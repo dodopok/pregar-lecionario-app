@@ -34,6 +34,14 @@ O índice versão 4 representa o texto bíblico e as quatro perspectivas como co
 
 Testes automatizados contra os PDFs locais confirmam Romanos 13:8–14 no Volume 4, páginas físicas 96–108, com as quatro autorias documentadas; Mateus 21:33–46 no Volume 4, páginas físicas 314–328, com as quatro autorias e o início em página compartilhada; e Romanos 13:11–14 no Volume 1 como sobreposição parcial. Um caso sintético cobre os limites dentro da página e a decodificação de registros antigos sem componentes. A indexação não altera os arquivos PDF e não envia conteúdo à rede.
 
+## Validação OCR de uma unidade real
+
+O teste `testRasterizedFeastingMatthewComponentsAreExtractedByOCRWhenAvailable` rasteriza temporariamente as 15 páginas físicas 314–328 do Volume 4 e confirma que o derivado não tem camada de texto. No escaneamento resultante, o cabeçalho Mateus 21:33–46 fica depois do fim do comentário anterior, além das primeiras 12 linhas da página; o indexador amplia a janela para 48 linhas somente quando o título identifica o layout Feasting, preservando o limite de 12 linhas para texto selecionável e para outros PDFs OCR, além do filtro de páginas com muitas referências. O teste do LOC escaneado confirma que uma referência numa tabela litúrgica não vira seção de comentário.
+
+O OCR localiza a perícope e o enriquecimento usa o texto reconhecido para criar os cinco componentes e as quatro autorias: Andrew Purves, Richard E. Spalding, Susan Grove Eastman e Marvin A. McMickle. A extração do texto bíblico exclui a assinatura Nathan Eddy da unidade anterior; a Homilética contém o texto do ensaio, sem a assinatura como prosa nem o cabeçalho de Isaías 25:1–9. Reindexar o mesmo derivado preserva texto OCR e autoria. A execução focada levou aproximadamente 5,8 segundos neste Mac; é um teste de integração local, não um benchmark. Os 17 testes do indexador passaram no macOS 26.6.2.
+
+Esse caso rasteriza páginas de um PDF com texto selecionável para exercitar o caminho de imagem com um layout real. Não comprova a qualidade de uma edição originalmente digitalizada, que continua pendente. O arquivo original do Feasting não foi modificado e nada foi enviado à rede.
+
 ## Próximos passos da indexação
 
 1. Criar manifesto por PDF com ano, volume, caminho, hash, total de páginas físicas e estado de extração/OCR. Resolver também referências pelo sumário e índice remissivo quando os cabeçalhos não bastarem; guardar localizador editorial só quando verificável.
@@ -42,4 +50,4 @@ Testes automatizados contra os PDFs locais confirmam Romanos 13:8–14 no Volume
 
 ## Limites
 
-Não examinei todos os capítulos nem a integridade de todas as páginas. O texto extraído conserva a sequência linear dos ensaios; as páginas renderizadas mostram uma coluna, o que confirma a ordem nos exemplos amostrados. A extração sozinha não prova a ordem em layouts multicoluna nem permite generalizar para páginas não renderizadas. Não auditei bookmarks ou links internos, então eles não podem ser premissa de navegação. A classificação de páginas escaneadas foi amostral, sobretudo para o Volume 3. Não houve OCR em lote, teste de parser nem implementação no app. O relatório registra observações e estratégia técnica; não interpreta passagens nem propõe conteúdo de sermão.
+Não examinei todos os capítulos nem a integridade de todas as páginas. O texto extraído conserva a sequência linear dos ensaios; as páginas renderizadas mostram uma coluna, o que confirma a ordem nos exemplos amostrados. A extração sozinha não prova a ordem em layouts multicoluna nem permite generalizar para páginas não renderizadas. Não auditei bookmarks ou links internos, então eles não podem ser premissa de navegação. A classificação de páginas escaneadas foi amostral, sobretudo para o Volume 3. O app implementa OCR sob demanda e testa o parser com esta rasterização real, mas ainda não há validação numa edição de comentário originalmente digitalizada nem OCR em lote de todo o acervo. O relatório registra observações e estratégia técnica; não interpreta passagens nem propõe conteúdo de sermão.

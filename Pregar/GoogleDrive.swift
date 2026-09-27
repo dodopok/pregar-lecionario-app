@@ -1157,9 +1157,10 @@ final class GoogleDrivePublicPDFImporter: ObservableObject {
         let readTask = Task.detached(priority: .utility) { loadAPIKey() }
         Task { [weak self] in
             let key = await readTask.value
-            self?.savedAPIKey = key
-            self?.savedAPIKeyExists = key != nil
-            self?.isLoadingKey = false
+            guard let self else { return }
+            if self.savedAPIKey == nil { self.savedAPIKey = key }
+            self.savedAPIKeyExists = self.savedAPIKey != nil
+            self.isLoadingKey = false
         }
     }
 
