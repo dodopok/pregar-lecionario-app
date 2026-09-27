@@ -39,7 +39,7 @@ struct APISettingsView: View {
     @AppStorage("drive.ideasDocument") private var ideasDocument = "Ideias de sermões"
     @AppStorage("drive.targets") private var tabletTargets = "Android e iPad"
     @AppStorage("drive.font") private var tabletFont = "Arial"
-    @AppStorage("drive.fontSize") private var tabletFontSize = 10.0
+    @AppStorage("drive.fontSize") private var tabletFontSize = 14.0
     @AppStorage("library.pdfFolder") private var pdfFolder = ""
     @State private var selectingPDFFolder = false
 
@@ -272,7 +272,7 @@ struct APISettingsView: View {
                     }
                 }
             }
-            Text("A cópia preparada para o tablet e o vínculo automático ao Drive só serão ativados quando a conta Google puder ser autenticada.")
+            Text("PDFs podem ser salvos em uma pasta local ou sincronizada pelo Google Drive para computador. Google Docs e o documento de ideias dependem da autenticação Google.")
                 .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
         }
     }

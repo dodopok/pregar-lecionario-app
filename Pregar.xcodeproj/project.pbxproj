@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */; };
+		0866D9EEF78894696416DEC2 /* TabletPDFExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EC0886F1F85FF11D8D858FF /* TabletPDFExporter.swift */; };
 		0AF15226A4B95D3A7B6A0B84 /* PDFLibraryIndexerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */; };
 		0B931865BC2CBFCE6E3D9D9C /* AISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCCDA011317AD64332990C8 /* AISettings.swift */; };
 		0E42A0E69E0150543BAA3CEB /* SermonReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F3AB7D4FC90DDBE36481FFE /* SermonReviewTests.swift */; };
@@ -42,6 +43,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0EC0886F1F85FF11D8D858FF /* TabletPDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabletPDFExporter.swift; sourceTree = "<group>"; };
 		0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
 		2495567BA510561B3883455A /* LibraryArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryArchiveViews.swift; sourceTree = "<group>"; };
 		39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrototypeStyle.swift; sourceTree = "<group>"; };
@@ -116,6 +118,7 @@
 				4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */,
 				AA1C17D3DB8E8C292118A7FF /* SermonHistory.swift */,
 				F3C58A2501218EC111B74290 /* SermonReview.swift */,
+				0EC0886F1F85FF11D8D858FF /* TabletPDFExporter.swift */,
 				8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */,
 				A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */,
 				9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */,
@@ -231,6 +234,7 @@
 				68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */,
 				174BE0C81CF839CEB026C8B4 /* SermonHistory.swift in Sources */,
 				FB5AFE51C49539B0A23C5700 /* SermonReview.swift in Sources */,
+				0866D9EEF78894696416DEC2 /* TabletPDFExporter.swift in Sources */,
 				5791E5B8E6B99C8CF7C942D1 /* WindowChrome.swift in Sources */,
 				11DF447737C4F2F6B3A484EE /* WorkspaceChrome.swift in Sources */,
 				7DF5C8B29B917622A6B03CAA /* WorkspaceSheets.swift in Sources */,

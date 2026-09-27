@@ -1,3 +1,5 @@
+import PDFKit
+import SwiftData
 import XCTest
 @testable import Pregar
 
@@ -50,6 +52,69 @@ final class SermonHistoryTests: XCTestCase {
         )
         let restored = try JSONDecoder().decode(ReaderTab.self, from: JSONEncoder().encode(current))
         XCTAssertEqual(restored.sermonDateKey, "2026-10-04")
+    }
+
+    func testTabletPDFExporterPaginatesFormattedManuscript() throws {
+        let paragraph = "Jesus entra na vinha, e a parábola nos chama a reler o texto com atenção. "
+        let source = NSAttributedString(string: String(repeating: paragraph, count: 320))
+        let rtfData = try source.data(
+            from: NSRange(location: 0, length: source.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        let pdfData = try TabletPDFExporter.makePDF(
+            rtfData: rtfData,
+            title: "Mateus 21.33-46",
+            subtitle: "04/10/2026 · Próprio 22 A",
+            fontName: "Arial",
+            fontSize: 14,
+            includeFootnotes: true
+        )
+        let pdf = try XCTUnwrap(PDFDocument(data: pdfData))
+        let extractedText = (0..<pdf.pageCount).compactMap { pdf.page(at: $0)?.string }.joined(separator: "\n")
+
+        XCTAssertGreaterThan(pdf.pageCount, 1)
+        XCTAssertTrue(extractedText.contains("Mateus 21.33-46"))
+        XCTAssertTrue(extractedText.contains("Jesus entra na vinha"))
+    }
+
+    func testTabletPDFExporterCanOmitFootnoteParagraphsWithoutChangingSource() throws {
+        let source = NSAttributedString(string: "O texto diz algo importante¹.\n\n¹ Nota de rodapé que fica no fim.")
+        let rtfData = try source.data(
+            from: NSRange(location: 0, length: source.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        let included = try TabletPDFExporter.makePDF(
+            rtfData: rtfData, title: "Sermão", subtitle: nil,
+            fontName: "Arial", fontSize: 14, includeFootnotes: true
+        )
+        let omitted = try TabletPDFExporter.makePDF(
+            rtfData: rtfData, title: "Sermão", subtitle: nil,
+            fontName: "Arial", fontSize: 14, includeFootnotes: false
+        )
+        let includedText = try XCTUnwrap(PDFDocument(data: included)).page(at: 0)?.string ?? ""
+        let omittedText = try XCTUnwrap(PDFDocument(data: omitted)).page(at: 0)?.string ?? ""
+
+        XCTAssertTrue(includedText.contains("Nota de rodapé"))
+        XCTAssertFalse(omittedText.contains("Nota de rodapé"))
+        XCTAssertFalse(omittedText.contains("¹"))
+        XCTAssertTrue(source.string.contains("Nota de rodapé"))
+    }
+
+    @MainActor
+    func testTabletPDFCopyLocationPersistsWithItsSermonDraft() throws {
+        let container = try ModelContainer(
+            for: SermonDraft.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let draft = SermonDraft(liturgicalDate: .now)
+        draft.tabletPDFPath = "/tmp/2026-10-04 - Mateus 21.pdf"
+        draft.tabletPDFUpdatedAt = Date(timeIntervalSince1970: 1_790_493_600)
+        container.mainContext.insert(draft)
+        try container.mainContext.save()
+
+        let restored = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<SermonDraft>()).first)
+        XCTAssertEqual(restored.tabletPDFPath, draft.tabletPDFPath)
+        XCTAssertEqual(restored.tabletPDFUpdatedAt, draft.tabletPDFUpdatedAt)
     }
 
     func testCapturesDistinctVersionsAndReloadsThemFromDisk() async throws {

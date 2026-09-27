@@ -722,10 +722,14 @@ struct TabletPreparationSheet: View {
     let accent: Color
     let openSettings: () -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var format = "Google Doc"
-    @State private var readingSize = 14.0
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage("drive.lastTabletFolder") private var lastTabletFolder = ""
+    @AppStorage("drive.font") private var readingFont = "Arial"
+    @AppStorage("drive.fontSize") private var readingSize = 14.0
+    @State private var format = "PDF"
     @State private var includeFootnotes = true
-    @State private var availableOffline = true
+    @State private var isExporting = false
+    @State private var alertMessage: String?
 
     private var manuscript: String {
         guard let data = draft?.rtfData,
@@ -736,7 +740,7 @@ struct TabletPreparationSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Preparar para pregar").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-            Text("Uma versão de leitura no Drive, para o tablet. O manuscrito não muda.")
+            Text("Uma cópia paginada para leitura no tablet. O manuscrito original não muda.")
                 .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
 
             HStack(spacing: 14) {
@@ -748,20 +752,53 @@ struct TabletPreparationSheet: View {
                 .labelsHidden()
                 Spacer()
                 Text("Fonte de leitura").foregroundStyle(PrototypeStyle.muted)
-                Stepper("\(Int(readingSize)) pt", value: $readingSize, in: 12...24)
+                Stepper("\(Int(readingSize)) pt", value: $readingSize, in: 8...24)
                     .frame(width: 116)
             }
             .font(.system(size: 12))
 
             Toggle("Notas de rodapé no fim", isOn: $includeFootnotes)
                 .toggleStyle(.checkbox)
-            Toggle("Disponível offline no tablet antes do domingo", isOn: $availableOffline)
+            Toggle("Disponível offline no tablet antes do domingo", isOn: .constant(false))
                 .toggleStyle(.checkbox)
+                .disabled(true)
+                .help("A disponibilidade offline é controlada no aplicativo Google Drive do tablet.")
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("CÓPIA NO DRIVE").font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
-                Text("Nenhuma conta Google conectada.")
-                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                Text(format == "PDF" ? "CÓPIA PDF PARA O TABLET" : "GOOGLE DOC")
+                    .font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+                if format == "Google Doc" {
+                    Text("Google Docs não conectado.")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                } else if let path = draft?.tabletPDFPath, FileManager.default.fileExists(atPath: path) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "doc.text.fill").foregroundStyle(accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(URL(fileURLWithPath: path).lastPathComponent)
+                                .font(.system(size: 12, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
+                                .lineLimit(1).truncationMode(.middle)
+                            Text(draft?.tabletPDFUpdatedAt?.formatted(date: .abbreviated, time: .shortened) ?? "PDF salvo neste Mac")
+                                .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                        }
+                        Spacer()
+                        Button {
+                            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                        } label: {
+                            Image(systemName: "folder")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Mostrar no Finder")
+                    }
+                    Text(URL(fileURLWithPath: path).deletingLastPathComponent().path)
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(PrototypeStyle.muted)
+                        .lineLimit(1).truncationMode(.middle)
+                } else if draft?.tabletPDFPath == nil {
+                    Text("Nenhuma cópia em PDF exportada.")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                } else {
+                    Text("O PDF salvo não foi encontrado neste local.")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                }
             }
             .padding(13)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -769,7 +806,7 @@ struct TabletPreparationSheet: View {
 
             ScrollView {
                 Text(manuscript.isEmpty ? "O manuscrito está vazio." : manuscript)
-                    .font(.system(size: readingSize))
+                    .font(.custom(readingFont, size: readingSize))
                     .foregroundStyle(PrototypeStyle.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
@@ -783,16 +820,97 @@ struct TabletPreparationSheet: View {
                     .foregroundStyle(accent)
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Atualizar cópia no Drive") {}
-                    .buttonStyle(.borderedProminent)
-                    .tint(accent)
-                    .disabled(true)
-                    .help("Conecte uma conta Google nas Preferências")
+                Button {
+                    exportPDF()
+                } label: {
+                    if isExporting { ProgressView().controlSize(.small) }
+                    else { Label("Exportar PDF", systemImage: "square.and.arrow.up") }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+                .disabled(isExporting || manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || format != "PDF")
+                .help(format == "PDF" ? "Salvar uma cópia paginada para leitura no tablet" : "Google Docs ainda não está conectado")
             }
         }
         .font(.system(size: 12))
         .padding(22)
         .frame(width: 650, height: 620)
         .background(PrototypeStyle.canvas)
+        .alert("Preparar para pregar", isPresented: Binding(
+            get: { alertMessage != nil },
+            set: { if !$0 { alertMessage = nil } }
+        )) {
+            Button("OK") { alertMessage = nil }
+        } message: {
+            Text(alertMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func exportPDF() {
+        guard let draft, let rtfData = draft.rtfData else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = suggestedFileName(for: draft)
+
+        if let savedPath = draft.tabletPDFPath {
+            let savedURL = URL(fileURLWithPath: savedPath)
+            panel.directoryURL = savedURL.deletingLastPathComponent()
+            panel.nameFieldStringValue = savedURL.lastPathComponent
+        } else if !lastTabletFolder.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: lastTabletFolder, isDirectory: true)
+        } else if let driveRoot = googleDriveRoot {
+            panel.directoryURL = driveRoot
+        }
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        let subtitle = [SermonDateKey.string(from: draft.liturgicalDate), draft.liturgicalOccasion]
+            .compactMap { $0 }.joined(separator: " · ")
+        let title = draft.title.isEmpty ? draft.mainReadingReference ?? "Sermão" : draft.title
+        let fontSize = CGFloat(readingSize)
+        let fontName = readingFont
+        let footnotes = includeFootnotes
+        isExporting = true
+        Task { @MainActor in
+            defer { isExporting = false }
+            do {
+                let data = try await Task.detached(priority: .userInitiated) {
+                    try TabletPDFExporter.makePDF(
+                        rtfData: rtfData,
+                        title: title,
+                        subtitle: subtitle,
+                        fontName: fontName,
+                        fontSize: fontSize,
+                        includeFootnotes: footnotes
+                    )
+                }.value
+                try data.write(to: destination, options: .atomic)
+                draft.tabletPDFPath = destination.path
+                draft.tabletPDFUpdatedAt = .now
+                try modelContext.save()
+                lastTabletFolder = destination.deletingLastPathComponent().path
+            } catch {
+                alertMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func suggestedFileName(for draft: SermonDraft) -> String {
+        let label = draft.mainReadingReference ?? (draft.title.isEmpty ? "Sermão" : draft.title)
+        let raw = "\(SermonDateKey.string(from: draft.liturgicalDate)) - \(label)"
+        let invalid = CharacterSet(charactersIn: "/:\\")
+        let safe = raw.components(separatedBy: invalid).filter { !$0.isEmpty }.joined(separator: "-")
+        return "\(safe).pdf"
+    }
+
+    private var googleDriveRoot: URL? {
+        let root = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/CloudStorage", isDirectory: true)
+        return (try? FileManager.default.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ))?.first { $0.lastPathComponent.hasPrefix("GoogleDrive-") }
     }
 }

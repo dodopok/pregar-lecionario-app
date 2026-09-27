@@ -22,6 +22,8 @@ final class SermonDraft {
     var prayerBookID: String?
     var mainReadingReference: String?
     var mainReadingSlot: String?
+    var tabletPDFPath: String?
+    var tabletPDFUpdatedAt: Date?
     var modifiedAt: Date
     @Attribute(.externalStorage) var rtfData: Data?
 
@@ -34,6 +36,8 @@ final class SermonDraft {
         self.prayerBookID = nil
         self.mainReadingReference = nil
         self.mainReadingSlot = nil
+        self.tabletPDFPath = nil
+        self.tabletPDFUpdatedAt = nil
         self.modifiedAt = .now
         self.rtfData = nil
     }

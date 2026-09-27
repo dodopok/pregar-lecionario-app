@@ -621,8 +621,17 @@ struct SermonArchiveView: View {
                                     Text("—").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                                         .frame(width: 80, alignment: .leading)
                                 }
-                                Text("local").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-                                    .frame(width: 110, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    if let path = draft.tabletPDFPath, FileManager.default.fileExists(atPath: path) {
+                                        Text("PDF salvo").foregroundStyle(PrototypeStyle.green)
+                                        Text(draft.tabletPDFUpdatedAt?.formatted(date: .omitted, time: .shortened) ?? "")
+                                            .foregroundStyle(PrototypeStyle.muted)
+                                    } else {
+                                        Text(draft.tabletPDFPath == nil ? "sem cópia" : "não encontrado")
+                                            .foregroundStyle(PrototypeStyle.muted)
+                                    }
+                                }
+                                .font(.system(size: 10)).frame(width: 110, alignment: .leading)
                             }
                             .padding(.horizontal, 22)
                             .frame(minHeight: 58)
