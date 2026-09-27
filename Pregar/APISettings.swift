@@ -105,6 +105,11 @@ final class APISettingsStore: ObservableObject {
 
     var hasAPIKey: Bool { credential != nil }
 
+    func reloadFromPreferences() {
+        settings = APISettings.load()
+        revision += 1
+    }
+
     init() {
         let readTask = Task.detached(priority: .utility) { APIKeychain.read() }
         Task { [weak self] in

@@ -3,8 +3,8 @@ import PDFKit
 import SwiftUI
 import WebKit
 
-struct ReaderTab: Codable, Identifiable, Equatable {
-    enum Kind: String, Codable { case pdf, web }
+struct ReaderTab: Codable, Identifiable, Equatable, Sendable {
+    enum Kind: String, Codable, Sendable { case pdf, web }
 
     var id: UUID
     var title: String
@@ -72,7 +72,7 @@ struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
-private struct ReaderArchive: Codable {
+struct ReaderArchive: Codable, Sendable {
     var tabs: [ReaderTab]
     var selectedID: UUID?
 }
@@ -319,6 +319,33 @@ final class ReaderSessionStore: ObservableObject {
         persist()
     }
 
+    func restore(archive: ReaderArchive, rememberedPages: [String: Int]) {
+        pendingPagePersistence?.cancel()
+        pendingPagePersistence = nil
+        for session in webSessions.values {
+            session.webView.stopLoading()
+            session.webView.navigationDelegate = nil
+        }
+        sectionTasks.values.forEach { $0.cancel() }
+        webSessions.removeAll()
+        pdfDocuments.removeAll()
+        pdfSections.removeAll()
+        sectionTasks.removeAll()
+
+        tabs = archive.tabs.filter { tab in
+            switch tab.kind {
+            case .pdf:
+                FileManager.default.fileExists(atPath: tab.location)
+            case .web:
+                ["https", "http"].contains(URL(string: tab.location)?.scheme?.lowercased() ?? "")
+            }
+        }
+        selectedID = archive.selectedID.flatMap { selected in tabs.contains(where: { $0.id == selected }) ? selected : nil }
+        if selectedID == nil { selectedID = tabs.last?.id }
+        self.rememberedPages = rememberedPages
+        persistNow()
+    }
+
     func rememberLink(for tab: ReaderTab, section: PDFSectionLocation? = nil, startPage: Int? = nil) {
         guard let reference = tab.reference ?? section?.title else { return }
         let page = startPage ?? section?.startPage ?? tab.physicalPage
@@ -356,8 +383,12 @@ final class ReaderSessionStore: ObservableObject {
 
     private func persistNow() {
         let archive = ReaderArchive(tabs: tabs, selectedID: selectedID)
-        guard let data = try? JSONEncoder().encode(archive) else { return }
-        userDefaults.set(data, forKey: archiveKey)
+        if let data = try? JSONEncoder().encode(archive) {
+            userDefaults.set(data, forKey: archiveKey)
+        }
+        if let data = try? JSONEncoder().encode(rememberedPages) {
+            userDefaults.set(data, forKey: linksKey)
+        }
     }
 }
 

@@ -74,10 +74,12 @@ struct PregarApp: App {
                 .environmentObject(settings)
                 .environmentObject(aiSettings)
                 .environmentObject(appearance)
+                .environmentObject(readerSession)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
         .defaultSize(width: 620, height: 640)
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
+        .modelContainer(for: SermonDraft.self)
     }
 }

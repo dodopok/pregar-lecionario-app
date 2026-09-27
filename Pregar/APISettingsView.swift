@@ -1,5 +1,7 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import SwiftData
 
 private enum PreferencesSection: String, CaseIterable, Identifiable {
     case api = "Estêvão API"
@@ -24,6 +26,8 @@ struct APISettingsView: View {
     let accent: Color
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var readerSession: ReaderSessionStore
     @State private var section: PreferencesSection = .api
     @State private var settings: APISettings
     @State private var enteredKey = ""
@@ -52,6 +56,13 @@ struct APISettingsView: View {
     @State private var authorPendingDeletion: FavoriteAuthor?
     @State private var confirmsSiteDeletion = false
     @State private var confirmsAuthorDeletion = false
+    @State private var isCreatingBackup = false
+    @State private var isValidatingBackup = false
+    @State private var isRestoringBackup = false
+    @State private var backupMessage: String?
+    @State private var backupMessageIsError = false
+    @State private var pendingBackup: PregarBackupContents?
+    @State private var confirmsBackupRestore = false
 
     init(store: APISettingsStore, aiStore: AISettingsStore, accent: Color) {
         self.store = store
@@ -110,6 +121,15 @@ struct APISettingsView: View {
             }
         } message: {
             Text(authorPendingDeletion?.name ?? "O autor será removido deste Mac.")
+        }
+        .confirmationDialog("Substituir os dados locais?", isPresented: $confirmsBackupRestore, titleVisibility: .visible) {
+            Button("Restaurar e substituir", role: .destructive) {
+                guard let pendingBackup else { return }
+                Task { await restoreBackup(pendingBackup) }
+            }
+            Button("Cancelar", role: .cancel) { pendingBackup = nil }
+        } message: {
+            Text("O backup contém \(pendingBackup?.manifest.draftCount ?? 0) sermões, \(pendingBackup?.manifest.libraryCount ?? 0) PDFs indexados e \(pendingBackup?.manifest.historyFileCount ?? 0) arquivos de histórico. Os dados locais atuais serão substituídos. Credenciais permanecem neste Mac e nada será enviado ao Drive.")
         }
         .sheet(isPresented: $showsPrayerBookPicker) {
             PrayerBookPickerSheet(
@@ -329,6 +349,36 @@ struct APISettingsView: View {
 
     private var libraryContent: some View {
         VStack(alignment: .leading, spacing: 22) {
+            Text("DADOS LOCAIS").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
+                .padding(.bottom, -12)
+            PreferenceGroup {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("Backup completo inclui sermões, versões, PDFs, favoritos e preferências.")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                    Text("Chaves da Estêvão API e de IA, tokens OAuth e Client ID do Google não entram no backup.")
+                        .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                    Text("A pasta não é criptografada; escolha um local privado para seus sermões e PDFs.")
+                        .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                    HStack(spacing: 9) {
+                        Button("Criar backup…", systemImage: "externaldrive.badge.plus", action: chooseBackupDestination)
+                            .buttonStyle(.borderedProminent).tint(accent).disabled(isBackupBusy)
+                        Button("Restaurar…", systemImage: "arrow.uturn.backward", action: chooseBackupToRestore)
+                            .buttonStyle(.bordered).disabled(isBackupBusy)
+                        Spacer()
+                        if isCreatingBackup || isValidatingBackup || isRestoringBackup {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                    if let backupMessage {
+                        Label(backupMessage, systemImage: backupMessageIsError ? "exclamationmark.triangle" : "checkmark.circle")
+                            .font(.system(size: 11))
+                            .foregroundStyle(backupMessageIsError ? Color.red : accent)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.vertical, 9)
+            }
+
             PreferenceGroup {
                 PreferenceRow(label: "Pasta de PDFs") {
                     HStack {
@@ -381,6 +431,114 @@ struct APISettingsView: View {
 
     private var favoriteSites: [FavoriteSite] { FavoriteReferenceLibrary.sites(from: favoriteSitesData) }
     private var favoriteAuthors: [FavoriteAuthor] { FavoriteReferenceLibrary.authors(from: favoriteAuthorsData) }
+
+    private var isBackupBusy: Bool {
+        isCreatingBackup || isValidatingBackup || isRestoringBackup
+    }
+
+    @MainActor
+    private func chooseBackupDestination() {
+        let panel = NSOpenPanel()
+        panel.title = "Criar backup completo"
+        panel.message = "Escolha a pasta onde o Pregar deve criar o backup."
+        panel.prompt = "Salvar backup aqui"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        Task { await createBackup(in: destination) }
+    }
+
+    @MainActor
+    private func chooseBackupToRestore() {
+        let panel = NSOpenPanel()
+        panel.title = "Restaurar backup do Pregar"
+        panel.message = "Selecione a pasta de backup criada pelo Pregar."
+        panel.prompt = "Validar backup"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let packageURL = panel.url else { return }
+        Task { await validateBackup(at: packageURL) }
+    }
+
+    @MainActor
+    private func createBackup(in destination: URL) async {
+        isCreatingBackup = true
+        backupMessage = nil
+        defer { isCreatingBackup = false }
+        do {
+            let drafts = try modelContext.fetch(FetchDescriptor<SermonDraft>())
+            let snapshot = try PregarBackupSnapshot.make(drafts: drafts)
+            let url = try await Task.detached(priority: .utility) {
+                try PregarBackupService.create(snapshot: snapshot, in: destination)
+            }.value
+            backupMessageIsError = false
+            backupMessage = "Backup criado: \(url.lastPathComponent)"
+        } catch {
+            backupMessageIsError = true
+            backupMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func validateBackup(at url: URL) async {
+        isValidatingBackup = true
+        backupMessage = nil
+        defer { isValidatingBackup = false }
+        do {
+            pendingBackup = try await Task.detached(priority: .utility) {
+                try PregarBackupService.load(from: url)
+            }.value
+            confirmsBackupRestore = true
+        } catch {
+            backupMessageIsError = true
+            backupMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func restoreBackup(_ contents: PregarBackupContents) async {
+        isRestoringBackup = true
+        confirmsBackupRestore = false
+        backupMessage = nil
+        defer {
+            isRestoringBackup = false
+            pendingBackup = nil
+        }
+        do {
+            try modelContext.save()
+            let supportDirectory = PregarBackupService.defaultApplicationSupportDirectory
+            let installed = try await Task.detached(priority: .utility) {
+                try PregarBackupService.installAssets(from: contents, applicationSupportDirectory: supportDirectory)
+            }.value
+            do {
+                let result = try PregarBackupService.restore(
+                    contents,
+                    installedAssets: installed,
+                    modelContext: modelContext,
+                    applicationSupportDirectory: supportDirectory
+                )
+                readerSession.restore(archive: result.readerArchive, rememberedPages: result.rememberedPages)
+                store.reloadFromPreferences()
+                aiStore.reloadPreferences()
+                settings = store.settings
+                reviewProvider = aiStore.reviewProvider
+                researchProvider = aiStore.researchProvider
+                reviewModel = aiStore.reviewModel
+                researchModel = aiStore.researchModel
+                backupMessageIsError = false
+                backupMessage = "Restaurados \(result.draftCount) sermões e \(result.libraryCount) PDFs. Nenhum documento foi enviado ao Drive."
+            } catch {
+                PregarBackupService.discard(installed)
+                throw error
+            }
+        } catch {
+            backupMessageIsError = true
+            backupMessage = error.localizedDescription
+        }
+    }
 
     private var selectedPrayerBook: PrayerBookCatalogEntry {
         if let selected = prayerBooks.first(where: { $0.code == settings.prayerBook }) { return selected }

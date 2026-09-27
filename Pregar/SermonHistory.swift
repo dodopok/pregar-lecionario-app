@@ -92,15 +92,15 @@ actor SermonRevisionStore {
     private let directory: URL
 
     init(directory: URL? = nil) {
-        if let directory {
-            self.directory = directory
-        } else {
-            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
-            self.directory = support
-                .appendingPathComponent(Bundle.main.bundleIdentifier ?? "Pregar", isDirectory: true)
-                .appendingPathComponent("SermonHistory", isDirectory: true)
-        }
+        self.directory = directory ?? Self.defaultDirectoryURL()
+    }
+
+    static func defaultDirectoryURL() -> URL {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+        return support
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "Pregar", isDirectory: true)
+            .appendingPathComponent("SermonHistory", isDirectory: true)
     }
 
     func revisions(for liturgicalDate: Date) throws -> [SermonRevision] {

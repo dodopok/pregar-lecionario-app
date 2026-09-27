@@ -150,6 +150,14 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - Medições exploratórias pela automação da interface, incluindo renderização e captura da árvore de acessibilidade: filtro da Biblioteca ~1,1 s; rolagem de várias dezenas de seções ~1,8 s; troca para uma aba PDF ~1,7 s; primeira abertura da página específica do Working Preacher ~6,4 s; retorno à página web já carregada ~1,3 s. Não observei travamento ou perda de conteúdo. Esses valores incluem a automação e, na primeira navegação web, a rede externa; não são um benchmark controlado.
 - A amostra anterior de 8 s em repouso não mostrou loop ativo, mas ainda não há captura do Instruments focada em rolagem ou importação. Uma rodada controlada de profiling e o teste com PDF digitalizado/OCR continuam pendentes.
 
+## Backup e restauração locais
+
+- Preferências > Biblioteca agora cria um pacote em pasta escolhida pelo usuário e permite validar/restaurar um pacote. Ele inclui sermões e vínculos já salvos, histórico de versões, PDFs da Biblioteca e do tablet, estado/abas do Leitor, posições lembradas, referências favoritas, índices e preferências locais. PDFs repetidos são armazenados uma vez por SHA-256.
+- O pacote não é criptografado; a interface avisa para escolher uma pasta privada antes de criar o backup.
+- A restauração pede confirmação, substitui sermões, histórico e dados locais cobertos pelo pacote, limpa preferências permitidas ausentes no backup e atualiza a sessão do Leitor e stores de preferências. Não envia nada ao Google Drive; o hash sincronizado é redefinido para evitar envio automático do conteúdo restaurado. Tokens e chaves da Estêvão API/IA ficam intocados no Acesso às Chaves; tokens OAuth e Client ID do Google não são incluídos.
+- O manifesto mantém SHA-256 por arquivo. Antes de restaurar, o app confere hashes, caminhos permitidos e referências aos PDFs; caminhos inesperados, conteúdo alterado e symlinks em arquivos referenciados são rejeitados. Links de página cujo PDF já não existe são descartados, sem impedir o backup.
+- Testes sintéticos cobrem ciclo de criação/restauração (RTF, PDF, Biblioteca, Leitor e histórico), preferências ausentes, preservação de credenciais do destino, checksum alterado, caminho adulterado e arquivo simbólico. A suíte macOS passou com 73 testes; assinatura verificada como `Apple Development: DOUGLAS DE ARAUJO SILVA`, `TeamIdentifier=R573HPN65Q`. Nenhum dado real do Drive ou sermão foi usado.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.

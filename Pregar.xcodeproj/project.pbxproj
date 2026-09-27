@@ -20,9 +20,11 @@
 		39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */; };
 		3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495567BA510561B3883455A /* LibraryArchiveViews.swift */; };
 		3AE4D461A05EE1772CD35DC4 /* AIReviewMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1C3731E589A46BFCE0F8FB /* AIReviewMaterials.swift */; };
+		4FF399EB1A1D678C57E41FDB /* PregarBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A13ADF90DEC5176003F66F /* PregarBackup.swift */; };
 		515BA5D71E86AA58E543FE54 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */; };
 		545D1E4BC97796B726BB67B2 /* PDFLibraryIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */; };
 		5791E5B8E6B99C8CF7C942D1 /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */; };
+		5D6FB4E1FD2F19CF596D80A7 /* PregarBackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F0E7BAD364EE8ED4D026BE9 /* PregarBackupTests.swift */; };
 		68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */; };
 		70F9C5A32F020FED083C6C2E /* FavoriteSourceURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */; };
 		72A8A2D038BFCBF45BC09039 /* AIResearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E40B242A599EC6CAFE862E2 /* AIResearchTests.swift */; };
@@ -55,6 +57,7 @@
 		0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
 		17836D44B2B2BEA9A8A0D019 /* FavoriteSiteSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSiteSearchTests.swift; sourceTree = "<group>"; };
 		1B0CB77E021FBC5487D7AD63 /* AIResearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResearch.swift; sourceTree = "<group>"; };
+		1F0E7BAD364EE8ED4D026BE9 /* PregarBackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PregarBackupTests.swift; sourceTree = "<group>"; };
 		2495567BA510561B3883455A /* LibraryArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryArchiveViews.swift; sourceTree = "<group>"; };
 		39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrototypeStyle.swift; sourceTree = "<group>"; };
 		3B1C3731E589A46BFCE0F8FB /* AIReviewMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIReviewMaterials.swift; sourceTree = "<group>"; };
@@ -70,6 +73,7 @@
 		8E40B242A599EC6CAFE862E2 /* AIResearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResearchTests.swift; sourceTree = "<group>"; };
 		8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChrome.swift; sourceTree = "<group>"; };
 		90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFLibraryIndexerTests.swift; sourceTree = "<group>"; };
+		95A13ADF90DEC5176003F66F /* PregarBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PregarBackup.swift; sourceTree = "<group>"; };
 		9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparationWorkspace.swift; sourceTree = "<group>"; };
 		9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSheets.swift; sourceTree = "<group>"; };
 		9FB73D3027C252959FB7E759 /* ReaderSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSession.swift; sourceTree = "<group>"; };
@@ -113,6 +117,7 @@
 				A0B8EA95BA4E5B5B8C9ABE0D /* GoogleDriveTests.swift */,
 				8C8270287951966563FC0973 /* LiturgicalAPITests.swift */,
 				90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */,
+				1F0E7BAD364EE8ED4D026BE9 /* PregarBackupTests.swift */,
 				A5DDFCFC902260D6AF83F167 /* SermonHistoryTests.swift */,
 				4F3AB7D4FC90DDBE36481FFE /* SermonReviewTests.swift */,
 			);
@@ -135,6 +140,7 @@
 				A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */,
 				CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */,
 				478AAAADD24805C4AAF1C997 /* PregarApp.swift */,
+				95A13ADF90DEC5176003F66F /* PregarBackup.swift */,
 				9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */,
 				39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */,
 				9FB73D3027C252959FB7E759 /* ReaderSession.swift */,
@@ -237,6 +243,7 @@
 				73B21B9386EC9BD0B41E2039 /* GoogleDriveTests.swift in Sources */,
 				AE5005E38B52F55CF2B4618D /* LiturgicalAPITests.swift in Sources */,
 				0AF15226A4B95D3A7B6A0B84 /* PDFLibraryIndexerTests.swift in Sources */,
+				5D6FB4E1FD2F19CF596D80A7 /* PregarBackupTests.swift in Sources */,
 				78900D070DCE8DD17EE335CC /* SermonHistoryTests.swift in Sources */,
 				0E42A0E69E0150543BAA3CEB /* SermonReviewTests.swift in Sources */,
 			);
@@ -259,6 +266,7 @@
 				00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */,
 				545D1E4BC97796B726BB67B2 /* PDFLibraryIndex.swift in Sources */,
 				99645F1CBB2F74C88E281950 /* PregarApp.swift in Sources */,
+				4FF399EB1A1D678C57E41FDB /* PregarBackup.swift in Sources */,
 				FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */,
 				2236BE23F5A46EA6012ECFD1 /* PrototypeStyle.swift in Sources */,
 				863FED12B32D3E5372DCC462 /* ReaderSession.swift in Sources */,

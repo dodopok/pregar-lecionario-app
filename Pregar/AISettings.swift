@@ -122,6 +122,19 @@ final class AISettingsStore: ObservableObject {
 
     func hasKey(for provider: AIProvider) -> Bool { keyedProviders.contains(provider) }
 
+    func reloadPreferences() {
+        let defaults = UserDefaults.standard
+        let savedReviewProvider = AIProvider(rawValue: defaults.string(forKey: "ai.reviewProvider") ?? "anthropic") ?? .anthropic
+        let savedResearchProvider = AIProvider(rawValue: defaults.string(forKey: "ai.researchProvider") ?? "perplexity") ?? .perplexity
+        reviewProvider = savedReviewProvider
+        researchProvider = savedResearchProvider
+        reviewModel = defaults.string(forKey: "ai.reviewModel").flatMap { savedReviewProvider.models.contains($0) ? $0 : nil }
+            ?? savedReviewProvider.suggestedModel
+        researchModel = defaults.string(forKey: "ai.researchModel").flatMap { savedResearchProvider.models.contains($0) ? $0 : nil }
+            ?? savedResearchProvider.suggestedModel
+        revision += 1
+    }
+
     func key(for provider: AIProvider) async -> String? {
         await Task.detached(priority: .utility) { AIKeychain.read(for: provider) }.value
     }
