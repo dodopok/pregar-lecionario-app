@@ -39,12 +39,7 @@ struct PreparationWorkspace: View {
     private let reviewReportStore = SermonReviewReportStore.shared
 
     private var selectedDayKey: String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: selectedDate)
+        SermonDateKey.string(from: selectedDate)
     }
 
     private var requestKey: String {

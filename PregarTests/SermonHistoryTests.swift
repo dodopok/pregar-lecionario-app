@@ -19,6 +19,39 @@ final class SermonHistoryTests: XCTestCase {
         XCTAssertTrue(ArchiveSearchMode.passage.matches(draft, query: "Mateus 21"))
     }
 
+    func testReaderReviewMaterialCountsAreScopedToSermonDateAndLegacyTabsDecode() throws {
+        let legacyJSON = #"{"id":"A9A598D5-552A-46E4-8A13-EC66A4C3E079","title":"Working Preacher","kind":"web","location":"https://workingpreacher.org","physicalPage":1,"reference":"Mateus 21.33-46","includedInReview":true}"#
+        let legacyTab = try JSONDecoder().decode(ReaderTab.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(legacyTab.sermonDateKey)
+
+        let reference = "Mateus 21.33-46"
+        let current = ReaderTab(
+            id: UUID(), title: "Working Preacher", kind: .web,
+            location: "https://workingpreacher.org", physicalPage: 1,
+            reference: reference, sermonDateKey: "2026-10-04",
+            includedInReview: true, reviewInclusionConfirmed: true
+        )
+        let otherSunday = ReaderTab(
+            id: UUID(), title: "Commentary", kind: .web,
+            location: "https://example.org", physicalPage: 1,
+            reference: reference, sermonDateKey: "2029-09-30",
+            includedInReview: true, reviewInclusionConfirmed: true
+        )
+        let unconfirmed = ReaderTab(
+            id: UUID(), title: "Unconfirmed", kind: .web,
+            location: "https://example.net", physicalPage: 1,
+            reference: reference, sermonDateKey: "2026-10-04",
+            includedInReview: true, reviewInclusionConfirmed: false
+        )
+
+        XCTAssertEqual(
+            ReaderTab.countMarkedForReview(in: [current, otherSunday, unconfirmed], reference: reference, sermonDateKey: "2026-10-04"),
+            1
+        )
+        let restored = try JSONDecoder().decode(ReaderTab.self, from: JSONEncoder().encode(current))
+        XCTAssertEqual(restored.sermonDateKey, "2026-10-04")
+    }
+
     func testCapturesDistinctVersionsAndReloadsThemFromDisk() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("PregarHistoryTests-\(UUID().uuidString)", isDirectory: true)

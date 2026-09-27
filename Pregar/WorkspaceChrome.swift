@@ -611,7 +611,12 @@ struct ResourceContextPanel: View {
 
                 ForEach(sources) { source in
                     Button {
-                        _ = readerSession.openWeb(title: source.title, url: source.url, reference: reference)
+                        _ = readerSession.openWeb(
+                            title: source.title,
+                            url: source.url,
+                            reference: reference,
+                            sermonDateKey: SermonDateKey.string(from: liturgicalDate)
+                        )
                         openWindow(id: "reader")
                     } label: {
                         HStack(alignment: .top, spacing: 10) {
@@ -701,6 +706,7 @@ struct ResourceContextPanel: View {
                         path: match.record.path,
                         page: match.section.startPage,
                         reference: reference,
+                        sermonDateKey: SermonDateKey.string(from: liturgicalDate),
                         indexedSections: match.record.sections
                     ) else { return }
                     openWindow(id: "reader")

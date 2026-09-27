@@ -1,6 +1,17 @@
 import Foundation
 import SwiftData
 
+enum SermonDateKey {
+    static func string(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+}
+
 @Model
 final class SermonDraft {
     var liturgicalDate: Date

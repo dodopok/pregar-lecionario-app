@@ -541,7 +541,7 @@ struct SermonArchiveView: View {
     }
 
     private func archiveKey(for draft: SermonDraft) -> String {
-        String(Int64(draft.liturgicalDate.timeIntervalSince1970))
+        SermonDateKey.string(from: draft.liturgicalDate)
     }
 
     var body: some View {
@@ -606,9 +606,11 @@ struct SermonArchiveView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("\(pdfMatchCounts[archiveKey(for: draft)] ?? 0) PDFs")
                                             .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
-                                        let reviewedCount = readerSession.tabs.filter {
-                                            $0.isIncludedForReview && $0.reference == reference
-                                        }.count
+                                        let reviewedCount = ReaderTab.countMarkedForReview(
+                                            in: readerSession.tabs,
+                                            reference: reference,
+                                            sermonDateKey: archiveKey(for: draft)
+                                        )
                                         if reviewedCount > 0 {
                                             Text("\(reviewedCount) na revisão")
                                                 .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)

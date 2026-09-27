@@ -12,10 +12,18 @@ struct ReaderTab: Codable, Identifiable, Equatable {
     var location: String
     var physicalPage: Int
     var reference: String?
+    var sermonDateKey: String? = nil
     var includedInReview: Bool
     var reviewInclusionConfirmed: Bool? = nil
 
     var isIncludedForReview: Bool { includedInReview && reviewInclusionConfirmed == true }
+
+    static func countMarkedForReview(in tabs: [ReaderTab], reference: String?, sermonDateKey: String?) -> Int {
+        guard let reference, let sermonDateKey else { return 0 }
+        return tabs.filter {
+            $0.isIncludedForReview && $0.reference == reference && $0.sermonDateKey == sermonDateKey
+        }.count
+    }
 }
 
 struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
@@ -115,6 +123,7 @@ final class ReaderSessionStore: ObservableObject {
         path: String,
         page: Int = 1,
         reference: String? = nil,
+        sermonDateKey: String? = nil,
         indexedSections: [PDFSectionLocation]? = nil
     ) -> Bool {
         let url = URL(fileURLWithPath: path).standardizedFileURL
@@ -131,7 +140,8 @@ final class ReaderSessionStore: ObservableObject {
 
         if let index = tabs.firstIndex(where: { $0.kind == .pdf && $0.location == location }) {
             tabs[index].title = title
-            if let reference { tabs[index].reference = reference }
+            tabs[index].reference = reference
+            tabs[index].sermonDateKey = sermonDateKey
             let remembered = reference.flatMap { rememberedPages[sectionLinkKey(path: location, reference: $0)] }
             tabs[index].physicalPage = min(max(remembered ?? page, 1), document.pageCount)
             selectedID = tabs[index].id
@@ -140,7 +150,8 @@ final class ReaderSessionStore: ObservableObject {
             let tab = ReaderTab(
                 id: UUID(), title: title, kind: .pdf, location: location,
                 physicalPage: min(max(remembered ?? page, 1), document.pageCount),
-                reference: reference, includedInReview: false, reviewInclusionConfirmed: true
+                reference: reference, sermonDateKey: sermonDateKey,
+                includedInReview: false, reviewInclusionConfirmed: true
             )
             tabs.append(tab)
             selectedID = tab.id
@@ -150,19 +161,21 @@ final class ReaderSessionStore: ObservableObject {
     }
 
     @discardableResult
-    func openWeb(title: String, url: URL, reference: String? = nil) -> Bool {
+    func openWeb(title: String, url: URL, reference: String? = nil, sermonDateKey: String? = nil) -> Bool {
         guard ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return false }
         let address = url.absoluteString
         if let existing = tabs.first(where: { $0.kind == .web && $0.location == address }) {
             if let index = tabs.firstIndex(where: { $0.id == existing.id }) {
                 tabs[index].title = title
-                if let reference { tabs[index].reference = reference }
+                tabs[index].reference = reference
+                tabs[index].sermonDateKey = sermonDateKey
             }
             selectedID = existing.id
         } else {
             let tab = ReaderTab(
                 id: UUID(), title: title, kind: .web, location: address,
-                physicalPage: 1, reference: reference, includedInReview: false, reviewInclusionConfirmed: true
+                physicalPage: 1, reference: reference, sermonDateKey: sermonDateKey,
+                includedInReview: false, reviewInclusionConfirmed: true
             )
             tabs.append(tab)
             selectedID = tab.id
@@ -484,7 +497,12 @@ struct ReaderWindowView: View {
         }
         .sheet(isPresented: $showingNewTab) {
             ReaderNewTabSheet { url in
-                _ = reader.openWeb(title: url.host ?? url.absoluteString, url: url, reference: tab?.reference)
+                _ = reader.openWeb(
+                    title: url.host ?? url.absoluteString,
+                    url: url,
+                    reference: tab?.reference,
+                    sermonDateKey: tab?.sermonDateKey
+                )
             }
         }
         .sheet(isPresented: $showingPageCorrection) {
