@@ -10,12 +10,15 @@ enum ContextPaneTab: String, CaseIterable, Identifiable {
 }
 
 struct CalendarSidebarView: View {
+    @EnvironmentObject private var apiSettingsStore: APISettingsStore
     @Binding var selectedDate: Date
     @Binding var calendarMonth: Date
     let liturgicalDay: LiturgicalDay?
     let accent: Color
     let openArchive: () -> Void
     let openLibrary: () -> Void
+    @State private var sundayNames: [String: String] = [:]
+    @State private var dayLabelsByMonth: [String: [String: String]] = [:]
 
     private let calendar = Calendar(identifier: .gregorian)
     private let weekdays = ["D", "S", "T", "Q", "Q", "S", "S"]
@@ -27,6 +30,15 @@ struct CalendarSidebarView: View {
         let leading = (calendar.component(.weekday, from: interval.start) - calendar.firstWeekday + 7) % 7
         let dates = dayRange.compactMap { calendar.date(byAdding: .day, value: $0 - 1, to: interval.start) }
         return Array(repeating: nil, count: leading) + dates.map(Optional.some)
+    }
+
+    private var calendarMonthKey: String {
+        let components = calendar.dateComponents([.year, .month], from: calendarMonth)
+        return String(format: "%04d-%02d", components.year ?? 0, components.month ?? 0)
+    }
+
+    private var dayLabelsCacheKey: String {
+        "\(calendarMonthKey)|\(apiSettingsStore.settings.prayerBook)|\(apiSettingsStore.settings.language)"
     }
 
     private var sundays: [Date] {
@@ -81,7 +93,7 @@ struct CalendarSidebarView: View {
                         if let date {
                             calendarDay(date)
                         } else {
-                            Color.clear.frame(height: 26)
+                            Color.clear.frame(height: 30)
                         }
                     }
                 }
@@ -99,9 +111,9 @@ struct CalendarSidebarView: View {
                     calendarMonth = today
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 26)
-                .background(PrototypeStyle.paper, in: RoundedRectangle(cornerRadius: 7))
-                .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
+                .frame(height: 30)
+                .contentShape(Rectangle())
+                .foregroundStyle(PrototypeStyle.ink)
                 weekButton("chevron.right", accessibility: "Próxima semana", days: 7)
             }
             .font(.system(size: 12))
@@ -134,6 +146,7 @@ struct CalendarSidebarView: View {
         .padding(.bottom, 14)
         .frame(maxHeight: .infinity, alignment: .topLeading)
         .background(PrototypeStyle.sidebar)
+        .task(id: "\(dayLabelsCacheKey)|\(apiSettingsStore.revision)") { await loadSundayNames() }
     }
 
     private var monthTitle: String {
@@ -146,7 +159,10 @@ struct CalendarSidebarView: View {
                 calendarMonth = date
             }
         } label: {
-            Image(systemName: symbol).font(.system(size: 11, weight: .medium)).frame(width: 22, height: 22)
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .medium))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(PrototypeStyle.muted)
@@ -169,7 +185,7 @@ struct CalendarSidebarView: View {
                     .frame(width: 3, height: 3)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 26)
+            .frame(height: 30)
             .background(selected ? accent : .clear, in: RoundedRectangle(cornerRadius: 7))
             .contentShape(Rectangle())
         }
@@ -185,9 +201,10 @@ struct CalendarSidebarView: View {
             }
         } label: {
             Image(systemName: symbol)
-                .frame(width: 28, height: 26)
+                .frame(width: 30, height: 30)
                 .background(PrototypeStyle.paper, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(accessibility)
@@ -196,7 +213,8 @@ struct CalendarSidebarView: View {
 
     private func sundayRow(_ date: Date) -> some View {
         let selected = calendar.isDate(date, inSameDayAs: selectedDate)
-        let name = selected ? liturgicalDay?.celebration?.name ?? liturgicalDay?.sundayName : nil
+        let name = sundayNames[SermonDateKey.string(from: date)]
+            ?? (selected ? liturgicalDay?.sundayName ?? liturgicalDay?.celebration?.name : nil)
         return Button {
             selectedDate = calendar.startOfDay(for: date)
         } label: {
@@ -212,11 +230,43 @@ struct CalendarSidebarView: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 7)
-            .frame(height: 26)
+            .frame(height: 30)
             .background(selected ? accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    @MainActor
+    private func loadSundayNames() async {
+        if let cached = dayLabelsByMonth[dayLabelsCacheKey] {
+            sundayNames = cached
+            return
+        }
+        sundayNames = [:]
+        guard let apiKey = apiSettingsStore.credential,
+              let monthInterval = calendar.dateInterval(of: .month, for: calendarMonth),
+              let lastDay = calendar.date(byAdding: .day, value: -1, to: monthInterval.end),
+              let rangeEnd = calendar.date(byAdding: .day, value: 7, to: lastDay) else { return }
+
+        do {
+            let days = try await LiturgicalAPIClient(
+                settings: apiSettingsStore.settings,
+                apiKey: apiKey
+            ).fetchCalendarDays(from: monthInterval.start, through: rangeEnd)
+            try Task.checkCancellation()
+            var names: [String: String] = [:]
+            for day in days where day.isSunday == true {
+                guard let name = day.sundayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { continue }
+                names[day.date] = name
+            }
+            sundayNames = names
+            dayLabelsByMonth[dayLabelsCacheKey] = names
+        } catch is CancellationError {
+            return
+        } catch {
+            sundayNames = [:]
+        }
     }
 
     private func sidebarLink(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
@@ -226,7 +276,8 @@ struct CalendarSidebarView: View {
                 .foregroundStyle(PrototypeStyle.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 6)
-                .frame(height: 32)
+                .frame(height: 34)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -279,12 +330,15 @@ struct ScripturePanelView: View {
                 }
                 .menuStyle(.borderlessButton)
                 Button(action: collapse) {
-                    Image(systemName: "chevron.left").font(.system(size: 11, weight: .medium))
-                        .frame(width: 24, height: 22)
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 13, weight: .regular))
+                        .frame(width: 32, height: 30)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(PrototypeStyle.muted)
-                .help("Recolher leituras")
+                .help("Ocultar painel de leituras")
+                .accessibilityLabel("Ocultar painel de leituras")
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
@@ -507,15 +561,15 @@ struct ResourceContextPanel: View {
                     Button {
                         selectedTab = tab
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(alignment: .center, spacing: 5) {
                             Text(tab.rawValue)
                                 .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .medium))
                             if tab == .ideas { badge("\(ideaNotes.count)", color: Color(red: 0.78, green: 0.65, blue: 0.29)) }
                             if tab == .review { badge("\(reviewReports.last?.findings.count ?? 0)", color: accent) }
                         }
                         .foregroundStyle(selectedTab == tab ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.75))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 31)
+                        .frame(maxWidth: .infinity, minHeight: 31, maxHeight: 31, alignment: .center)
+                        .contentShape(Rectangle())
                         .background(selectedTab == tab ? .white : .clear, in: RoundedRectangle(cornerRadius: 7))
                         .shadow(color: selectedTab == tab ? .black.opacity(0.10) : .clear, radius: 2, y: 1)
                     }
@@ -524,13 +578,15 @@ struct ResourceContextPanel: View {
                 Button {
                     collapse()
                 } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .medium))
-                        .frame(width: 23, height: 29)
+                    Image(systemName: "sidebar.right")
+                        .font(.system(size: 13, weight: .regular))
+                        .frame(width: 32, height: 30)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(PrototypeStyle.muted)
-                .help("Recolher painel")
+                .help("Ocultar painel de materiais")
+                .accessibilityLabel("Ocultar painel de materiais")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 3)

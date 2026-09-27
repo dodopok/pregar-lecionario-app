@@ -116,6 +116,26 @@ struct LiturgicalAPIClient {
         try await get(APIEnvelope<LiturgicalDay>.self, from: dayURL(date)).data
     }
 
+    func fetchCalendarDays(from startDate: Date, through endDate: Date) async throws -> [LiturgicalDay] {
+        guard var components = URLComponents(string: settings.baseURL) else {
+            throw LiturgicalAPIError(message: "Endereço inválido da Estêvão API.")
+        }
+        let trimmedPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let apiPath = trimmedPath.hasSuffix("api/v2") ? trimmedPath : [trimmedPath, "api/v2"].filter { !$0.isEmpty }.joined(separator: "/")
+        components.path = "/\(apiPath)/days"
+        components.queryItems = [
+            URLQueryItem(name: "from", value: SermonDateKey.string(from: startDate)),
+            URLQueryItem(name: "to", value: SermonDateKey.string(from: endDate)),
+            URLQueryItem(name: "book", value: settings.prayerBook),
+            URLQueryItem(name: "lang", value: settings.language),
+            URLQueryItem(name: "fields[day]", value: "date,sunday_name,is_sunday")
+        ]
+        guard let url = components.url else {
+            throw LiturgicalAPIError(message: "Não foi possível montar o calendário da Estêvão API.")
+        }
+        return try await get(APIEnvelope<[LiturgicalDay]>.self, from: url).data
+    }
+
     func fetchPassage(reference: String, bible: String) async throws -> BiblePassageText {
         let passage = try await get(APIEnvelope<BiblePassage>.self, from: passageURL(reference: reference, bible: bible)).data
         guard let text = passage.text else {

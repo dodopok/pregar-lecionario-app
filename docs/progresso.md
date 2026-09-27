@@ -98,6 +98,14 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - Validação em runtime da busca nativa para Mateus 21:23–32: o artigo de Bob Cornwall para Mateus 21:18–27 apareceu no painel como sobreposição parcial, com intervalo comum 21:23–27 e intervalo do material 21:18–27. A versão nova do cache regenerou os relatórios antigos; o manuscrito que já estava aberto não foi editado.
 - Um teste local de OCR processou uma digitalização real sem camada de texto: as 21 páginas foram examinadas, pelo menos uma produziu texto reconhecido pelo Vision e o arquivo original permaneceu byte a byte idêntico. O teste verifica contagens, não registra nem imprime o conteúdo privado do documento.
 
+## Refinamento visual da Mesa e da Bíblia
+
+- Os nomes dos domingos são carregados para o mês inteiro pela Estêvão API v2, inclusive antes de selecionar cada data. A consulta pede apenas data, nome do domingo e indicador de domingo (`fields[day]`), sem baixar leituras/coletas completas; o resultado fica em cache local por mês, livro e idioma.
+- Hoje não tem mais uma placa de fundo. Navegação do calendário, abas Materiais/Ideias/Revisão, ações da barra superior e controles do editor têm áreas de toque ampliadas sem inflar seus elementos visuais. Os rótulos e badges das abas ficam alinhados verticalmente; Preferências usa engrenagem.
+- Os dois painéis laterais usam controles de recolher/reabrir identificáveis e nomeados; os botões de reabertura permanecem junto à referência no topo da Mesa. A paleta continua seguindo a cor litúrgica retornada por data.
+- Na Bíblia, toda tradução aberta agora aparece como controle próprio; traduções adicionais são escolhidas no catálogo completo de `bible_versions`, e as comparações podem ser removidas individualmente. Os controles Perícope/Capítulo também têm alvo de toque ampliado. A tipografia dos versículos foi reduzida de 23 para 19 pt, mantendo as colunas alinhadas na rolagem compartilhada.
+- O XcodeGen regenerou o projeto para incluir `LiturgicalAPITests.swift`, que estava ausente do target no `.xcodeproj`; por isso a primeira contagem não exercitava os contratos da API. Com o target corrigido, 53 testes passaram, incluindo a consulta leve dos nomes dos domingos. A build macOS foi assinada com `Apple Development: DOUGLAS DE ARAUJO SILVA` e `TeamIdentifier=R573HPN65Q`. A janela da Mesa já aberta não foi reiniciada durante a validação, para não interferir no rascunho em uso; a conferência visual final da build atual depende de reabri-la quando o documento estiver salvo.
+
 ## Performance
 
 - Uma amostra de 8 segundos do processo aberto encontrou a thread principal aguardando eventos do AppKit, sem loop ativo durante o intervalo ocioso. O footprint era 68,2 MB naquele instante e o pico desde a abertura era 224,3 MB; é uma fotografia pontual, não um benchmark de rolagem ou troca de abas.

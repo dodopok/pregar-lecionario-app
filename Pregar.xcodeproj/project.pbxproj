@@ -14,25 +14,26 @@
 		0E42A0E69E0150543BAA3CEB /* SermonReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F3AB7D4FC90DDBE36481FFE /* SermonReviewTests.swift */; };
 		11DF447737C4F2F6B3A484EE /* WorkspaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */; };
 		174BE0C81CF839CEB026C8B4 /* SermonHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1C17D3DB8E8C292118A7FF /* SermonHistory.swift */; };
+		1C294EB6B8A9CCADA6AF6D55 /* FavoriteSiteSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B828392C615A2131C4ABEF /* FavoriteSiteSearch.swift */; };
 		2236BE23F5A46EA6012ECFD1 /* PrototypeStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */; };
 		39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */; };
 		3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495567BA510561B3883455A /* LibraryArchiveViews.swift */; };
 		3AE4D461A05EE1772CD35DC4 /* AIReviewMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1C3731E589A46BFCE0F8FB /* AIReviewMaterials.swift */; };
 		515BA5D71E86AA58E543FE54 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */; };
 		545D1E4BC97796B726BB67B2 /* PDFLibraryIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */; };
-		62A7B3018E6849EE9EA4A311 /* AIResearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D04F9F8324A4B0AAE51B195 /* AIResearch.swift */; };
-		6B19E8A458C4A17B4E1D4C21 /* GoogleDrive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F4D9BC217E4B34A15831A6 /* GoogleDrive.swift */; };
-		6938077666FE4A3A9520F407 /* FavoriteSiteSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24C1E5D8E06445878A351AAD /* FavoriteSiteSearch.swift */; };
-		5329FE8D581C43FEA58AA293 /* FavoriteSiteSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CFB5BF9DCC04B6A81D40587 /* FavoriteSiteSearchTests.swift */; };
-		75F403AE9DE0459899C54DCA /* AIResearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E8A6F70CEB4565A4E4D0A0 /* AIResearchTests.swift */; };
-		C90D0A6447594F2E981D67C1 /* GoogleDriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C90D0A6447594F2E981D67C2 /* GoogleDriveTests.swift */; };
 		5791E5B8E6B99C8CF7C942D1 /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */; };
 		68FA06B1B3C53EAA31414A52 /* SermonDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */; };
 		70F9C5A32F020FED083C6C2E /* FavoriteSourceURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */; };
+		72A8A2D038BFCBF45BC09039 /* AIResearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E40B242A599EC6CAFE862E2 /* AIResearchTests.swift */; };
+		73B21B9386EC9BD0B41E2039 /* GoogleDriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B8EA95BA4E5B5B8C9ABE0D /* GoogleDriveTests.swift */; };
+		745F2D034AB95FE15F4AF828 /* AIResearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0CB77E021FBC5487D7AD63 /* AIResearch.swift */; };
 		78900D070DCE8DD17EE335CC /* SermonHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5DDFCFC902260D6AF83F167 /* SermonHistoryTests.swift */; };
+		7D6CB8C856A40027094C3151 /* GoogleDrive.swift in Sources */ = {isa = PBXBuildFile; fileRef = D197D272EBD91D154ABF1AB6 /* GoogleDrive.swift */; };
 		7DF5C8B29B917622A6B03CAA /* WorkspaceSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */; };
 		863FED12B32D3E5372DCC462 /* ReaderSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB73D3027C252959FB7E759 /* ReaderSession.swift */; };
 		99645F1CBB2F74C88E281950 /* PregarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478AAAADD24805C4AAF1C997 /* PregarApp.swift */; };
+		A42B452780F4ED3C6370D636 /* FavoriteSiteSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17836D44B2B2BEA9A8A0D019 /* FavoriteSiteSearchTests.swift */; };
+		AE5005E38B52F55CF2B4618D /* LiturgicalAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C8270287951966563FC0973 /* LiturgicalAPITests.swift */; };
 		AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D8516E9667268B7075CEB2 /* APISettings.swift */; };
 		FB5AFE51C49539B0A23C5700 /* SermonReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C58A2501218EC111B74290 /* SermonReview.swift */; };
 		FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */; };
@@ -51,6 +52,8 @@
 /* Begin PBXFileReference section */
 		0EC0886F1F85FF11D8D858FF /* TabletPDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabletPDFExporter.swift; sourceTree = "<group>"; };
 		0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
+		17836D44B2B2BEA9A8A0D019 /* FavoriteSiteSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSiteSearchTests.swift; sourceTree = "<group>"; };
+		1B0CB77E021FBC5487D7AD63 /* AIResearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResearch.swift; sourceTree = "<group>"; };
 		2495567BA510561B3883455A /* LibraryArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryArchiveViews.swift; sourceTree = "<group>"; };
 		39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrototypeStyle.swift; sourceTree = "<group>"; };
 		3B1C3731E589A46BFCE0F8FB /* AIReviewMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIReviewMaterials.swift; sourceTree = "<group>"; };
@@ -58,26 +61,25 @@
 		478AAAADD24805C4AAF1C997 /* PregarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PregarApp.swift; sourceTree = "<group>"; };
 		4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonDraft.swift; sourceTree = "<group>"; };
 		4F3AB7D4FC90DDBE36481FFE /* SermonReviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonReviewTests.swift; sourceTree = "<group>"; };
-		9D04F9F8324A4B0AAE51B195 /* AIResearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResearch.swift; sourceTree = "<group>"; };
-		17F4D9BC217E4B34A15831A6 /* GoogleDrive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDrive.swift; sourceTree = "<group>"; };
-		D6E8A6F70CEB4565A4E4D0A0 /* AIResearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResearchTests.swift; sourceTree = "<group>"; };
-		9CFB5BF9DCC04B6A81D40587 /* FavoriteSiteSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSiteSearchTests.swift; sourceTree = "<group>"; };
-		C90D0A6447594F2E981D67C2 /* GoogleDriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveTests.swift; sourceTree = "<group>"; };
 		547C3A36015E310F5E8EDD26 /* Pregar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pregar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettingsView.swift; sourceTree = "<group>"; };
 		74D8516E9667268B7075CEB2 /* APISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettings.swift; sourceTree = "<group>"; };
+		89B828392C615A2131C4ABEF /* FavoriteSiteSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSiteSearch.swift; sourceTree = "<group>"; };
+		8C8270287951966563FC0973 /* LiturgicalAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiturgicalAPITests.swift; sourceTree = "<group>"; };
+		8E40B242A599EC6CAFE862E2 /* AIResearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResearchTests.swift; sourceTree = "<group>"; };
 		8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChrome.swift; sourceTree = "<group>"; };
 		90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFLibraryIndexerTests.swift; sourceTree = "<group>"; };
 		9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparationWorkspace.swift; sourceTree = "<group>"; };
 		9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSheets.swift; sourceTree = "<group>"; };
 		9FB73D3027C252959FB7E759 /* ReaderSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSession.swift; sourceTree = "<group>"; };
+		A0B8EA95BA4E5B5B8C9ABE0D /* GoogleDriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveTests.swift; sourceTree = "<group>"; };
 		A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiturgicalAPI.swift; sourceTree = "<group>"; };
 		A5DDFCFC902260D6AF83F167 /* SermonHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonHistoryTests.swift; sourceTree = "<group>"; };
 		A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChrome.swift; sourceTree = "<group>"; };
 		AA1C17D3DB8E8C292118A7FF /* SermonHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonHistory.swift; sourceTree = "<group>"; };
 		CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFLibraryIndex.swift; sourceTree = "<group>"; };
 		D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSourceURLs.swift; sourceTree = "<group>"; };
-		24C1E5D8E06445878A351AAD /* FavoriteSiteSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSiteSearch.swift; sourceTree = "<group>"; };
+		D197D272EBD91D154ABF1AB6 /* GoogleDrive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDrive.swift; sourceTree = "<group>"; };
 		D6ACD579D8F2E7611FB24671 /* PregarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PregarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F3C58A2501218EC111B74290 /* SermonReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonReview.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -104,9 +106,10 @@
 		CB1F61623805CB6E47071066 /* PregarTests */ = {
 			isa = PBXGroup;
 			children = (
-				D6E8A6F70CEB4565A4E4D0A0 /* AIResearchTests.swift */,
-				9CFB5BF9DCC04B6A81D40587 /* FavoriteSiteSearchTests.swift */,
-				C90D0A6447594F2E981D67C2 /* GoogleDriveTests.swift */,
+				8E40B242A599EC6CAFE862E2 /* AIResearchTests.swift */,
+				17836D44B2B2BEA9A8A0D019 /* FavoriteSiteSearchTests.swift */,
+				A0B8EA95BA4E5B5B8C9ABE0D /* GoogleDriveTests.swift */,
+				8C8270287951966563FC0973 /* LiturgicalAPITests.swift */,
 				90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */,
 				A5DDFCFC902260D6AF83F167 /* SermonHistoryTests.swift */,
 				4F3AB7D4FC90DDBE36481FFE /* SermonReviewTests.swift */,
@@ -117,14 +120,14 @@
 		D40AA52FAFDBBB3B027F142C /* Pregar */ = {
 			isa = PBXGroup;
 			children = (
-				9D04F9F8324A4B0AAE51B195 /* AIResearch.swift */,
-				24C1E5D8E06445878A351AAD /* FavoriteSiteSearch.swift */,
-				17F4D9BC217E4B34A15831A6 /* GoogleDrive.swift */,
+				1B0CB77E021FBC5487D7AD63 /* AIResearch.swift */,
 				3B1C3731E589A46BFCE0F8FB /* AIReviewMaterials.swift */,
 				3DCCDA011317AD64332990C8 /* AISettings.swift */,
 				74D8516E9667268B7075CEB2 /* APISettings.swift */,
 				62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */,
+				89B828392C615A2131C4ABEF /* FavoriteSiteSearch.swift */,
 				D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */,
+				D197D272EBD91D154ABF1AB6 /* GoogleDrive.swift */,
 				2495567BA510561B3883455A /* LibraryArchiveViews.swift */,
 				A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */,
 				CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */,
@@ -226,9 +229,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				75F403AE9DE0459899C54DCA /* AIResearchTests.swift in Sources */,
-				5329FE8D581C43FEA58AA293 /* FavoriteSiteSearchTests.swift in Sources */,
-				C90D0A6447594F2E981D67C1 /* GoogleDriveTests.swift in Sources */,
+				72A8A2D038BFCBF45BC09039 /* AIResearchTests.swift in Sources */,
+				A42B452780F4ED3C6370D636 /* FavoriteSiteSearchTests.swift in Sources */,
+				73B21B9386EC9BD0B41E2039 /* GoogleDriveTests.swift in Sources */,
+				AE5005E38B52F55CF2B4618D /* LiturgicalAPITests.swift in Sources */,
 				0AF15226A4B95D3A7B6A0B84 /* PDFLibraryIndexerTests.swift in Sources */,
 				78900D070DCE8DD17EE335CC /* SermonHistoryTests.swift in Sources */,
 				0E42A0E69E0150543BAA3CEB /* SermonReviewTests.swift in Sources */,
@@ -239,14 +243,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				62A7B3018E6849EE9EA4A311 /* AIResearch.swift in Sources */,
-				6938077666FE4A3A9520F407 /* FavoriteSiteSearch.swift in Sources */,
-				6B19E8A458C4A17B4E1D4C21 /* GoogleDrive.swift in Sources */,
+				745F2D034AB95FE15F4AF828 /* AIResearch.swift in Sources */,
 				3AE4D461A05EE1772CD35DC4 /* AIReviewMaterials.swift in Sources */,
 				0B931865BC2CBFCE6E3D9D9C /* AISettings.swift in Sources */,
 				AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */,
 				39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */,
+				1C294EB6B8A9CCADA6AF6D55 /* FavoriteSiteSearch.swift in Sources */,
 				70F9C5A32F020FED083C6C2E /* FavoriteSourceURLs.swift in Sources */,
+				7D6CB8C856A40027094C3151 /* GoogleDrive.swift in Sources */,
 				3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */,
 				00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */,
 				545D1E4BC97796B726BB67B2 /* PDFLibraryIndex.swift in Sources */,

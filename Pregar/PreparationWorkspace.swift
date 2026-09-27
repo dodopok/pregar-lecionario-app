@@ -244,10 +244,11 @@ struct PreparationWorkspace: View {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(PrototypeStyle.muted)
-                    .frame(width: 27, height: 30)
+                    .frame(width: 34, height: 34)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Barra lateral")
+            .help("Mostrar ou ocultar calendário")
 
             if !isReadingsVisible && !focusMode {
                 panelRestoreButton("Leituras", symbol: "sidebar.left") {
@@ -289,6 +290,9 @@ struct PreparationWorkspace: View {
                 Label("Foco", systemImage: focusMode ? "arrow.up.left.and.arrow.down.right" : "rectangle.compress.vertical")
                     .font(.system(size: 12))
                     .foregroundStyle(focusMode ? accentColor : PrototypeStyle.muted)
+                    .padding(.horizontal, 5)
+                    .frame(height: 34)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Modo de escrita")
@@ -304,6 +308,7 @@ struct PreparationWorkspace: View {
                     .padding(.horizontal, 14)
                     .frame(height: 31)
                     .background(accentColor, in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             .help("Solicitar uma revisão")
@@ -311,10 +316,11 @@ struct PreparationWorkspace: View {
             Button {
                 openPreferences()
             } label: {
-                Image(systemName: "sun.max")
+                Image(systemName: "gearshape")
                     .font(.system(size: 15))
                     .foregroundStyle(PrototypeStyle.muted)
-                    .frame(width: 26, height: 30)
+                    .frame(width: 34, height: 34)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Preferências")
@@ -425,6 +431,9 @@ struct PreparationWorkspace: View {
             Label(title, systemImage: symbol)
                 .font(.system(size: 12))
                 .foregroundStyle(PrototypeStyle.muted)
+                .padding(.horizontal, 4)
+                .frame(height: 34)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -435,8 +444,9 @@ struct PreparationWorkspace: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(accentColor)
                 .padding(.horizontal, 8)
-                .frame(height: 27)
+                .frame(height: 31)
                 .background(PrototypeStyle.softGreen.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .help("Reabrir painel de \(title.lowercased())")
@@ -499,7 +509,7 @@ struct PreparationWorkspace: View {
                     Text(editorCommands.selectedFontFamily)
                         .font(.system(size: 11))
                         .lineLimit(1)
-                        .frame(width: 72, height: 27, alignment: .leading)
+                        .frame(width: 72, height: 32, alignment: .leading)
                 }
                 .menuStyle(.borderlessButton)
                 .help("Fonte: \(editorCommands.selectedFontFamily)")
@@ -511,7 +521,7 @@ struct PreparationWorkspace: View {
                 } label: {
                     Text("\(editorCommands.selectedFontSize) pt")
                         .font(.system(size: 11))
-                        .frame(width: 42, height: 27)
+                        .frame(width: 42, height: 32)
                 }
                 .menuStyle(.borderlessButton)
                 .help("Tamanho da fonte")
@@ -588,7 +598,7 @@ struct PreparationWorkspace: View {
     private func editorButton(_ symbol: String, title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .frame(width: 28, height: 27)
+                .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
         }
         .keyboardShortcut(symbol == "bold" ? "b" : "i", modifiers: .command)
@@ -601,7 +611,7 @@ struct PreparationWorkspace: View {
             Text(title)
                 .font(.system(size: 12))
                 .padding(.horizontal, 8)
-                .frame(height: 27)
+                .frame(height: 32)
         }
         .help(title)
     }

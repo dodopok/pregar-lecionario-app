@@ -72,6 +72,10 @@ struct BibleComparisonView: View {
         [settings.bible] + selectedComparisonBibles.filter { $0 != settings.bible }
     }
 
+    private var versionsAvailableToAdd: [BibleVersion] {
+        availableVersions.filter { !displayedVersionCodes.contains($0.code) }
+    }
+
     private var verseNumbers: [Int] {
         let numbers = displayedVersionCodes.flatMap { code in
             passages[passageKey(for: code)]?.verses?.map(\.number) ?? []
@@ -89,7 +93,7 @@ struct BibleComparisonView: View {
                     .font(PrototypeStyle.serif(16, weight: .semibold))
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 13)
-                    .frame(width: 222, height: 30)
+                    .frame(width: 222, height: 30, alignment: .center)
                     .background(.white, in: RoundedRectangle(cornerRadius: 7))
                     .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
                     .onSubmit { commitReference() }
@@ -103,37 +107,56 @@ struct BibleComparisonView: View {
 
                 Spacer(minLength: 6)
 
-                translationBadge(settings.bible.uppercased())
-                Menu {
-                    if isLoadingVersions {
-                        Label("Carregando traduções…", systemImage: "arrow.triangle.2.circlepath")
-                    } else if !availableVersions.isEmpty {
-                        Section("Traduções disponíveis") {
-                            ForEach(availableVersions) { version in
-                                Toggle(isOn: Binding(
-                                    get: { displayedVersionCodes.contains(version.code) },
-                                    set: { isSelected in setTranslation(version.code, selected: isSelected) }
-                                )) {
-                                    Text(versionMenuTitle(version))
-                                }
-                                .disabled(version.code == settings.bible)
-                            }
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(displayedVersionCodes, id: \.self) { code in
+                            translationChip(code, isPrimary: code == settings.bible)
                         }
-                    } else {
-                        Text(catalogError ?? "Catálogo indisponível")
-                        Button("Tentar novamente") { Task { await loadBibleVersions() } }
+                        Menu {
+                            if isLoadingVersions {
+                                Label("Carregando traduções…", systemImage: "arrow.triangle.2.circlepath")
+                            } else if !availableVersions.isEmpty {
+                                if versionsAvailableToAdd.isEmpty {
+                                    Text("Todas as traduções disponíveis já estão abertas")
+                                } else {
+                                    Section("Adicionar tradução") {
+                                        ForEach(versionsAvailableToAdd) { version in
+                                            Button(versionMenuTitle(version)) {
+                                                setTranslation(version.code, selected: true)
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text(catalogError ?? "Catálogo indisponível")
+                                Button("Tentar novamente") { Task { await loadBibleVersions() } }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 11, weight: .medium))
+                                Text(versionsAvailableToAdd.first?.code.uppercased() ?? "Bíblia")
+                                    .font(.system(size: 13, weight: .medium))
+                            }
+                            .foregroundStyle(PrototypeStyle.muted)
+                            .padding(.horizontal, 11)
+                            .frame(height: 26)
+                            .overlay {
+                                Capsule().strokeBorder(
+                                    PrototypeStyle.muted.opacity(0.42),
+                                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+                                )
+                            }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                        }
+                        .menuStyle(.borderlessButton)
+                        .help("Adicionar tradução à comparação")
+                        .accessibilityLabel(versionsAvailableToAdd.first.map { "Adicionar tradução \($0.code.uppercased())" } ?? "Adicionar tradução")
                     }
-                } label: {
-                    Label("\(displayedVersionCodes.count) traduções", systemImage: "text.book.closed")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(PrototypeStyle.ink)
-                        .padding(.horizontal, 14)
-                        .frame(height: 26)
-                        .background(.white, in: Capsule())
-                        .overlay(Capsule().stroke(PrototypeStyle.line, lineWidth: 1))
                 }
-                .menuStyle(.borderlessButton)
-                .help("Selecionar várias traduções")
+                .scrollIndicators(.hidden)
+                .frame(maxWidth: 220)
             }
             .padding(.leading, 104)
             .padding(.trailing, 22)
@@ -143,7 +166,7 @@ struct BibleComparisonView: View {
             Divider()
 
             GeometryReader { geometry in
-                let columnWidth = max(320, geometry.size.width / CGFloat(max(displayedVersionCodes.count, 1)))
+                let columnWidth = max(280, geometry.size.width / CGFloat(max(displayedVersionCodes.count, 1)))
                 ScrollView([.horizontal, .vertical]) {
                     LazyVStack(spacing: 0) {
                         HStack(spacing: 0) {
@@ -226,15 +249,43 @@ struct BibleComparisonView: View {
                 .background(scope == value ? .white : .clear, in: RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.plain)
+        .frame(minHeight: 34)
+        .contentShape(Rectangle())
     }
 
-    private func translationBadge(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .frame(height: 26)
-            .background(accent, in: Capsule())
+    @ViewBuilder
+    private func translationChip(_ code: String, isPrimary: Bool) -> some View {
+        if isPrimary {
+            Text(code.uppercased())
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 26)
+                .background(accent, in: Capsule())
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+        } else {
+            Button {
+                setTranslation(code, selected: false)
+            } label: {
+                HStack(spacing: 5) {
+                    Text(code.uppercased())
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(PrototypeStyle.ink)
+                .padding(.horizontal, 12)
+                .frame(height: 26)
+                .background(.white, in: Capsule())
+                .overlay(Capsule().stroke(PrototypeStyle.line, lineWidth: 1))
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Remover \(code.uppercased()) da comparação")
+            .accessibilityLabel("Remover \(code.uppercased()) da comparação")
+        }
     }
 
     private func verseCell(version: String, number: Int, width: CGFloat) -> some View {
@@ -249,8 +300,9 @@ struct BibleComparisonView: View {
             }
             if let text {
                 Text(text)
-                    .font(PrototypeStyle.serif(23))
+                    .font(PrototypeStyle.serif(19))
                     .foregroundStyle(PrototypeStyle.ink)
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             } else if isLoading {
@@ -262,7 +314,7 @@ struct BibleComparisonView: View {
             }
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(.vertical, 10)
         .frame(width: width, alignment: .leading)
         .frame(minHeight: 62, alignment: .topLeading)
         .background(PrototypeStyle.paper)
