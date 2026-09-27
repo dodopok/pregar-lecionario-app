@@ -566,7 +566,7 @@ struct ResourceContextPanel: View {
                 }
                 for kind in Array(groups.keys) {
                     groups[kind]?.sort {
-                        $0.record.title.localizedStandardCompare($1.record.title) == .orderedAscending
+                        $0.record.displayTitle.localizedStandardCompare($1.record.displayTitle) == .orderedAscending
                     }
                 }
                 return groups
@@ -684,7 +684,7 @@ struct ResourceContextPanel: View {
                         .font(PrototypeStyle.serif(14, weight: .semibold))
                         .foregroundStyle(PrototypeStyle.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text([match.record.title, match.record.author].compactMap { $0 }.joined(separator: " · "))
+                    Text([match.record.displayTitle, match.record.displayAuthor].compactMap { $0 }.joined(separator: " · "))
                         .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("PDF · físicas \(match.section.startPage)–\(match.section.endPage) · \(match.section.context ?? "sumário")")
@@ -694,7 +694,7 @@ struct ResourceContextPanel: View {
             HStack(spacing: 8) {
                 Button("Ir para a aba") {
                     guard readerSession.openPDF(
-                        title: match.record.title,
+                        title: match.record.displayTitle,
                         path: match.record.path,
                         page: match.section.startPage,
                         reference: reference,

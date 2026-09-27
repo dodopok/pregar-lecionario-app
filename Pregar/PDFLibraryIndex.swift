@@ -13,6 +13,67 @@ struct PDFLibraryRecord: Codable, Identifiable, Equatable, Sendable {
     var sections: [PDFSectionLocation]? = nil
     var indexVersion: Int? = nil
     var copyLabel: String? = nil
+    var metadataOverrides: PDFLibraryMetadataOverrides? = nil
+
+    var displayTitle: String {
+        nonEmpty(metadataOverrides?.title) ?? title
+    }
+
+    var displayAuthor: String? {
+        metadataOverrides.map { nonEmpty($0.author) } ?? author
+    }
+
+    var displayPublisher: String? { metadataOverrides.flatMap { nonEmpty($0.publisher) } }
+    var displayYear: String? { metadataOverrides.flatMap { nonEmpty($0.year) } }
+    var displayVolume: String? { metadataOverrides.flatMap { nonEmpty($0.volume) } }
+    var displayEdition: String? { metadataOverrides.flatMap { nonEmpty($0.edition) } }
+    var displayLanguage: String? { metadataOverrides.flatMap { nonEmpty($0.language) } }
+
+    var displayCredits: [String] {
+        [displayAuthor, displayPublisher, displayYear, displayVolume, displayEdition, displayLanguage, copyLabel]
+            .compactMap { $0 }
+    }
+
+    func preservingMetadata(from previous: PDFLibraryRecord?) -> PDFLibraryRecord {
+        var refreshed = self
+        refreshed.metadataOverrides = previous?.metadataOverrides
+        return refreshed
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        return value
+    }
+}
+
+struct PDFLibraryMetadataOverrides: Codable, Equatable, Sendable {
+    var title: String
+    var author: String
+    var publisher: String
+    var year: String
+    var volume: String
+    var edition: String
+    var language: String
+
+    init(title: String, author: String, publisher: String, year: String, volume: String, edition: String, language: String) {
+        self.title = title
+        self.author = author
+        self.publisher = publisher
+        self.year = year
+        self.volume = volume
+        self.edition = edition
+        self.language = language
+    }
+
+    init(record: PDFLibraryRecord) {
+        title = record.displayTitle
+        author = record.displayAuthor ?? ""
+        publisher = record.displayPublisher ?? ""
+        year = record.displayYear ?? ""
+        volume = record.displayVolume ?? ""
+        edition = record.displayEdition ?? ""
+        language = record.displayLanguage ?? ""
+    }
 }
 
 struct PDFTextPosition: Codable, Equatable, Sendable {

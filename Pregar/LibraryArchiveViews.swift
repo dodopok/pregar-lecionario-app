@@ -32,6 +32,7 @@ struct PDFLibraryView: View {
     @State private var didRestore = false
     @State private var sectionQuery = ""
     @State private var errorMessage: String?
+    @State private var metadataRecord: PDFLibraryRecord?
 
     private var selectedRecord: PDFLibraryRecord? {
         records.first { $0.id == selectedID }
@@ -93,6 +94,12 @@ struct PDFLibraryView: View {
         .background(PrototypeStyle.paper)
         .preferredColorScheme(.light)
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.pdf], allowsMultipleSelection: true, onCompletion: importFiles)
+        .sheet(item: $metadataRecord) { record in
+            PDFLibraryMetadataEditor(record: record) { metadata in
+                saveMetadata(metadata, for: record)
+            }
+            .frame(width: 560, height: 360)
+        }
         .alert("Biblioteca de PDFs", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: {
@@ -109,7 +116,7 @@ struct PDFLibraryView: View {
                     HStack(alignment: .top, spacing: 17) {
                         coverImage(selectedRecord, width: 76, height: 104)
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(selectedRecord.title)
+                            Text(selectedRecord.displayTitle)
                                 .font(PrototypeStyle.serif(22, weight: .semibold))
                                 .foregroundStyle(PrototypeStyle.ink)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -126,9 +133,16 @@ struct PDFLibraryView: View {
 
                     HStack(spacing: 8) {
                         Button("Corrigir metadados", systemImage: "pencil") {
-                            errorMessage = "A edição de metadados estará disponível junto à indexação por passagem."
+                            metadataRecord = selectedRecord
                         }
                         .buttonStyle(.bordered)
+                        if selectedRecord.metadataOverrides != nil {
+                            Button("Usar dados do PDF", systemImage: "arrow.uturn.backward") {
+                                resetMetadata(for: selectedRecord)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Descartar as correções e voltar aos metadados do arquivo")
+                        }
                         Button("Abrir no leitor", systemImage: "book") {
                             openInReader(selectedRecord, page: 1)
                         }
@@ -179,11 +193,11 @@ struct PDFLibraryView: View {
         HStack(spacing: 11) {
             coverImage(record, width: 43, height: 59)
             VStack(alignment: .leading, spacing: 3) {
-                Text(record.title)
+                Text(record.displayTitle)
                     .font(PrototypeStyle.serif(16, weight: .semibold))
                     .foregroundStyle(PrototypeStyle.ink)
                     .multilineTextAlignment(.leading)
-                Text([record.author, "\(record.pageCount) p."].compactMap { $0 }.joined(separator: " · "))
+                Text([record.displayAuthor, "\(record.pageCount) p."].compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).lineLimit(1)
                 Text(record.copyLabel ?? (record.sections?.isEmpty == false ? "\(record.sections?.count ?? 0) seções" : (record.bookmarkCount > 0 ? "\(record.bookmarkCount) bookmarks" : "sem sumário")))
                     .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
@@ -247,7 +261,7 @@ struct PDFLibraryView: View {
             if let image = PDFLibraryCoverCache.image(for: record) {
                 Image(nsImage: image).resizable().scaledToFill()
             } else {
-                Rectangle().fill(coverColor(record.title))
+                Rectangle().fill(coverColor(record.displayTitle))
             }
         }
         .frame(width: width, height: height)
@@ -257,7 +271,7 @@ struct PDFLibraryView: View {
     }
 
     private func metadataLine(for record: PDFLibraryRecord) -> String {
-        let credits = [record.author, record.copyLabel].compactMap { $0 }
+        let credits = record.displayCredits
         return credits.isEmpty
             ? "\(record.pageCount) páginas físicas"
             : "\(credits.joined(separator: " · ")) · \(record.pageCount) páginas físicas"
@@ -265,7 +279,7 @@ struct PDFLibraryView: View {
 
     private func openInReader(_ record: PDFLibraryRecord, page: Int, reference: String? = nil) {
         guard readerSession.openPDF(
-            title: record.title,
+            title: record.displayTitle,
             path: record.path,
             page: page,
             reference: reference,
@@ -325,6 +339,21 @@ struct PDFLibraryView: View {
         index(paths: records.map(\.path), replacingAll: true)
     }
 
+    private func saveMetadata(_ metadata: PDFLibraryMetadataOverrides, for record: PDFLibraryRecord) {
+        guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
+        records[index].metadataOverrides = metadata
+        records.sort { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
+        persistRecords()
+        metadataRecord = nil
+    }
+
+    private func resetMetadata(for record: PDFLibraryRecord) {
+        guard let index = records.firstIndex(where: { $0.id == record.id }) else { return }
+        records[index].metadataOverrides = nil
+        records.sort { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
+        persistRecords()
+    }
+
     private func index(paths: [String], replacingAll: Bool) {
         guard !isIndexing, !paths.isEmpty else { return }
         isIndexing = true
@@ -332,13 +361,17 @@ struct PDFLibraryView: View {
             let indexed = await Task.detached(priority: .utility) {
                 paths.compactMap { PDFLibraryIndexer.index(path: $0) }
             }.value
-            let indexedByPath = Dictionary(uniqueKeysWithValues: indexed.map { ($0.path, $0) })
+            let previousByPath = Dictionary(uniqueKeysWithValues: records.map { ($0.path, $0) })
+            let indexedByPath = Dictionary(uniqueKeysWithValues: indexed.map { record in
+                let refreshed = record.preservingMetadata(from: previousByPath[record.path])
+                return (refreshed.path, refreshed)
+            })
             if replacingAll {
                 records = records.map { indexedByPath[$0.path] ?? $0 }
             } else {
                 records.append(contentsOf: indexed)
             }
-            records.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            records.sort { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
             selectedID = selectedID ?? records.first?.id
             persistRecords()
             isIndexing = false
@@ -347,6 +380,100 @@ struct PDFLibraryView: View {
 
     private func persistRecords() {
         savedRecords = (try? JSONEncoder().encode(records)) ?? Data()
+    }
+}
+
+private struct PDFLibraryMetadataEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var metadata: PDFLibraryMetadataOverrides
+
+    let record: PDFLibraryRecord
+    let onSave: (PDFLibraryMetadataOverrides) -> Void
+
+    init(record: PDFLibraryRecord, onSave: @escaping (PDFLibraryMetadataOverrides) -> Void) {
+        self.record = record
+        self.onSave = onSave
+        _metadata = State(initialValue: PDFLibraryMetadataOverrides(record: record))
+    }
+
+    private var hasTitle: Bool {
+        !metadata.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Corrigir metadados")
+                    .font(PrototypeStyle.serif(21, weight: .semibold))
+                    .foregroundStyle(PrototypeStyle.ink)
+            }
+            .padding(.bottom, 19)
+
+            Divider()
+
+            VStack(spacing: 11) {
+                metadataField("Título", text: $metadata.title)
+                metadataField("Autor", text: $metadata.author)
+                metadataField("Editora", text: $metadata.publisher)
+                HStack(spacing: 12) {
+                    metadataField("Ano", text: $metadata.year)
+                    metadataField("Volume", text: $metadata.volume)
+                }
+                HStack(spacing: 12) {
+                    metadataField("Edição", text: $metadata.edition)
+                    metadataField("Idioma", text: $metadata.language)
+                }
+            }
+            .padding(.vertical, 18)
+
+            Spacer(minLength: 0)
+            Divider()
+            HStack {
+                Text(URL(fileURLWithPath: record.path).lastPathComponent)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 12)
+                Button("Cancelar") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Salvar metadados") {
+                    onSave(cleanedMetadata)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(PrototypeStyle.green)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!hasTitle)
+            }
+            .padding(.top, 14)
+        }
+        .padding(24)
+        .background(PrototypeStyle.paper)
+    }
+
+    private var cleanedMetadata: PDFLibraryMetadataOverrides {
+        func clean(_ value: String) -> String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return PDFLibraryMetadataOverrides(
+            title: clean(metadata.title),
+            author: clean(metadata.author),
+            publisher: clean(metadata.publisher),
+            year: clean(metadata.year),
+            volume: clean(metadata.volume),
+            edition: clean(metadata.edition),
+            language: clean(metadata.language)
+        )
+    }
+
+    private func metadataField(_ title: String, text: Binding<String>) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(PrototypeStyle.muted)
+                .frame(width: 74, alignment: .leading)
+            TextField(title, text: text)
+                .textFieldStyle(.roundedBorder)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

@@ -88,6 +88,57 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertFalse(PDFLibraryIndexer.requiresReindex(legacyBookmarked))
     }
 
+    func testLegacyLibraryRecordsDecodeWithoutMetadataOverrides() throws {
+        let json = #"{"id":"legacy","title":"Book title","path":"/tmp/book.pdf","pageCount":20,"bookmarkCount":3}"#
+        let record = try JSONDecoder().decode(PDFLibraryRecord.self, from: Data(json.utf8))
+
+        XCTAssertNil(record.metadataOverrides)
+        XCTAssertEqual(record.displayTitle, "Book title")
+        XCTAssertNil(record.displayAuthor)
+    }
+
+    func testManualMetadataSurvivesReindexAndPersistence() throws {
+        let metadata = PDFLibraryMetadataOverrides(
+            title: "Matthew for Everyone, Part 2",
+            author: "N. T. Wright",
+            publisher: "SPCK",
+            year: "2004",
+            volume: "Part 2",
+            edition: "",
+            language: "English"
+        )
+        let previous = PDFLibraryRecord(
+            id: "book",
+            title: "Feasting on the Word: Year A, Volume 4",
+            path: "/tmp/book.pdf",
+            pageCount: 242,
+            bookmarkCount: 60,
+            sections: [],
+            indexVersion: 3,
+            metadataOverrides: metadata
+        )
+        let indexed = PDFLibraryRecord(
+            id: "book",
+            title: "Feasting on the Word: Year A, Volume 4",
+            path: "/tmp/book.pdf",
+            pageCount: 243,
+            bookmarkCount: 60,
+            sections: [],
+            indexVersion: 3
+        )
+
+        let refreshed = indexed.preservingMetadata(from: previous)
+        let decoded = try JSONDecoder().decode(
+            PDFLibraryRecord.self,
+            from: JSONEncoder().encode(refreshed)
+        )
+
+        XCTAssertEqual(decoded.displayTitle, "Matthew for Everyone, Part 2")
+        XCTAssertEqual(decoded.displayCredits, ["N. T. Wright", "SPCK", "2004", "Part 2", "English"])
+        XCTAssertEqual(decoded.pageCount, 243)
+        XCTAssertTrue(PDFLibraryIndexer.requiresReindex(decoded), "Indexing must classify by the PDF-derived title, not the user override")
+    }
+
     func testLegacyBookmarkMethodBackfillPreservesKnownOrigins() throws {
         let legacyJSON = #"{"title":"Romans 13:8-14","startPage":102,"endPage":107,"context":null}"#
         let legacy = try JSONDecoder().decode(PDFSectionLocation.self, from: Data(legacyJSON.utf8))
