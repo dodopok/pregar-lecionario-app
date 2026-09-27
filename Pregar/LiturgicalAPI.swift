@@ -66,10 +66,30 @@ struct BiblePassageText: Decodable, Sendable {
     let content: String?
 }
 
+struct BibleVersePosition: Hashable, Comparable, Identifiable, Sendable {
+    let chapter: Int?
+    let number: Int
+
+    var id: String { "\(chapter.map(String.init) ?? "?"):\(number)" }
+
+    static func < (lhs: BibleVersePosition, rhs: BibleVersePosition) -> Bool {
+        let leftChapter = lhs.chapter ?? Int.min
+        let rightChapter = rhs.chapter ?? Int.min
+        if leftChapter != rightChapter { return leftChapter < rightChapter }
+        return lhs.number < rhs.number
+    }
+}
+
 struct BibleVerse: Decodable, Identifiable, Sendable {
+    let chapter: Int?
     let number: Int
     let text: String
-    var id: Int { number }
+
+    var id: BibleVersePosition { position(fallbackChapter: nil) }
+
+    func position(fallbackChapter: Int?) -> BibleVersePosition {
+        BibleVersePosition(chapter: chapter ?? fallbackChapter, number: number)
+    }
 }
 
 struct BibleVersion: Decodable, Equatable, Identifiable, Sendable {

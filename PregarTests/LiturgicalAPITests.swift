@@ -82,6 +82,34 @@ final class LiturgicalAPITests: XCTestCase {
         XCTAssertEqual(captured?.value(forHTTPHeaderField: "X-API-Key"), "test-api-key")
     }
 
+    func testBibleVersePositionsKeepRepeatedNumbersInDifferentChaptersDistinct() {
+        let firstChapterVerse = BibleVerse(chapter: 3, number: 1, text: "Primeiro capítulo")
+        let nextChapterVerse = BibleVerse(chapter: 4, number: 1, text: "Capítulo seguinte")
+        let legacyVerse = BibleVerse(chapter: nil, number: 16, text: "Resposta antiga")
+
+        XCTAssertNotEqual(firstChapterVerse.id, nextChapterVerse.id)
+        XCTAssertEqual([nextChapterVerse.id, firstChapterVerse.id].sorted(), [firstChapterVerse.id, nextChapterVerse.id])
+        XCTAssertEqual(firstChapterVerse.position(fallbackChapter: nil).id, "3:1")
+        XCTAssertEqual(legacyVerse.position(fallbackChapter: 3).id, "3:16")
+    }
+
+    func testCrossChapterBibleReferenceRetainsItsEndingChapter() throws {
+        let reference = try XCTUnwrap(ScriptureReference.parse("João 3:16-4:1"))
+
+        XCTAssertEqual(reference.chapter, 3)
+        XCTAssertEqual(reference.endChapter, 4)
+        XCTAssertEqual(reference.endVerse, 1)
+    }
+
+    func testBibleVerseDecodingAcceptsChapterAndOlderResponsesWithoutIt() throws {
+        let decoder = JSONDecoder()
+        let current = try decoder.decode(BibleVerse.self, from: Data(#"{"chapter":3,"number":16,"text":"Texto"}"#.utf8))
+        let older = try decoder.decode(BibleVerse.self, from: Data(#"{"number":16,"text":"Texto"}"#.utf8))
+
+        XCTAssertEqual(current.chapter, 3)
+        XCTAssertNil(older.chapter)
+    }
+
     func testPrayerBookCatalogLoadsVisualMetadataFromTheAuthenticatedAPI() async throws {
         var captured: URLRequest?
         CatalogStubURLProtocol.setHandler { request in

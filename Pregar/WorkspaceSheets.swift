@@ -76,14 +76,37 @@ struct BibleComparisonView: View {
         availableVersions.filter { !displayedVersionCodes.contains($0.code) }
     }
 
-    private var verseNumbers: [Int] {
-        let numbers = displayedVersionCodes.flatMap { code in
-            passages[passageKey(for: code)]?.verses?.map(\.number) ?? []
+    private var requestedScripture: ScriptureReference? {
+        ScriptureReference.parse(requestReference)
+    }
+
+    private var spansMultipleChapters: Bool {
+        guard let requestedScripture else { return false }
+        return (requestedScripture.endChapter ?? requestedScripture.chapter) != requestedScripture.chapter
+    }
+
+    private var fallbackChapter: Int? {
+        spansMultipleChapters ? nil : requestedScripture?.chapter
+    }
+
+    private var chapterCoordinatesUnavailable: Bool {
+        guard spansMultipleChapters, !isLoading else { return false }
+        return displayedVersionCodes.contains { code in
+            guard let passage = passages[passageKey(for: code)] else { return false }
+            guard let verses = passage.verses, !verses.isEmpty else { return true }
+            return verses.contains { $0.chapter == nil }
         }
-        if !numbers.isEmpty { return Array(Set(numbers)).sorted() }
+    }
+
+    private var versePositions: [BibleVersePosition] {
+        guard !chapterCoordinatesUnavailable else { return [] }
+        let positions = displayedVersionCodes.flatMap { code in
+            passages[passageKey(for: code)]?.verses?.map { $0.position(fallbackChapter: fallbackChapter) } ?? []
+        }
+        if !positions.isEmpty { return Array(Set(positions)).sorted() }
         return displayedVersionCodes.contains { code in
             !(passages[passageKey(for: code)]?.content?.isEmpty ?? true)
-        } ? [0] : []
+        } ? [BibleVersePosition(chapter: fallbackChapter, number: 0)] : []
     }
 
     var body: some View {
@@ -181,15 +204,21 @@ struct BibleComparisonView: View {
                         }
                         .background(PrototypeStyle.canvas)
 
-                        if verseNumbers.isEmpty {
+                        if versePositions.isEmpty {
                             VStack(spacing: 10) {
                                 if isLoading {
                                     ProgressView().controlSize(.small).tint(accent)
                                 } else {
                                     Image(systemName: "text.book.closed").foregroundStyle(PrototypeStyle.muted)
                                 }
-                                Text(isLoading ? "Carregando as traduções…" : (errorMessage ?? "Nenhum texto disponível para esta referência."))
+                                Text(isLoading
+                                     ? "Carregando as traduções…"
+                                     : (chapterCoordinatesUnavailable
+                                        ? "A resposta da Estêvão API não informa o capítulo de cada versículo. Atualize a API para comparar referências entre capítulos."
+                                        : (errorMessage ?? "Nenhum texto disponível para esta referência.")))
                                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: 520)
                                 if !isLoading {
                                     Button("Tentar novamente") { Task { await loadPassages() } }
                                         .buttonStyle(.bordered)
@@ -197,10 +226,10 @@ struct BibleComparisonView: View {
                             }
                             .frame(maxWidth: .infinity, minHeight: 150)
                         } else {
-                            ForEach(verseNumbers, id: \.self) { number in
+                            ForEach(versePositions) { position in
                                 HStack(alignment: .top, spacing: 0) {
                                     ForEach(displayedVersionCodes, id: \.self) { version in
-                                        verseCell(version: version, number: number, width: columnWidth)
+                                        verseCell(version: version, position: position, width: columnWidth)
                                             .overlay(alignment: .trailing) { Rectangle().fill(PrototypeStyle.line).frame(width: 1) }
                                     }
                                 }
@@ -288,15 +317,17 @@ struct BibleComparisonView: View {
         }
     }
 
-    private func verseCell(version: String, number: Int, width: CGFloat) -> some View {
+    private func verseCell(version: String, position: BibleVersePosition, width: CGFloat) -> some View {
         let passage = passages[passageKey(for: version)]
-        let text = number == 0 ? passage?.content : passage?.verses?.first(where: { $0.number == number })?.text
+        let text = position.number == 0
+            ? passage?.content
+            : passage?.verses?.first(where: { $0.position(fallbackChapter: fallbackChapter) == position })?.text
         return HStack(alignment: .top, spacing: 13) {
-            if number > 0 {
-                Text("\(number)")
+            if position.number > 0 {
+                Text(verseLabel(position))
                     .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
                     .foregroundStyle(accent)
-                    .frame(width: 18, alignment: .trailing)
+                    .frame(width: spansMultipleChapters ? 34 : 18, alignment: .trailing)
             }
             if let text {
                 Text(text)
@@ -318,6 +349,11 @@ struct BibleComparisonView: View {
         .frame(width: width, alignment: .leading)
         .frame(minHeight: 62, alignment: .topLeading)
         .background(PrototypeStyle.paper)
+    }
+
+    private func verseLabel(_ position: BibleVersePosition) -> String {
+        guard spansMultipleChapters, let chapter = position.chapter else { return "\(position.number)" }
+        return "\(chapter):\(position.number)"
     }
 
     @MainActor
