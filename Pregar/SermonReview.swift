@@ -84,6 +84,39 @@ struct SermonReviewFinding: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+enum SermonReviewValidationFailure: Error, Hashable, Sendable {
+    case invalidFields
+    case scope
+    case manuscriptAnchor
+    case sourceEvidence
+    case orthography
+
+    var displayName: String {
+        switch self {
+        case .invalidFields: "critério ou formato"
+        case .scope: "escopo"
+        case .manuscriptAnchor: "citação do manuscrito"
+        case .sourceEvidence: "evidência da fonte"
+        case .orthography: "correção ortográfica"
+        }
+    }
+}
+
+struct SermonAIReviewResult: Sendable {
+    let findings: [SermonReviewFinding]
+    let rejectedFindingCount: Int
+    let rejectionReasons: [SermonReviewValidationFailure]
+
+    var validationNotice: String? {
+        guard rejectedFindingCount > 0 else { return nil }
+        let count = rejectedFindingCount
+        let subject = count == 1 ? "1 apontamento foi ocultado" : "\(count) apontamentos foram ocultados"
+        let reasons = Set(rejectionReasons.map(\.displayName)).sorted().joined(separator: ", ")
+        let reason = reasons.isEmpty ? "" : " (\(reasons))"
+        return "\(subject) após a validação local\(reason). Nenhum texto rejeitado foi exibido."
+    }
+}
+
 struct SermonReviewReport: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let createdAt: Date
@@ -95,6 +128,7 @@ struct SermonReviewReport: Codable, Equatable, Identifiable, Sendable {
     let manuscriptFingerprint: String
     let criteria: [SermonReviewCriterion]
     var findings: [SermonReviewFinding]
+    var validationNotice: String? = nil
 
     var isEmpty: Bool { findings.isEmpty }
 
@@ -166,7 +200,6 @@ enum SermonReviewError: LocalizedError {
     case contextTooLarge
     case provider(status: Int)
     case unreadableResponse
-    case invalidFinding
 
     var errorDescription: String? {
         switch self {
@@ -177,7 +210,6 @@ enum SermonReviewError: LocalizedError {
         case .contextTooLarge: "O conjunto selecionado excede o limite desta revisão. Desmarque alguns materiais e tente novamente."
         case let .provider(status): "O provedor recusou a revisão (HTTP \(status)). Verifique a chave, o modelo e os limites da conta."
         case .unreadableResponse: "A resposta do provedor não pôde ser validada. Nenhuma observação foi exibida."
-        case .invalidFinding: "A resposta estruturada chegou, mas um apontamento não passou na validação de referência e escopo. Nenhuma observação foi exibida."
         }
     }
 }
@@ -190,7 +222,7 @@ struct SermonAIReviewClient {
         context: SermonReviewContext,
         sources: [SermonReviewSource],
         configuration: SermonReviewConfiguration
-    ) async throws -> [SermonReviewFinding] {
+    ) async throws -> SermonAIReviewResult {
         guard !context.manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw SermonReviewError.emptyManuscript
         }
@@ -216,7 +248,20 @@ struct SermonAIReviewClient {
         }
 
         let sourceByID = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0) })
-        return try payload.findings.map { try Self.validate($0, context: context, sourceByID: sourceByID) }
+        var findings: [SermonReviewFinding] = []
+        var rejected: [SermonReviewValidationFailure: Int] = [:]
+        for item in payload.findings {
+            do {
+                findings.append(try Self.validate(item, context: context, sourceByID: sourceByID))
+            } catch let failure as SermonReviewValidationFailure {
+                rejected[failure, default: 0] += 1
+            }
+        }
+        return SermonAIReviewResult(
+            findings: findings,
+            rejectedFindingCount: rejected.values.reduce(0, +),
+            rejectionReasons: rejected.keys.sorted { $0.displayName < $1.displayName }
+        )
     }
 
     static func makeRequest(
@@ -359,19 +404,23 @@ struct SermonAIReviewClient {
               context.criteria.contains(criterion),
               let severity = SermonReviewSeverity(rawValue: item.severity),
               !item.observation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              item.observation.count <= 800,
-              !AIReviewPrompt.containsForbiddenSuggestion(item.observation) else {
-            throw SermonReviewError.invalidFinding
+              item.observation.count <= 800 else {
+            throw SermonReviewValidationFailure.invalidFields
+        }
+        guard !AIReviewPrompt.containsForbiddenSuggestion(item.observation) else {
+            throw SermonReviewValidationFailure.scope
         }
 
         let quote = item.manuscriptQuote.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !quote.isEmpty && !Self.containsExact(quote, in: context.manuscript) { throw SermonReviewError.invalidFinding }
+        if !quote.isEmpty && !Self.containsExact(quote, in: context.manuscript) {
+            throw SermonReviewValidationFailure.manuscriptAnchor
+        }
         if criterion == .spelling {
             guard !quote.isEmpty,
                   item.correction.range(of: #"^[\p{L}\p{M}][\p{L}\p{M}'’\-]*$"#, options: .regularExpression) != nil,
-                  item.correction.count <= 64 else { throw SermonReviewError.invalidFinding }
+                  item.correction.count <= 64 else { throw SermonReviewValidationFailure.orthography }
         } else if !item.correction.isEmpty {
-            throw SermonReviewError.invalidFinding
+            throw SermonReviewValidationFailure.orthography
         }
 
         var sourceTitle: String?
@@ -383,13 +432,13 @@ struct SermonAIReviewClient {
                   !evidence.isEmpty,
                   Self.containsExact(evidence, in: source.text),
                   ["contradiction", "tension", "unsupported", "interpretive"].contains(item.classification) else {
-                throw SermonReviewError.invalidFinding
+                throw SermonReviewValidationFailure.sourceEvidence
             }
             sourceTitle = source.title
             sourceCitation = source.citation
         } else {
             evidence = ""
-            guard item.evidenceSourceID.isEmpty else { throw SermonReviewError.invalidFinding }
+            guard item.evidenceSourceID.isEmpty else { throw SermonReviewValidationFailure.sourceEvidence }
             let allowed: String
             switch criterion {
             case .spelling: allowed = "spelling"
@@ -398,12 +447,14 @@ struct SermonAIReviewClient {
             case .tone: allowed = "tone"
             case .fidelity: allowed = ""
             }
-            guard item.classification == allowed else { throw SermonReviewError.invalidFinding }
+            guard item.classification == allowed else { throw SermonReviewValidationFailure.invalidFields }
         }
 
-        if criterion != .spelling && !quote.isEmpty && quote.count > 420 { throw SermonReviewError.invalidFinding }
+        if criterion != .spelling && !quote.isEmpty && quote.count > 420 {
+            throw SermonReviewValidationFailure.manuscriptAnchor
+        }
         if [SermonReviewCriterion.spelling, .fidelity].contains(criterion) && quote.isEmpty {
-            throw SermonReviewError.invalidFinding
+            throw SermonReviewValidationFailure.manuscriptAnchor
         }
         return SermonReviewFinding(
             criterion: criterion,

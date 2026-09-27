@@ -75,7 +75,7 @@ Não incluir campos para reescrita, frase sugerida, aplicação alternativa ou c
 
 As APIs oferecem mecanismos de saída estruturada: [OpenAI](https://developers.openai.com/api/docs/guides/structured-outputs), [Claude](https://platform.claude.com/docs/en/build-with-claude/structured-outputs), [Gemini](https://ai.google.dev/gemini-api/docs/structured-output) e [Perplexity](https://docs.perplexity.ai/docs/agent-api/building-agents/shape-output). Cada integração deve converter o mesmo contrato para o formato suportado, sem presumir que todos usam os mesmos parâmetros.
 
-Validar o resultado antes de apresentá-lo: critério conhecido, ligação existente no manuscrito, fonte incluída, citação realmente presente e resposta concluída. Um esquema válido não garante correção teológica nem ausência de sugestões disfarçadas; essas propriedades exigem avaliação de conteúdo. Respostas incompletas ou inválidas não devem parecer revisões concluídas.
+Validar cada resultado antes de apresentá-lo: critério conhecido, ligação existente no manuscrito, fonte incluída, citação realmente presente e resposta concluída. Um esquema válido não garante correção teológica nem ausência de sugestões disfarçadas; essas propriedades exigem avaliação de conteúdo. Apontamentos inválidos são ocultados individualmente; os válidos podem ser apresentados junto de um aviso que informa somente contagem e categorias fixas, nunca o texto rejeitado. JSON incompleto ou ilegível não vira uma revisão concluída.
 
 ## 6. Critérios de tom
 

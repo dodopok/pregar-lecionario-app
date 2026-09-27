@@ -515,11 +515,29 @@ struct ReviewRequestSheet: View {
                     .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
             }
             if report.isEmpty {
-                ContentUnavailableView("Nenhuma observação", systemImage: "checkmark.circle", description: Text("Não encontrei apontamentos fundamentados nos critérios escolhidos."))
+                if let validationNotice = report.validationNotice {
+                    ContentUnavailableView(
+                        "Nenhuma observação verificável",
+                        systemImage: "exclamationmark.shield",
+                        description: Text(validationNotice)
+                    )
                     .frame(minHeight: 150)
+                } else {
+                    ContentUnavailableView(
+                        "Nenhuma observação",
+                        systemImage: "checkmark.circle",
+                        description: Text("Não encontrei apontamentos fundamentados nos critérios escolhidos.")
+                    )
+                    .frame(minHeight: 150)
+                }
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
+                        if let validationNotice = report.validationNotice {
+                            Label(validationNotice, systemImage: "checkmark.shield")
+                                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         ForEach(report.findings) { finding in
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
@@ -591,7 +609,7 @@ struct ReviewRequestSheet: View {
                 manuscript: context.manuscript,
                 criteria: criteria
             )
-            let findings = try await SermonAIReviewClient().review(
+            let result = try await SermonAIReviewClient().review(
                 context: requestContext,
                 sources: sources,
                 configuration: SermonReviewConfiguration(
@@ -610,7 +628,8 @@ struct ReviewRequestSheet: View {
                 model: aiSettings.reviewModel,
                 manuscriptFingerprint: SermonReviewReport.fingerprint(context.manuscript),
                 criteria: criteria,
-                findings: findings
+                findings: result.findings,
+                validationNotice: result.validationNotice
             )
             do {
                 _ = try await SermonReviewReportStore.shared.save(completed)

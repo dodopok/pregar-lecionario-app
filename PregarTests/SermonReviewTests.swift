@@ -20,14 +20,15 @@ final class SermonReviewTests: XCTestCase {
                 return (200, Self.responseData("{\"findings\":[]}", provider: provider))
             }
             let session = stubSession()
-            let findings = try await SermonAIReviewClient(session: session).review(
+            let result = try await SermonAIReviewClient(session: session).review(
                 context: context,
                 sources: [source],
                 configuration: providerConfiguration
             )
             session.invalidateAndCancel()
 
-            XCTAssertTrue(findings.isEmpty)
+            XCTAssertTrue(result.findings.isEmpty)
+            XCTAssertEqual(result.rejectedFindingCount, 0)
             let request = try XCTUnwrap(captured)
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.url?.host, Self.expectedHost(for: provider))
@@ -84,21 +85,22 @@ final class SermonReviewTests: XCTestCase {
         let json = #"{"findings":[{"criterion":"fidelity","severity":"attention","manuscript_quote":"A promessa parece distante.","observation":"A passagem citada registra que Jesus chorou, sem explicitar a afirmação do manuscrito.","correction":"","classification":"unsupported","evidence_source_id":"bible:nvt","evidence_quote":"Jesus chorou."}]}"#
         ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .perplexity)) }
         let session = stubSession()
-        let findings = try await SermonAIReviewClient(session: session).review(
+        let result = try await SermonAIReviewClient(session: session).review(
             context: reviewContext(criteria: [.fidelity], manuscript: "A promessa parece distante."),
             sources: [bibleSource()],
             configuration: configuration(for: .perplexity)
         )
 
-        XCTAssertEqual(findings.count, 1)
-        XCTAssertEqual(findings[0].criterion, .fidelity)
-        XCTAssertEqual(findings[0].manuscriptQuote, "A promessa parece distante.")
-        XCTAssertEqual(findings[0].evidenceQuote, "Jesus chorou.")
-        XCTAssertEqual(findings[0].evidenceSourceTitle, "NVT")
+        XCTAssertEqual(result.findings.count, 1)
+        XCTAssertEqual(result.findings[0].criterion, .fidelity)
+        XCTAssertEqual(result.findings[0].manuscriptQuote, "A promessa parece distante.")
+        XCTAssertEqual(result.findings[0].evidenceQuote, "Jesus chorou.")
+        XCTAssertEqual(result.findings[0].evidenceSourceTitle, "NVT")
+        XCTAssertNil(result.validationNotice)
         session.invalidateAndCancel()
     }
 
-    func testRejectsFindingsWithUnverifiableQuotesOrSuggestionLanguage() async throws {
+    func testFiltersFindingsWithUnverifiableQuotesOrSuggestionLanguage() async throws {
         let cases = [
             #"{"findings":[{"criterion":"fidelity","severity":"attention","manuscript_quote":"frase inventada","observation":"A afirmação não aparece no trecho.","correction":"","classification":"unsupported","evidence_source_id":"bible:nvt","evidence_quote":"Jesus chorou."}]}"#,
             #"{"findings":[{"criterion":"structure","severity":"attention","manuscript_quote":"MANUSCRITO_PRIVADO","observation":"Sugiro reescrever o início.","correction":"","classification":"structure","evidence_source_id":"","evidence_quote":""}]}"#
@@ -107,34 +109,51 @@ final class SermonReviewTests: XCTestCase {
         for json in cases {
             ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .openAI)) }
             let session = stubSession()
-            do {
-                _ = try await SermonAIReviewClient(session: session).review(
-                    context: reviewContext(criteria: [.fidelity, .structure]),
-                    sources: [bibleSource()],
-                    configuration: configuration(for: .openAI)
-                )
-                XCTFail("Uma resposta fora do contrato não deve aparecer como revisão válida.")
-            } catch let error as SermonReviewError {
-                guard case .invalidFinding = error else { return XCTFail("Erro inesperado: \(error)") }
-            }
+            let result = try await SermonAIReviewClient(session: session).review(
+                context: reviewContext(criteria: [.fidelity, .structure]),
+                sources: [bibleSource()],
+                configuration: configuration(for: .openAI)
+            )
+
+            XCTAssertTrue(result.findings.isEmpty)
+            XCTAssertEqual(result.rejectedFindingCount, 1)
+            XCTAssertNotNil(result.validationNotice)
             session.invalidateAndCancel()
         }
+    }
+
+    func testKeepsValidFindingsAndReportsOnlyTheCountOfRejectedContent() async throws {
+        let json = #"{"findings":[{"criterion":"structure","severity":"note","manuscript_quote":"O início apresenta a tese.","observation":"A tese aparece antes de o contexto que a sustenta ser apresentado.","correction":"","classification":"structure","evidence_source_id":"","evidence_quote":""},{"criterion":"structure","severity":"attention","manuscript_quote":"O início apresenta a tese.","observation":"Sugiro reescrever o início.","correction":"","classification":"structure","evidence_source_id":"","evidence_quote":""}]}"#
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .perplexity)) }
+        let session = stubSession()
+        let result = try await SermonAIReviewClient(session: session).review(
+            context: reviewContext(criteria: [.structure], manuscript: "O início apresenta a tese. Depois o texto a desenvolve."),
+            sources: [],
+            configuration: configuration(for: .perplexity)
+        )
+
+        XCTAssertEqual(result.findings.count, 1)
+        XCTAssertEqual(result.findings[0].observation, "A tese aparece antes de o contexto que a sustenta ser apresentado.")
+        XCTAssertEqual(result.rejectedFindingCount, 1)
+        XCTAssertTrue(result.validationNotice?.contains("escopo") == true)
+        XCTAssertFalse(result.validationNotice?.contains("Sugiro reescrever") == true)
+        session.invalidateAndCancel()
     }
 
     func testOrthographyMayReturnOnlyOneCorrectedWord() async throws {
         let json = #"{"findings":[{"criterion":"spelling","severity":"attention","manuscript_quote":"excessão","observation":"A grafia desta palavra não corresponde à forma padrão.","correction":"exceção","classification":"spelling","evidence_source_id":"","evidence_quote":""}]}"#
         ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .anthropic)) }
         let session = stubSession()
-        let findings = try await SermonAIReviewClient(session: session).review(
+        let result = try await SermonAIReviewClient(session: session).review(
             context: reviewContext(criteria: [.spelling], manuscript: "A excessão confirma a regra."),
             sources: [],
             configuration: configuration(for: .anthropic)
         )
 
-        XCTAssertEqual(findings.count, 1)
-        XCTAssertEqual(findings[0].manuscriptQuote, "excessão")
-        XCTAssertEqual(findings[0].correction, "exceção")
-        XCTAssertNil(findings[0].evidenceSourceTitle)
+        XCTAssertEqual(result.findings.count, 1)
+        XCTAssertEqual(result.findings[0].manuscriptQuote, "excessão")
+        XCTAssertEqual(result.findings[0].correction, "exceção")
+        XCTAssertNil(result.findings[0].evidenceSourceTitle)
         session.invalidateAndCancel()
     }
 
@@ -269,18 +288,26 @@ final class SermonReviewTests: XCTestCase {
             model: "gpt-6-sol",
             manuscriptFingerprint: SermonReviewReport.fingerprint(manuscript),
             criteria: [.spelling],
-            findings: [finding]
+            findings: [finding],
+            validationNotice: "1 apontamento foi ocultado após a validação local (escopo). Nenhum texto rejeitado foi exibido."
         )
         let store = SermonReviewReportStore(directory: directory)
         _ = try await store.save(report)
         let loaded = try await SermonReviewReportStore(directory: directory).reports(for: "2026-10-04")
 
         XCTAssertEqual(loaded, [report])
+        XCTAssertEqual(loaded[0].validationNotice, report.validationNotice)
         XCTAssertFalse(loaded[0].isStale(manuscript: manuscript, mainReference: "Mateus 21.33-46"))
         XCTAssertFalse(loaded[0].isStale(manuscript: manuscript, mainReference: ""))
         XCTAssertTrue(loaded[0].isStale(manuscript: manuscript + " mudou", mainReference: "Mateus 21.33-46"))
         let persisted = try Data(contentsOf: directory.appendingPathComponent("2026-10-04.json"))
         XCTAssertFalse(String(decoding: persisted, as: UTF8.self).contains(manuscript))
+
+        var legacyPayload = try XCTUnwrap(JSONSerialization.jsonObject(with: persisted) as? [[String: Any]])
+        legacyPayload[0].removeValue(forKey: "validationNotice")
+        let legacyData = try JSONSerialization.data(withJSONObject: legacyPayload)
+        let legacyReports = try JSONDecoder().decode([SermonReviewReport].self, from: legacyData)
+        XCTAssertNil(legacyReports[0].validationNotice)
     }
 
     private func reviewContext(

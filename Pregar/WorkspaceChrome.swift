@@ -1171,6 +1171,11 @@ struct ResourceContextPanel: View {
                     if stale { Text("· texto alterado").foregroundStyle(.orange) }
                 }
                 .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                if let validationNotice = report.validationNotice {
+                    Label(validationNotice, systemImage: "checkmark.shield")
+                        .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 ForEach(SermonReviewCriterion.allCases) { criterion in
                     HStack {
                         Text(criterion.title).font(.system(size: 12))
