@@ -49,10 +49,17 @@ final class FavoriteSiteSearchTests: XCTestCase {
             language: "português",
             adapter: .wordpress,
             searchURLTemplate: "https://example.org/?s={query}",
-            tradition: "Anglicana · ACNA"
+            tradition: "Anglicana (ACNA)"
+        )
+        XCTAssertEqual(
+            custom.editorialContext,
+            "Comentários · Tradição/jurisdição: Anglicana (ACNA) · Idioma: português"
         )
         let restored = try JSONDecoder().decode(FavoriteSite.self, from: JSONEncoder().encode(custom))
         XCTAssertEqual(restored, custom)
+
+        XCTAssertTrue(FavoriteSite.anglicanCompass.editorialContext.contains("Recursos anglicanos · ACNA"))
+        XCTAssertTrue(FavoriteSite.anglicanCompass.editorialContext.contains("Idioma: inglês"))
 
         let olderProfile = Data("""
         {"id":"older","title":"Site antigo","baseURL":"https://example.org","detail":"Comentários","language":"inglês","adapter":"wordpress","searchURLTemplate":"https://example.org/?s={query}"}

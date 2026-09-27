@@ -38,6 +38,18 @@ struct FavoriteSite: Codable, Equatable, Identifiable, Sendable {
 
     var rawValue: String { id }
     var hasStructuredSearch: Bool { adapter != .websiteSearch && adapter != .workingPreacherArchive }
+    var editorialContext: String {
+        let cleanDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTradition = tradition.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanLanguage = language.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [
+            cleanDetail.isEmpty ? nil : cleanDetail,
+            cleanTradition.isEmpty ? nil : "Tradição/jurisdição: \(cleanTradition)",
+            cleanLanguage.isEmpty ? nil : "Idioma: \(cleanLanguage)"
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+    }
     var usesAnglicanCompassDestination: Bool {
         adapter == .anglicanCompass && Self.usesBuiltInDestination(for: self, defaultSite: .anglicanCompass)
     }

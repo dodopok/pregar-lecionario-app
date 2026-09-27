@@ -779,15 +779,12 @@ struct ResourceContextPanel: View {
                     .frame(width: 15)
                     .padding(.top, 2)
                 VStack(alignment: .leading, spacing: 2) {
-                    let contextDetails = [
-                        site.usesAnglicanCompassDestination
-                            ? FavoriteSourceURLs.anglicanCompassDetail(occasion: occasion, date: liturgicalDate, isSunday: isSunday)
-                            : site.detail,
-                        site.tradition,
-                        site.language
-                    ]
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
+                    let destinationContext = site.usesAnglicanCompassDestination
+                        ? FavoriteSourceURLs.anglicanCompassDetail(occasion: occasion, date: liturgicalDate, isSunday: isSunday)
+                        : nil
+                    let contextDetails = [destinationContext, site.editorialContext]
+                        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
                     Text(site.title)
                         .font(PrototypeStyle.serif(13, weight: .semibold))
                         .foregroundStyle(PrototypeStyle.ink)
