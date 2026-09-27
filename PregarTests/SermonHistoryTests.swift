@@ -1,10 +1,51 @@
 import AppKit
+import Combine
 import PDFKit
 import SwiftData
 import XCTest
 @testable import Pregar
 
 final class SermonHistoryTests: XCTestCase {
+    @MainActor
+    func testRestoringRTFDefersEditorStateUpdatesUntilAfterViewUpdate() async throws {
+        let source = "Anotação escrita com cuidado."
+        let attributed = NSAttributedString(string: source, attributes: [
+            .font: NSFont(name: "Arial", size: 10)!
+        ])
+        let data = try attributed.data(
+            from: NSRange(location: 0, length: attributed.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        let commands = EditorCommands()
+        let restored = expectation(description: "RTF state is published after the view update")
+        restored.assertForOverFulfill = false
+        var publicationCount = 0
+        let cancellable = commands.objectWillChange.sink {
+            publicationCount += 1
+            restored.fulfill()
+        }
+        let editor = RichTextEditor(
+            rtfData: .constant(data),
+            modifiedAt: .constant(.now),
+            commands: commands
+        )
+        let coordinator = editor.makeCoordinator()
+        let textView = NSTextView()
+        textView.delegate = coordinator
+
+        coordinator.apply(data, to: textView)
+
+        XCTAssertEqual(publicationCount, 0)
+        await fulfillment(of: [restored], timeout: 1)
+        XCTAssertEqual(commands.wordCount, 4)
+        XCTAssertFalse(commands.isEmpty)
+
+        let publicationsAfterRestore = publicationCount
+        commands.updateWordCount(from: source)
+        XCTAssertEqual(publicationCount, publicationsAfterRestore)
+        withExtendedLifetime(cancellable) {}
+    }
+
     @MainActor
     func testArchiveSearchUsesStoredLiturgicalOccasionAndBrazilianDate() throws {
         let date = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 4))!

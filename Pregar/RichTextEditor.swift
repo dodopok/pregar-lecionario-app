@@ -12,8 +12,9 @@ final class EditorCommands: ObservableObject {
     weak var textView: NSTextView?
 
     func updateWordCount(from text: String) {
-        wordCount = text.split(whereSeparator: \.isWhitespace).count
-        isEmpty = text.isEmpty
+        let updatedWordCount = text.split(whereSeparator: \.isWhitespace).count
+        if wordCount != updatedWordCount { wordCount = updatedWordCount }
+        if isEmpty != text.isEmpty { isEmpty = text.isEmpty }
         updateSelectionFormatting()
     }
 
@@ -232,8 +233,10 @@ final class EditorCommands: ObservableObject {
             ?? selectedFont
             ?? textView.font
         if let font {
-            selectedFontFamily = font.familyName ?? "Arial"
-            selectedFontSize = Int(font.pointSize.rounded())
+            let family = font.familyName ?? "Arial"
+            let size = Int(font.pointSize.rounded())
+            if selectedFontFamily != family { selectedFontFamily = family }
+            if selectedFontSize != size { selectedFontSize = size }
         }
     }
 
@@ -294,6 +297,7 @@ struct RichTextEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
         private var lastAppliedData: Data?
+        private var isApplyingProgrammaticChange = false
 
         init(_ parent: RichTextEditor) {
             self.parent = parent
@@ -301,25 +305,34 @@ struct RichTextEditor: NSViewRepresentable {
 
         func apply(_ data: Data?, to textView: NSTextView) {
             guard data != lastAppliedData else { return }
+            lastAppliedData = data
+            isApplyingProgrammaticChange = true
+            defer { isApplyingProgrammaticChange = false }
+
             if let data, let content = try? NSAttributedString(
                 data: data,
                 options: [.documentType: NSAttributedString.DocumentType.rtf],
                 documentAttributes: nil
             ) {
                 textView.textStorage?.setAttributedString(content)
-                parent.commands.updateWordCount(from: content.string)
             } else if data == nil {
                 textView.string = ""
-                parent.commands.updateWordCount(from: "")
             }
-            lastAppliedData = data
+
+            let commands = parent.commands
+            Task { @MainActor [weak commands, weak textView] in
+                guard let commands, let textView else { return }
+                commands.updateWordCount(from: textView.string)
+            }
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
+            guard !isApplyingProgrammaticChange else { return }
             parent.commands.updateSelectionFormatting()
         }
 
         func textDidChange(_ notification: Notification) {
+            guard !isApplyingProgrammaticChange else { return }
             guard let textView = notification.object as? NSTextView else { return }
             parent.commands.updateWordCount(from: textView.string)
             let range = NSRange(location: 0, length: textView.textStorage?.length ?? 0)

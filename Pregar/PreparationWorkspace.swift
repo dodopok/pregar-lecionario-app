@@ -541,11 +541,17 @@ struct PreparationWorkspace: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    TextField("Título do sermão", text: Bindable(draft).title)
+                    TextField("Título do sermão", text: Binding(
+                        get: { draft.title },
+                        set: { title in
+                            guard draft.title != title else { return }
+                            draft.title = title
+                            draft.modifiedAt = .now
+                        }
+                    ))
                         .font(PrototypeStyle.serif(28, weight: .semibold))
                         .foregroundStyle(PrototypeStyle.ink)
                         .textFieldStyle(.plain)
-                        .onChange(of: draft.title) { _, _ in draft.modifiedAt = .now }
                     Spacer(minLength: 8)
                 }
                 .padding(.top, 46)
