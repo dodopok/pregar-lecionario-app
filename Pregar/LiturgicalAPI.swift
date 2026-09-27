@@ -87,6 +87,31 @@ struct BibleVersion: Decodable, Equatable, Identifiable, Sendable {
     var id: String { code }
 }
 
+struct PrayerBookCatalogEntry: Decodable, Equatable, Identifiable, Sendable {
+    let code: String
+    let name: String
+    let description: String?
+    let language: String?
+    let jurisdiction: String?
+    let year: Int?
+    let isRecommended: Bool?
+    let imageUrl: String?
+    let thumbnailUrl: String?
+
+    var id: String { code }
+
+    var coverURL: URL? {
+        guard let rawURL = thumbnailUrl ?? imageUrl,
+              let components = URLComponents(string: rawURL) else { return nil }
+        if let scheme = components.scheme?.lowercased() {
+            return scheme == "https" ? components.url : nil
+        }
+        guard let resolved = URL(string: rawURL, relativeTo: URL(string: APISettings.apiBaseURL))?.absoluteURL,
+              resolved.scheme == "https" else { return nil }
+        return resolved
+    }
+}
+
 struct LiturgicalCollect: Decodable, Identifiable {
     let title: String?
     let subtitle: String?
@@ -154,6 +179,20 @@ struct LiturgicalAPIClient {
             throw LiturgicalAPIError(message: "Não foi possível montar o catálogo de traduções.")
         }
         return try await get(APIEnvelope<[BibleVersion]>.self, from: url).data
+    }
+
+    func fetchPrayerBooks() async throws -> [PrayerBookCatalogEntry] {
+        guard var components = URLComponents(string: settings.baseURL) else {
+            throw LiturgicalAPIError(message: "Endereço inválido da Estêvão API.")
+        }
+        components.path = "/api/v2/prayer-books"
+        components.queryItems = [
+            URLQueryItem(name: "fields[prayer_book]", value: "code,name,description,language,jurisdiction,year,is_recommended,image_url,thumbnail_url")
+        ]
+        guard let url = components.url else {
+            throw LiturgicalAPIError(message: "Não foi possível montar o catálogo de livros de oração.")
+        }
+        return try await get(APIEnvelope<[PrayerBookCatalogEntry]>.self, from: url).data
     }
 
     private func get<Value: Decodable>(_ type: Value.Type, from url: URL) async throws -> Value {

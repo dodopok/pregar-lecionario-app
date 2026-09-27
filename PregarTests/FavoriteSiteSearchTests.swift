@@ -21,6 +21,55 @@ final class FavoriteSiteSearchTests: XCTestCase {
         ))
     }
 
+    func testCacheKeyIncludesEditableSourcesAndAuthors() {
+        let date = ISO8601DateFormatter().date(from: "2026-09-27T12:00:00Z")!
+        let baseline = FavoriteSiteSearchReport.cacheKey(reference: "Matthew 21:23-32", occasion: nil, date: date, isSunday: true)
+        var source = FavoriteSite.newSite()
+        source.title = "Meu comentário"
+        let withSource = FavoriteSiteSearchReport.cacheKey(reference: "Matthew 21:23-32", occasion: nil, date: date, isSunday: true, sites: [source])
+        let withAuthor = FavoriteSiteSearchReport.cacheKey(reference: "Matthew 21:23-32", occasion: nil, date: date, isSunday: true, authors: [FavoriteAuthor(id: "bird", name: "Michael Bird")])
+
+        XCTAssertNotEqual(baseline, withSource)
+        XCTAssertNotEqual(baseline, withAuthor)
+    }
+
+    func testFavoriteProfilesDecodeLegacyIDsAndRoundTripEditableProfiles() throws {
+        let legacy = try JSONDecoder().decode([FavoriteSite].self, from: Data("[\"workingPreacher\",\"anglicanCompass\"]".utf8))
+        XCTAssertEqual(legacy, [.workingPreacher, .anglicanCompass])
+
+        let custom = FavoriteSite(
+            id: "my-wp-site",
+            title: "Meu WordPress",
+            baseURL: URL(string: "https://example.org")!,
+            detail: "Comentários",
+            language: "português",
+            adapter: .wordpress,
+            searchURLTemplate: "https://example.org/?s={query}"
+        )
+        let restored = try JSONDecoder().decode(FavoriteSite.self, from: JSONEncoder().encode(custom))
+        XCTAssertEqual(restored, custom)
+    }
+
+    func testBuiltInSiteOverridesUseEditedDestinationWhenBaseURLChanges() throws {
+        var preacher = FavoriteSite.workingPreacher
+        preacher.baseURL = URL(string: "https://commentary.example.org")!
+        let preacherURL = preacher.searchURL(
+            reference: "Matthew 21:33-46", occasion: nil, date: .now, isSunday: false
+        )
+        XCTAssertEqual(preacherURL.host, "commentary.example.org")
+        XCTAssertEqual(URLComponents(url: preacherURL, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "s" })?.value, "Matthew 21")
+
+        var compass = FavoriteSite.anglicanCompass
+        compass.baseURL = URL(string: "https://anglican.example.org/resources")!
+        XCTAssertFalse(compass.usesAnglicanCompassDestination)
+        let compassURL = compass.searchURL(
+            reference: "Matthew 21:33-46", occasion: "Proper 22 A", date: .now, isSunday: true
+        )
+        XCTAssertEqual(compassURL.host, "anglican.example.org")
+        XCTAssertTrue(compassURL.path.hasPrefix("/resources"))
+        XCTAssertTrue(FavoriteSite.anglicanCompass.usesAnglicanCompassDestination)
+    }
+
     func testBuildsFirstPartySearchRequestsFromPassageOnly() throws {
         for site in [FavoriteSite.anglicanCompass, .myPastoralPonderings, .bobCornwall] {
             let request = try XCTUnwrap(FavoriteSiteSearchClient.request(for: site, reference: "Romanos 13.8-14"))
@@ -112,6 +161,67 @@ final class FavoriteSiteSearchTests: XCTestCase {
         XCTAssertEqual(results.first?.overlapReference, "Matthew 21:23-27")
         XCTAssertEqual(results.first?.passageReference, "Matthew 21:18-27")
         XCTAssertEqual(results.first?.author, "Bob Cornwall")
+    }
+
+    func testGenericWordPressAndRSSAdaptersCanSearchAndPrioritizeSavedAuthors() throws {
+        let wordpress = FavoriteSite(
+            id: "generic-wp",
+            title: "Meu blog",
+            baseURL: URL(string: "https://example.org/teologia")!,
+            detail: "",
+            language: "português",
+            adapter: .wordpress,
+            searchURLTemplate: "https://example.org/?s={query}"
+        )
+        let request = try XCTUnwrap(FavoriteSiteSearchClient.request(for: wordpress, reference: "Mateus 21.33-46"))
+        XCTAssertEqual(request.url?.path, "/teologia/wp-json/wp/v2/posts")
+
+        let response = try JSONSerialization.data(withJSONObject: [
+            [
+                "date": "2026-09-20T12:00:00Z",
+                "link": "https://example.org/teologia/mateus-21/",
+                "title": ["rendered": "Matthew 21:33-46"],
+                "excerpt": ["rendered": "The vineyard parable."],
+                "_embedded": ["author": [["name": "Another Writer"]]]
+            ],
+            [
+                "date": "2026-09-19T12:00:00Z",
+                "link": "https://example.org/teologia/mateus-21-bird/",
+                "title": ["rendered": "Matthew 21:33-46"],
+                "excerpt": ["rendered": "The vineyard parable."],
+                "_embedded": ["author": [["name": "Michael Bird"]]]
+            ]
+        ])
+        let authors = [FavoriteAuthor(id: "bird", name: "Michael Bird")]
+        let results = try FavoriteSiteSearchClient.articles(from: response, site: wordpress, targetReference: "Matthew 21:33-46", authors: authors)
+        XCTAssertEqual(results.first?.author, "Michael Bird")
+
+        let rss = FavoriteSite(
+            id: "rss",
+            title: "Feed de comentários",
+            baseURL: URL(string: "https://feed.example.org")!,
+            detail: "",
+            language: "inglês",
+            adapter: .rssAtom,
+            searchURLTemplate: "https://feed.example.org/?s={query}",
+            feedURL: URL(string: "https://feed.example.org/comments.xml")
+        )
+        let xml = """
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <entry>
+            <title>Matthew 21:33-46</title>
+            <link rel="alternate" href="https://feed.example.org/vineyard" />
+            <author><name>Andrew McGowan</name></author>
+            <published>2026-09-20T12:00:00Z</published>
+            <summary>A reflection on the passage.</summary>
+          </entry>
+        </feed>
+        """
+        let feedRequest = try XCTUnwrap(FavoriteSiteSearchClient.request(for: rss, reference: "Matthew 21:33-46"))
+        XCTAssertEqual(feedRequest.url?.absoluteString, "https://feed.example.org/comments.xml")
+        let feedResults = try FavoriteSiteSearchClient.articles(from: Data(xml.utf8), site: rss, targetReference: "Matthew 21:33-46")
+        XCTAssertEqual(feedResults.first?.author, "Andrew McGowan")
+        XCTAssertEqual(feedResults.first?.match, .same)
     }
 
     func testCrossChapterOverlapReportsOnlyTheSharedVerses() throws {

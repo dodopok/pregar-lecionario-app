@@ -81,6 +81,53 @@ final class LiturgicalAPITests: XCTestCase {
         XCTAssertNil(captured?.url?.query)
         XCTAssertEqual(captured?.value(forHTTPHeaderField: "X-API-Key"), "test-api-key")
     }
+
+    func testPrayerBookCatalogLoadsVisualMetadataFromTheAuthenticatedAPI() async throws {
+        var captured: URLRequest?
+        CatalogStubURLProtocol.setHandler { request in
+            captured = request
+            let payload: [String: Any] = [
+                "data": [[
+                    "code": "loc_2027",
+                    "name": "REB - 2027",
+                    "description": "Livro de Oração Comum da Rede Episcopal Brasileira",
+                    "language": "pt-BR",
+                    "jurisdiction": "Rede Episcopal Brasileira",
+                    "year": 2027,
+                    "is_recommended": true,
+                    "thumbnail_url": "/locs/thumbs/loc-2027.png"
+                ]],
+                "meta": ["count": 1]
+            ]
+            return (200, try JSONSerialization.data(withJSONObject: payload))
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogStubURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let books = try await LiturgicalAPIClient(
+            settings: APISettings(),
+            apiKey: "test-api-key",
+            session: session
+        ).fetchPrayerBooks()
+
+        let book = try XCTUnwrap(books.first)
+        XCTAssertEqual(book.code, "loc_2027")
+        XCTAssertEqual(book.name, "REB - 2027")
+        XCTAssertEqual(book.description, "Livro de Oração Comum da Rede Episcopal Brasileira")
+        XCTAssertEqual(book.jurisdiction, "Rede Episcopal Brasileira")
+        XCTAssertEqual(book.year, 2027)
+        XCTAssertEqual(book.isRecommended, true)
+        XCTAssertEqual(book.coverURL?.absoluteString, "https://api.caminhoanglicano.com.br/locs/thumbs/loc-2027.png")
+
+        XCTAssertEqual(captured?.url?.host, "api.caminhoanglicano.com.br")
+        XCTAssertEqual(captured?.url?.path, "/api/v2/prayer-books")
+        XCTAssertEqual(captured?.value(forHTTPHeaderField: "X-API-Key"), "test-api-key")
+        let queryItems = try XCTUnwrap(URLComponents(url: try XCTUnwrap(captured?.url), resolvingAgainstBaseURL: false)?.queryItems)
+        let query = Dictionary(uniqueKeysWithValues: queryItems.compactMap { item in item.value.map { (item.name, $0) } })
+        XCTAssertEqual(query["fields[prayer_book]"], "code,name,description,language,jurisdiction,year,is_recommended,image_url,thumbnail_url")
+    }
 }
 
 private final class CatalogStubURLProtocol: URLProtocol {
@@ -111,4 +158,6 @@ private final class CatalogStubURLProtocol: URLProtocol {
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
+
+    override func stopLoading() {}
 }

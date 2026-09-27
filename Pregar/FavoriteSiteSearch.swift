@@ -1,49 +1,5 @@
 import Foundation
 
-enum FavoriteSite: String, Codable, CaseIterable, Identifiable, Sendable {
-    case workingPreacher
-    case anglicanCompass
-    case myPastoralPonderings
-    case bobCornwall
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .workingPreacher: "Working Preacher"
-        case .anglicanCompass: "Anglican Compass"
-        case .myPastoralPonderings: "My Pastoral Ponderings"
-        case .bobCornwall: "Ponderings on a Faith Journey"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .workingPreacher: "Comentários · Lecionário Comum Revisado"
-        case .anglicanCompass: "Recursos anglicanos · ACNA"
-        case .myPastoralPonderings: "Sermões e reflexões"
-        case .bobCornwall: "Bob Cornwall · reflexão pastoral"
-        }
-    }
-
-    var language: String { "inglês" }
-
-    var hasStructuredSearch: Bool { self != .workingPreacher }
-
-    func searchURL(reference: String, occasion: String?, date: Date, isSunday: Bool) -> URL {
-        switch self {
-        case .workingPreacher:
-            FavoriteSourceURLs.workingPreacher(reference: reference)
-        case .anglicanCompass:
-            FavoriteSourceURLs.anglicanCompass(reference: reference, occasion: occasion, date: date, isSunday: isSunday)
-        case .myPastoralPonderings:
-            FavoriteSourceURLs.myPastoralPonderings(reference: reference)
-        case .bobCornwall:
-            FavoriteSourceURLs.bobCornwall(reference: reference)
-        }
-    }
-}
-
 enum FavoriteSiteMatch: String, Codable, Sendable {
     case same
     case contains
@@ -89,7 +45,7 @@ struct FavoriteSiteSearchGroup: Codable, Equatable, Identifiable, Sendable {
     let searchedAt: Date
     let errorMessage: String?
 
-    var id: String { site.rawValue }
+    var id: String { site.id }
 }
 
 struct FavoriteSiteSearchReport: Codable, Equatable, Identifiable, Sendable {
@@ -100,10 +56,18 @@ struct FavoriteSiteSearchReport: Codable, Equatable, Identifiable, Sendable {
 
     var id: String { cacheKey }
 
-    static func cacheKey(reference: String, occasion: String?, date: Date, isSunday: Bool) -> String {
+    static func cacheKey(
+        reference: String,
+        occasion: String?,
+        date: Date,
+        isSunday: Bool,
+        sites: [FavoriteSite] = [],
+        authors: [FavoriteAuthor] = []
+    ) -> String {
         let cleanReference = reference.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanOccasion = occasion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return [cleanReference, cleanOccasion, SermonDateKey.string(from: date), isSunday ? "sunday" : "other"]
+        let revision = FavoriteReferenceLibrary.fingerprint(sites: sites, authors: authors)
+        return [cleanReference, cleanOccasion, SermonDateKey.string(from: date), isSunday ? "sunday" : "other", revision]
             .joined(separator: "|")
     }
 }
@@ -122,23 +86,27 @@ struct FavoriteSiteSearchClient {
         reference: String,
         occasion: String?,
         date: Date,
-        isSunday: Bool
+        isSunday: Bool,
+        sites: [FavoriteSite] = FavoriteSite.defaults,
+        authors: [FavoriteAuthor] = []
     ) async -> FavoriteSiteSearchReport {
         let cleanReference = reference.trimmingCharacters(in: .whitespacesAndNewlines)
         let cacheKey = FavoriteSiteSearchReport.cacheKey(
             reference: cleanReference,
             occasion: occasion,
             date: date,
-            isSunday: isSunday
+            isSunday: isSunday,
+            sites: sites,
+            authors: authors
         )
-        let searchURLs = Dictionary(uniqueKeysWithValues: FavoriteSite.allCases.map {
-            ($0, $0.searchURL(reference: cleanReference, occasion: occasion, date: date, isSunday: isSunday))
+        let searchURLs = Dictionary(uniqueKeysWithValues: sites.map { site in
+            (site.id, site.searchURL(reference: cleanReference, occasion: occasion, date: date, isSunday: isSunday))
         })
         guard ScriptureReference.parse(cleanReference) != nil else {
-            let groups = FavoriteSite.allCases.map { site in
+            let groups = sites.map { site in
                 FavoriteSiteSearchGroup(
                     site: site,
-                    searchURL: searchURLs[site]!,
+                    searchURL: searchURLs[site.id] ?? site.baseURL,
                     articles: [],
                     searchedAt: .now,
                     errorMessage: "Escolha uma passagem com livro, capítulo e versículos."
@@ -147,19 +115,17 @@ struct FavoriteSiteSearchClient {
             return FavoriteSiteSearchReport(cacheKey: cacheKey, reference: cleanReference, searchedAt: .now, groups: groups)
         }
 
-        async let anglicanCompass = search(site: .anglicanCompass, reference: cleanReference, searchURL: searchURLs[.anglicanCompass]!)
-        async let myPastoralPonderings = search(site: .myPastoralPonderings, reference: cleanReference, searchURL: searchURLs[.myPastoralPonderings]!)
-        async let bobCornwall = search(site: .bobCornwall, reference: cleanReference, searchURL: searchURLs[.bobCornwall]!)
-
-        let resolved = await (anglicanCompass, myPastoralPonderings, bobCornwall)
-        let workingPreacher = FavoriteSiteSearchGroup(
-            site: .workingPreacher,
-            searchURL: searchURLs[.workingPreacher]!,
-            articles: [],
-            searchedAt: .now,
-            errorMessage: nil
-        )
-        let groups = [workingPreacher, resolved.0, resolved.1, resolved.2]
+        let groups = await withTaskGroup(of: (Int, FavoriteSiteSearchGroup).self) { taskGroup in
+            for (index, site) in sites.enumerated() {
+                let searchURL = searchURLs[site.id] ?? site.baseURL
+                taskGroup.addTask {
+                    (index, await self.search(site: site, reference: cleanReference, searchURL: searchURL, authors: authors))
+                }
+            }
+            var results: [(Int, FavoriteSiteSearchGroup)] = []
+            for await result in taskGroup { results.append(result) }
+            return results.sorted { $0.0 < $1.0 }.map(\.1)
+        }
         return FavoriteSiteSearchReport(cacheKey: cacheKey, reference: cleanReference, searchedAt: .now, groups: groups)
     }
 
@@ -169,28 +135,39 @@ struct FavoriteSiteSearchClient {
         var components = URLComponents()
         components.scheme = "https"
 
-        switch site {
-        case .workingPreacher:
+        switch site.adapter {
+        case .workingPreacherArchive, .websiteSearch:
             return nil
-        case .anglicanCompass:
-            components.host = "anglicancompass.com"
-            components.path = "/wp-json/wp/v2/posts"
+        case .rssAtom:
+            guard let url = site.feedURL ?? URL(string: "feed", relativeTo: site.baseURL)?.absoluteURL,
+                  url.scheme?.lowercased() == "https" else { return nil }
+            var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+            request.httpMethod = "GET"
+            request.setValue("application/rss+xml, application/atom+xml, application/xml, text/xml", forHTTPHeaderField: "Accept")
+            return request
+        case .anglicanCompass, .wordpress:
+            guard let host = site.baseURL.host else { return nil }
+            components.host = host
+            let basePath = site.baseURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            components.path = "/" + [basePath, "wp-json/wp/v2/posts"].filter { !$0.isEmpty }.joined(separator: "/")
             components.queryItems = [
                 URLQueryItem(name: "search", value: term),
                 URLQueryItem(name: "per_page", value: "12"),
                 URLQueryItem(name: "_embed", value: "author"),
                 URLQueryItem(name: "_fields", value: "date,link,title,excerpt,_links,_embedded")
             ]
-        case .myPastoralPonderings:
+        case .wordpressCom:
+            guard let host = site.baseURL.host else { return nil }
             components.host = "public-api.wordpress.com"
-            components.path = "/rest/v1.1/sites/mypastoralponderings.com/posts/"
+            components.path = "/rest/v1.1/sites/\(host)/posts/"
             components.queryItems = [
                 URLQueryItem(name: "search", value: term),
                 URLQueryItem(name: "number", value: "12"),
                 URLQueryItem(name: "fields", value: "title,URL,date,author,excerpt")
             ]
-        case .bobCornwall:
-            components.host = "www.bobcornwall.com"
+        case .blogger:
+            guard let host = site.baseURL.host else { return nil }
+            components.host = host
             components.path = "/feeds/posts/default"
             components.queryItems = [
                 URLQueryItem(name: "q", value: term),
@@ -206,13 +183,18 @@ struct FavoriteSiteSearchClient {
         return request
     }
 
-    static func articles(from data: Data, site: FavoriteSite, targetReference: String) throws -> [FavoriteSiteArticle] {
+    static func articles(
+        from data: Data,
+        site: FavoriteSite,
+        targetReference: String,
+        authors: [FavoriteAuthor] = []
+    ) throws -> [FavoriteSiteArticle] {
         guard let target = ScriptureReference.parse(targetReference) else { throw FavoriteSiteSearchError.invalidReference }
         let candidates: [SiteArticleCandidate]
-        switch site {
-        case .workingPreacher:
+        switch site.adapter {
+        case .workingPreacherArchive, .websiteSearch:
             return []
-        case .anglicanCompass:
+        case .anglicanCompass, .wordpress:
             candidates = try JSONDecoder().decode([WordPressV2Post].self, from: data).map {
                 SiteArticleCandidate(
                     title: $0.title.rendered,
@@ -222,11 +204,11 @@ struct FavoriteSiteSearchClient {
                     excerpt: $0.excerpt.rendered
                 )
             }
-        case .myPastoralPonderings:
+        case .wordpressCom:
             candidates = try JSONDecoder().decode(WordPressComResponse.self, from: data).posts.map {
                 SiteArticleCandidate(title: $0.title, url: $0.url, author: $0.author?.name, date: $0.date, excerpt: $0.excerpt)
             }
-        case .bobCornwall:
+        case .blogger:
             candidates = try JSONDecoder().decode(BloggerFeed.self, from: data).feed.entries.map { entry in
                 let canonicalLink = entry.links.first(where: { $0.relation == "alternate" })?.href ?? ""
                 return SiteArticleCandidate(
@@ -237,6 +219,8 @@ struct FavoriteSiteSearchClient {
                     excerpt: entry.summary?.text ?? ""
                 )
             }
+        case .rssAtom:
+            candidates = try RSSAtomFeedParser.candidates(from: data)
         }
 
         var seen: Set<String> = []
@@ -258,25 +242,28 @@ struct FavoriteSiteSearchClient {
                 overlapReference: relation.overlapReference
             )
         }
-        .sorted {
-            if $0.match.priority != $1.match.priority { return $0.match.priority < $1.match.priority }
-            return ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast)
+        .sorted { lhs, rhs in
+            let lhsPreferred = isPreferredAuthor(lhs.author, in: authors)
+            let rhsPreferred = isPreferredAuthor(rhs.author, in: authors)
+            if lhsPreferred != rhsPreferred { return lhsPreferred }
+            if lhs.match.priority != rhs.match.priority { return lhs.match.priority < rhs.match.priority }
+            return (lhs.publishedAt ?? .distantPast) > (rhs.publishedAt ?? .distantPast)
         }
         .prefix(6)
         .map { $0 }
     }
 
-    private func search(site: FavoriteSite, reference: String, searchURL: URL) async -> FavoriteSiteSearchGroup {
+    private func search(site: FavoriteSite, reference: String, searchURL: URL, authors: [FavoriteAuthor]) async -> FavoriteSiteSearchGroup {
         let searchedAt = Date.now
         guard let request = Self.request(for: site, reference: reference) else {
-            return FavoriteSiteSearchGroup(site: site, searchURL: searchURL, articles: [], searchedAt: searchedAt, errorMessage: "Busca nativa indisponível.")
+            return FavoriteSiteSearchGroup(site: site, searchURL: searchURL, articles: [], searchedAt: searchedAt, errorMessage: nil)
         }
         do {
             let (data, response) = try await session.data(for: request)
             guard let response = response as? HTTPURLResponse else { throw FavoriteSiteSearchError.invalidResponse }
             guard (200..<300).contains(response.statusCode) else { throw FavoriteSiteSearchError.httpStatus(response.statusCode) }
             guard data.count <= 2_000_000 else { throw FavoriteSiteSearchError.invalidResponse }
-            let articles = try Self.articles(from: data, site: site, targetReference: reference)
+            let articles = try Self.articles(from: data, site: site, targetReference: reference, authors: authors)
             return FavoriteSiteSearchGroup(site: site, searchURL: searchURL, articles: articles, searchedAt: searchedAt, errorMessage: nil)
         } catch {
             return FavoriteSiteSearchGroup(
@@ -287,6 +274,12 @@ struct FavoriteSiteSearchClient {
                 errorMessage: "Busca temporariamente indisponível."
             )
         }
+    }
+
+    private static func isPreferredAuthor(_ value: String?, in authors: [FavoriteAuthor]) -> Bool {
+        guard let value else { return false }
+        let normalized = ScriptureReference.normalized(value)
+        return authors.contains { !normalized.isEmpty && normalized.contains(ScriptureReference.normalized($0.name)) }
     }
 
     private struct PassageRelation {
@@ -385,20 +378,18 @@ struct FavoriteSiteSearchClient {
     private static func safeArticleURL(_ value: String, for site: FavoriteSite) -> URL? {
         guard var components = URLComponents(string: value),
               let host = components.host?.lowercased(),
-              allowedHosts[site]?.contains(host) == true,
+              normalizedHost(host) == normalizedHost(site.baseURL.host ?? ""),
               components.user == nil,
               components.password == nil,
-              components.scheme == "http" || components.scheme == "https" else { return nil }
+              components.scheme?.lowercased() == "http" || components.scheme?.lowercased() == "https" else { return nil }
         components.scheme = "https"
         guard let url = components.url, url.host?.lowercased() == host else { return nil }
         return url
     }
 
-    private static let allowedHosts: [FavoriteSite: Set<String>] = [
-        .anglicanCompass: ["anglicancompass.com", "www.anglicancompass.com"],
-        .myPastoralPonderings: ["mypastoralponderings.com", "www.mypastoralponderings.com"],
-        .bobCornwall: ["bobcornwall.com", "www.bobcornwall.com"]
-    ]
+    private static func normalizedHost(_ host: String) -> String {
+        host.lowercased().hasPrefix("www.") ? String(host.dropFirst(4)).lowercased() : host.lowercased()
+    }
 
     private static func decodedText(_ value: String) -> String? {
         let withoutActiveContent = value.replacingOccurrences(of: #"(?is)<(script|style)\b.*?</\1>"#, with: " ", options: .regularExpression)
@@ -553,4 +544,90 @@ private struct BloggerFeed: Decodable {
 private struct BloggerText: Decodable {
     let text: String
     enum CodingKeys: String, CodingKey { case text = "$t" }
+}
+
+private final class RSSAtomFeedParser: NSObject, XMLParserDelegate {
+    private(set) var candidates: [SiteArticleCandidate] = []
+    private var entry: [String: String]?
+    private var captureKey: String?
+    private var captureElement: String?
+    private var captureDepth = 0
+    private var depth = 0
+    private var captureText = ""
+
+    static func candidates(from data: Data) throws -> [SiteArticleCandidate] {
+        let delegate = RSSAtomFeedParser()
+        let parser = XMLParser(data: data)
+        parser.shouldProcessNamespaces = true
+        parser.delegate = delegate
+        guard parser.parse(), parser.parserError == nil else { throw FavoriteSiteSearchError.invalidResponse }
+        return delegate.candidates
+    }
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes: [String: String] = [:]) {
+        depth += 1
+        let name = localName(elementName, qualifiedName: qName)
+        if name == "item" || name == "entry" {
+            entry = [:]
+        }
+        guard entry != nil else { return }
+
+        if name == "link", let href = attributes["href"], !href.isEmpty {
+            if attributes["rel"] == nil || attributes["rel"] == "alternate" { entry?["url"] = href }
+            return
+        }
+
+        let field: String?
+        switch name {
+        case "title": field = "title"
+        case "link": field = "url"
+        case "creator", "author": field = "author"
+        case "pubdate", "published", "updated": field = "date"
+        case "description", "summary", "encoded", "content": field = "excerpt"
+        default: field = nil
+        }
+        guard let field, captureKey == nil else { return }
+        captureKey = field
+        captureElement = name
+        captureDepth = depth
+        captureText = ""
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        guard captureKey != nil else { return }
+        captureText += string
+    }
+
+    func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
+        guard captureKey != nil, let value = String(data: CDATABlock, encoding: .utf8) else { return }
+        captureText += value
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        let name = localName(elementName, qualifiedName: qName)
+        if captureElement == name, captureDepth == depth, let captureKey {
+            if entry?[captureKey] == nil { entry?[captureKey] = captureText.trimmingCharacters(in: .whitespacesAndNewlines) }
+            self.captureKey = nil
+            captureElement = nil
+            captureText = ""
+        }
+        if name == "item" || name == "entry", let entry {
+            if let title = entry["title"], let url = entry["url"] {
+                candidates.append(SiteArticleCandidate(
+                    title: title,
+                    url: url,
+                    author: entry["author"],
+                    date: entry["date"],
+                    excerpt: entry["excerpt"] ?? ""
+                ))
+            }
+            self.entry = nil
+        }
+        depth = max(0, depth - 1)
+    }
+
+    private func localName(_ elementName: String, qualifiedName: String?) -> String {
+        let value = qualifiedName ?? elementName
+        return value.split(separator: ":").last.map(String.init)?.lowercased() ?? value.lowercased()
+    }
 }

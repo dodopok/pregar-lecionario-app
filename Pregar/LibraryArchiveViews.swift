@@ -29,6 +29,7 @@ struct PDFLibraryView: View {
     @State private var records: [PDFLibraryRecord] = []
     @State private var selectedID: String?
     @State private var isImporting = false
+    @State private var isImportingPublicDriveFolder = false
     @State private var isIndexing = false
     @State private var didRestore = false
     @State private var sectionQuery = ""
@@ -64,6 +65,11 @@ struct PDFLibraryView: View {
                 }
                     .buttonStyle(.bordered)
                     .disabled(isIndexing)
+                Button("Drive público…", systemImage: "arrow.down.doc") {
+                    isImportingPublicDriveFolder = true
+                }
+                .buttonStyle(.bordered)
+                .disabled(isIndexing)
                 Button("Importar PDF…", systemImage: "plus", action: { isImporting = true })
                     .buttonStyle(.borderedProminent)
                     .tint(PrototypeStyle.green)
@@ -107,6 +113,11 @@ struct PDFLibraryView: View {
                 saveMetadata(metadata, for: record)
             }
             .frame(width: 560, height: 360)
+        }
+        .sheet(isPresented: $isImportingPublicDriveFolder) {
+            GoogleDrivePublicFolderImportSheet(accent: PrototypeStyle.green, isLibraryIndexing: $isIndexing) { urls in
+                index(paths: urls.map(\.path))
+            }
         }
         .alert("Biblioteca de PDFs", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
@@ -342,7 +353,7 @@ struct PDFLibraryView: View {
         case .success(let urls):
             let paths = urls.map(\.path).filter { path in !records.contains(where: { $0.path == path }) }
             guard !paths.isEmpty else { return }
-            index(paths: paths, replacingAll: false)
+            index(paths: paths)
         }
     }
 
@@ -369,12 +380,12 @@ struct PDFLibraryView: View {
         if pathsToReindex.isEmpty {
             persistRecords()
         } else {
-            index(paths: records.filter { pathsToReindex.contains($0.path) }.map(\.path), replacingAll: true)
+            index(paths: records.filter { pathsToReindex.contains($0.path) }.map(\.path))
         }
     }
 
     private func reindex() {
-        index(paths: records.map(\.path), replacingAll: true)
+        index(paths: records.map(\.path))
     }
 
     private func saveMetadata(_ metadata: PDFLibraryMetadataOverrides, for record: PDFLibraryRecord) {
@@ -392,7 +403,7 @@ struct PDFLibraryView: View {
         persistRecords()
     }
 
-    private func index(paths: [String], replacingAll: Bool) {
+    private func index(paths: [String]) {
         guard !isIndexing, !paths.isEmpty else { return }
         isIndexing = true
         let previousByPath = Dictionary(uniqueKeysWithValues: records.map { ($0.path, $0) })
@@ -406,11 +417,9 @@ struct PDFLibraryView: View {
                 let refreshed = record.preservingMetadata(from: previousByPath[record.path])
                 return (refreshed.path, refreshed)
             })
-            if replacingAll {
-                records = records.map { indexedByPath[$0.path] ?? $0 }
-            } else {
-                records.append(contentsOf: indexed)
-            }
+            var mergedByPath = Dictionary(records.map { ($0.path, $0) }, uniquingKeysWith: { _, later in later })
+            for (path, record) in indexedByPath { mergedByPath[path] = record }
+            records = Array(mergedByPath.values)
             records.sort { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
             selectedID = selectedID ?? records.first?.id
             persistRecords()
@@ -479,6 +488,117 @@ struct PDFLibraryView: View {
     private func persistRecords() {
         savedRecords = (try? JSONEncoder().encode(records)) ?? Data()
         savedLibraryRevision += 1
+    }
+}
+
+private struct GoogleDrivePublicFolderImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var importer: GoogleDrivePublicPDFImporter
+    @State private var folderLink = ""
+    @State private var apiKey = ""
+    @State private var includeSubfolders = true
+    @State private var errorMessage: String?
+    @State private var importedCount: Int?
+    @State private var skippedFiles: [String] = []
+    let accent: Color
+    @Binding var isLibraryIndexing: Bool
+    let onImport: ([URL]) -> Void
+
+    init(accent: Color, isLibraryIndexing: Binding<Bool>, onImport: @escaping ([URL]) -> Void) {
+        self.accent = accent
+        _isLibraryIndexing = isLibraryIndexing
+        self.onImport = onImport
+        _importer = StateObject(wrappedValue: GoogleDrivePublicPDFImporter())
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Importar PDFs do Drive")
+                    .font(PrototypeStyle.serif(21, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+                Text("Use o link de uma pasta compartilhada como “Qualquer pessoa com o link”.")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+            }
+
+            Form {
+                TextField("Link público da pasta", text: $folderLink)
+                SecureField(importer.savedAPIKeyExists ? "Chave salva; deixe vazio para mantê-la" : "Chave de API Google", text: $apiKey)
+                    .disabled(importer.isLoadingKey)
+                Toggle("Incluir subpastas", isOn: $includeSubfolders)
+            }
+
+            Text("A chave deve ter a Drive API ativada; ela fica no Acesso às Chaves deste Mac. Os PDFs são copiados para a pasta de suporte local do Pregar.")
+                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if importer.isImporting {
+                VStack(alignment: .leading, spacing: 7) {
+                    if importer.totalCount > 0 {
+                        ProgressView(value: Double(importer.completedCount), total: Double(importer.totalCount))
+                    } else {
+                        ProgressView()
+                    }
+                    Text(importer.status).font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted).lineLimit(2)
+                }
+            } else if let importedCount {
+                Label("\(importedCount) PDF(s) importado(s); indexação iniciada.", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(accent)
+                if !skippedFiles.isEmpty {
+                    Text("\(skippedFiles.count) arquivo(s) não foram baixados.")
+                        .font(.system(size: 11)).foregroundStyle(.orange)
+                }
+                if isLibraryIndexing {
+                    HStack(spacing: 7) {
+                        ProgressView().controlSize(.small)
+                        Text("Indexando PDFs na Biblioteca…").font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                    }
+                }
+            }
+
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11)).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+            HStack {
+                Spacer()
+                Button("Fechar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button {
+                    Task { await importFolder() }
+                } label: {
+                    if importer.isImporting { ProgressView().controlSize(.small) }
+                    else { Label(importedCount == nil ? "Importar PDFs" : "Importar novamente", systemImage: "arrow.down.doc") }
+                }
+                .buttonStyle(.borderedProminent).tint(accent)
+                .disabled(importer.isImporting || importer.isLoadingKey || isLibraryIndexing || folderLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(22)
+        .frame(width: 590, height: 450)
+        .background(PrototypeStyle.canvas)
+        .preferredColorScheme(.light)
+    }
+
+    @MainActor
+    private func importFolder() async {
+        errorMessage = nil
+        importedCount = nil
+        skippedFiles = []
+        do {
+            let result = try await importer.importPDFs(
+                from: folderLink,
+                apiKey: apiKey,
+                includeSubfolders: includeSubfolders
+            )
+            importedCount = result.localURLs.count
+            skippedFiles = result.failures
+            onImport(result.localURLs)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

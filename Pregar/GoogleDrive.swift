@@ -11,12 +11,19 @@ enum GoogleDriveError: LocalizedError {
     case notConnected
     case invalidClientID
     case invalidOAuthResponse
+    case invalidPublicDriveFolderLink
+    case missingPublicDriveAPIKey
+    case publicDriveFolderIsNotAccessible
+    case noPDFsInPublicDriveFolder
     case authorizationDenied(String)
     case authorizationTimedOut
     case api(status: Int, message: String)
     case documentConflict
     case emptyDocument
     case syncInProgress
+    case driveImportFileTooLarge(String)
+    case driveImportInvalidPDF(String)
+    case driveImportTooManyFiles
 
     var errorDescription: String? {
         switch self {
@@ -24,12 +31,19 @@ enum GoogleDriveError: LocalizedError {
         case .notConnected: "Conecte o Google Drive pela Mesa e tente novamente."
         case .invalidClientID: "O Client ID não parece ser de um aplicativo Google para desktop."
         case .invalidOAuthResponse: "O Google não concluiu a autorização. Tente conectar novamente."
+        case .invalidPublicDriveFolderLink: "Cole o link compartilhável de uma pasta do Google Drive."
+        case .missingPublicDriveAPIKey: "Informe uma chave de API Google com a Drive API ativada."
+        case .publicDriveFolderIsNotAccessible: "A pasta não está pública ou o link não permite acesso. Confira o compartilhamento “Qualquer pessoa com o link”."
+        case .noPDFsInPublicDriveFolder: "Nenhum PDF foi encontrado nessa pasta pública."
         case let .authorizationDenied(message): "A autorização do Google foi recusada: \(message)"
         case .authorizationTimedOut: "A autorização expirou. Volte ao app e conecte o Google Drive novamente."
         case let .api(status, message): "Google Drive (HTTP \(status)): \(message)"
         case .documentConflict: "O Google Doc mudou fora do app desde a última sincronização. Sua cópia local foi preservada. Compare as versões antes de substituir a cópia do Drive."
         case .emptyDocument: "Escreva algum texto antes de salvar o sermão no Google Drive."
         case .syncInProgress: "A sincronização anterior ainda está em andamento."
+        case let .driveImportFileTooLarge(name): "O PDF \(name) excede o limite de 128 MB e foi ignorado."
+        case let .driveImportInvalidPDF(name): "O arquivo \(name) não parece ser um PDF válido."
+        case .driveImportTooManyFiles: "A pasta contém mais de 5.000 PDFs. Escolha uma pasta menor para importar com segurança."
         }
     }
 }
@@ -59,7 +73,12 @@ enum GoogleOAuthRequest {
         randomURLSafeString(byteCount: 32)
     }
 
-    static func authorizationURL(clientID: String, redirectURI: URL, state: String, verifier: String) throws -> URL {
+    static func authorizationURL(
+        clientID: String,
+        redirectURI: URL,
+        state: String,
+        verifier: String
+    ) throws -> URL {
         guard clientID.hasSuffix(".apps.googleusercontent.com") else { throw GoogleDriveError.invalidClientID }
         var components = URLComponents(url: authorizationEndpoint, resolvingAgainstBaseURL: false)!
         let challenge = Data(SHA256.hash(data: Data(verifier.utf8)))
@@ -364,17 +383,52 @@ private enum GoogleRefreshTokenKeychain {
     }
 }
 
-struct GoogleDriveFile: Decodable {
+struct GoogleDriveFile: Decodable, Equatable, Sendable {
     let id: String
     let name: String
     let mimeType: String?
     let webViewLink: URL?
+    let size: Int64?
+    let md5Checksum: String?
+    let parents: [String]?
+    let resourceKey: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case name
         case mimeType
         case webViewLink
+        case size
+        case md5Checksum
+        case parents
+        case resourceKey
+    }
+
+    init(id: String, name: String, mimeType: String?, webViewLink: URL?, size: Int64? = nil, md5Checksum: String? = nil, parents: [String]? = nil, resourceKey: String? = nil) {
+        self.id = id
+        self.name = name
+        self.mimeType = mimeType
+        self.webViewLink = webViewLink
+        self.size = size
+        self.md5Checksum = md5Checksum
+        self.parents = parents
+        self.resourceKey = resourceKey
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+        webViewLink = try container.decodeIfPresent(URL.self, forKey: .webViewLink)
+        if let value = try? container.decode(String.self, forKey: .size) {
+            size = Int64(value)
+        } else {
+            size = try container.decodeIfPresent(Int64.self, forKey: .size)
+        }
+        md5Checksum = try container.decodeIfPresent(String.self, forKey: .md5Checksum)
+        parents = try container.decodeIfPresent([String].self, forKey: .parents)
+        resourceKey = try container.decodeIfPresent(String.self, forKey: .resourceKey)
     }
 }
 
@@ -646,7 +700,9 @@ struct GoogleDriveAPI {
     private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         var request = request
         request.setValue("Bearer \(try await accessToken())", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if request.value(forHTTPHeaderField: "Accept") == nil {
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+        }
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
         return (data, response)
@@ -689,6 +745,302 @@ struct GoogleDriveAPI {
 
 private struct GoogleDriveFileList: Decodable {
     let files: [GoogleDriveFile]
+    let nextPageToken: String?
+}
+
+struct GoogleDrivePublicFolderLink: Equatable, Sendable {
+    let folderID: String
+    let resourceKey: String?
+
+    static func parse(_ value: String) -> GoogleDrivePublicFolderLink? {
+        guard let components = URLComponents(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),
+              components.scheme?.lowercased() == "https",
+              let host = components.host?.lowercased(), host == "drive.google.com" || host == "www.drive.google.com",
+              components.user == nil, components.password == nil else { return nil }
+        let pathParts = components.path.split(separator: "/").map(String.init)
+        let pathID: String? = {
+            guard let index = pathParts.firstIndex(of: "folders"), pathParts.indices.contains(index + 1) else { return nil }
+            return pathParts[index + 1]
+        }()
+        let query = Dictionary(components.queryItems?.map { ($0.name.lowercased(), $0.value ?? "") } ?? [], uniquingKeysWith: { first, _ in first })
+        let id = pathID ?? query["id"]
+        guard let id, id.range(of: #"^[A-Za-z0-9_-]{5,}$"#, options: .regularExpression) != nil else { return nil }
+        return GoogleDrivePublicFolderLink(folderID: id, resourceKey: query["resourcekey"])
+    }
+}
+
+struct GoogleDrivePublicPDF: Equatable, Sendable {
+    let file: GoogleDriveFile
+    let parentResourceKeys: [String: String]
+}
+
+struct GoogleDrivePublicFolderClient {
+    static let filesURL = URL(string: "https://www.googleapis.com/drive/v3/files")!
+    static let maximumPDFSize = 128 * 1_024 * 1_024
+
+    let apiKey: String
+    var session: URLSession = .shared
+
+    func folder(for link: GoogleDrivePublicFolderLink) async throws -> GoogleDriveFile {
+        let file = try await getFile(id: link.folderID, resourceKey: link.resourceKey)
+        guard file.mimeType == GoogleDriveAPI.folderMimeType else { throw GoogleDriveError.invalidPublicDriveFolderLink }
+        return file
+    }
+
+    func pdfFiles(in folder: GoogleDriveFile, rootResourceKey: String?, includeSubfolders: Bool) async throws -> [GoogleDrivePublicPDF] {
+        var folderKeys: [String: String] = [:]
+        if let rootResourceKey { folderKeys[folder.id] = rootResourceKey }
+        else if let key = folder.resourceKey { folderKeys[folder.id] = key }
+        var pending: [(folder: GoogleDriveFile, keys: [String: String], depth: Int)] = [(folder, folderKeys, 0)]
+        var visited: Set<String> = []
+        var results: [GoogleDrivePublicPDF] = []
+
+        while let current = pending.popLast() {
+            guard visited.insert(current.folder.id).inserted else { continue }
+            let children = try await listChildren(of: current.folder.id, resourceKeys: current.keys)
+            for child in children {
+                if child.mimeType == GoogleDriveAPI.folderMimeType {
+                    if includeSubfolders, current.depth < 24 {
+                        var keys = current.keys
+                        if let resourceKey = child.resourceKey { keys[child.id] = resourceKey }
+                        pending.append((child, keys, current.depth + 1))
+                    }
+                } else if child.mimeType == "application/pdf" || child.name.lowercased().hasSuffix(".pdf") {
+                    results.append(GoogleDrivePublicPDF(file: child, parentResourceKeys: current.keys))
+                    guard results.count <= 5_000 else { throw GoogleDriveError.driveImportTooManyFiles }
+                }
+            }
+        }
+        return results.sorted { $0.file.name.localizedStandardCompare($1.file.name) == .orderedAscending }
+    }
+
+    func download(_ pdf: GoogleDrivePublicPDF) async throws -> Data {
+        if let size = pdf.file.size, size > Self.maximumPDFSize {
+            throw GoogleDriveError.driveImportFileTooLarge(pdf.file.name)
+        }
+        var components = URLComponents(url: Self.filesURL.appending(path: pdf.file.id), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "alt", value: "media"), URLQueryItem(name: "key", value: apiKey)]
+        var request = URLRequest(url: components.url!, timeoutInterval: 90)
+        request.httpMethod = "GET"
+        request.setValue("application/pdf", forHTTPHeaderField: "Accept")
+        var keys = pdf.parentResourceKeys
+        if let resourceKey = pdf.file.resourceKey { keys[pdf.file.id] = resourceKey }
+        setResourceKeyHeader(keys, on: &request)
+        let (data, response) = try await session.data(for: request)
+        guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
+        guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
+        guard data.count <= Self.maximumPDFSize else { throw GoogleDriveError.driveImportFileTooLarge(pdf.file.name) }
+        guard data.starts(with: Data("%PDF-".utf8)) else { throw GoogleDriveError.driveImportInvalidPDF(pdf.file.name) }
+        return data
+    }
+
+    private func getFile(id: String, resourceKey: String?) async throws -> GoogleDriveFile {
+        var components = URLComponents(url: Self.filesURL.appending(path: id), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "key", value: apiKey),
+            URLQueryItem(name: "fields", value: "id,name,mimeType,webViewLink,size,md5Checksum,parents,resourceKey")
+        ]
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "GET"
+        if let resourceKey { request.setValue("\(id)/\(resourceKey)", forHTTPHeaderField: "X-Goog-Drive-Resource-Keys") }
+        let (data, response) = try await session.data(for: request)
+        guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
+        guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
+        return try JSONDecoder().decode(GoogleDriveFile.self, from: data)
+    }
+
+    private func listChildren(of folderID: String, resourceKeys: [String: String]) async throws -> [GoogleDriveFile] {
+        let escapedID = folderID.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        let query = "'\(escapedID)' in parents and trashed = false"
+        var results: [GoogleDriveFile] = []
+        var nextPageToken: String?
+        repeat {
+            var components = URLComponents(url: Self.filesURL, resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "q", value: query),
+                URLQueryItem(name: "key", value: apiKey),
+                URLQueryItem(name: "spaces", value: "drive"),
+                URLQueryItem(name: "pageSize", value: "1000"),
+                URLQueryItem(name: "supportsAllDrives", value: "true"),
+                URLQueryItem(name: "includeItemsFromAllDrives", value: "true"),
+                URLQueryItem(name: "fields", value: "nextPageToken,files(id,name,mimeType,webViewLink,size,md5Checksum,parents,resourceKey)")
+            ]
+            if let nextPageToken { components.queryItems?.append(URLQueryItem(name: "pageToken", value: nextPageToken)) }
+            var request = URLRequest(url: components.url!)
+            request.httpMethod = "GET"
+            setResourceKeyHeader(resourceKeys, on: &request)
+            let (data, response) = try await session.data(for: request)
+            guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
+            guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
+            let page = try JSONDecoder().decode(GoogleDriveFileList.self, from: data)
+            results.append(contentsOf: page.files)
+            nextPageToken = page.nextPageToken
+            guard results.count <= 10_000 else { throw GoogleDriveError.driveImportTooManyFiles }
+        } while nextPageToken != nil
+        return results
+    }
+
+    private func setResourceKeyHeader(_ keys: [String: String], on request: inout URLRequest) {
+        guard !keys.isEmpty else { return }
+        let value = keys.keys.sorted().compactMap { id in keys[id].map { "\(id)/\($0)" } }.joined(separator: ",")
+        request.setValue(value, forHTTPHeaderField: "X-Goog-Drive-Resource-Keys")
+    }
+
+    private func apiError(_ response: HTTPURLResponse, data: Data) -> GoogleDriveError {
+        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let error = root?["error"] as? [String: Any]
+        let message = error?["message"] as? String ?? "A API do Google Drive recusou a solicitação."
+        let normalizedMessage = message.lowercased()
+        let keyFailure = ["api key", "api_key", "api has not been used", "service_disabled", "referer"].contains {
+            normalizedMessage.contains($0)
+        }
+        if response.statusCode == 404 || (response.statusCode == 403 && !keyFailure) {
+            return .publicDriveFolderIsNotAccessible
+        }
+        return .api(status: response.statusCode, message: message)
+    }
+}
+
+private enum GoogleDrivePublicAPIKeychain {
+    private static let service = "br.caminhoanglicano.pregar.google-drive-public-api"
+    private static let account = "api-key"
+
+    static func read() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func save(_ key: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: Data(key.utf8)] as CFDictionary)
+        if status == errSecItemNotFound {
+            var item = query
+            item[kSecValueData as String] = Data(key.utf8)
+            let addStatus = SecItemAdd(item as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw APIKeychain.KeychainError(status: addStatus) }
+        } else if status != errSecSuccess {
+            throw APIKeychain.KeychainError(status: status)
+        }
+    }
+}
+
+struct GoogleDrivePublicPDFImportResult: Sendable {
+    let folderName: String
+    let localURLs: [URL]
+    let failures: [String]
+}
+
+@MainActor
+final class GoogleDrivePublicPDFImporter: ObservableObject {
+    @Published private(set) var isLoadingKey = true
+    @Published private(set) var isImporting = false
+    @Published private(set) var savedAPIKeyExists = false
+    @Published private(set) var status = ""
+    @Published private(set) var completedCount = 0
+    @Published private(set) var totalCount = 0
+
+    private var savedAPIKey: String?
+
+    init() {
+        let readTask = Task.detached(priority: .utility) { GoogleDrivePublicAPIKeychain.read() }
+        Task { [weak self] in
+            let key = await readTask.value
+            self?.savedAPIKey = key
+            self?.savedAPIKeyExists = key != nil
+            self?.isLoadingKey = false
+        }
+    }
+
+    func importPDFs(
+        from publicFolderLink: String,
+        apiKey enteredAPIKey: String,
+        includeSubfolders: Bool
+    ) async throws -> GoogleDrivePublicPDFImportResult {
+        guard !isImporting else { throw GoogleDriveError.syncInProgress }
+        guard let link = GoogleDrivePublicFolderLink.parse(publicFolderLink) else {
+            throw GoogleDriveError.invalidPublicDriveFolderLink
+        }
+        let submittedKey = enteredAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = submittedKey.isEmpty ? savedAPIKey : submittedKey
+        guard let key, !key.isEmpty else { throw GoogleDriveError.missingPublicDriveAPIKey }
+
+        isImporting = true
+        completedCount = 0
+        totalCount = 0
+        status = "Verificando pasta pública…"
+        defer { isImporting = false }
+
+        let client = GoogleDrivePublicFolderClient(apiKey: key)
+        let folder = try await client.folder(for: link)
+        if !submittedKey.isEmpty {
+            try await Task.detached(priority: .utility) { try GoogleDrivePublicAPIKeychain.save(submittedKey) }.value
+            savedAPIKey = submittedKey
+            savedAPIKeyExists = true
+        }
+        let files = try await client.pdfFiles(in: folder, rootResourceKey: link.resourceKey, includeSubfolders: includeSubfolders)
+        guard !files.isEmpty else { throw GoogleDriveError.noPDFsInPublicDriveFolder }
+        totalCount = files.count
+        let directory = try Self.importDirectory(folderID: folder.id)
+        var imported: [URL] = []
+        var failures: [String] = []
+
+        for (index, pdf) in files.enumerated() {
+            status = "Baixando \(index + 1) de \(files.count): \(pdf.file.name)"
+            do {
+                let data = try await client.download(pdf)
+                let destination = directory.appendingPathComponent(Self.localFilename(for: pdf.file), isDirectory: false)
+                try await Task.detached(priority: .utility) {
+                    try data.write(to: destination, options: .atomic)
+                }.value
+                imported.append(destination)
+            } catch {
+                failures.append("\(pdf.file.name): \(error.localizedDescription)")
+            }
+            completedCount = index + 1
+        }
+        guard !imported.isEmpty else {
+            throw GoogleDriveError.api(status: 400, message: failures.first ?? "Nenhum PDF pôde ser baixado.")
+        }
+        status = "\(imported.count) PDF(s) baixado(s)\(failures.isEmpty ? "" : " · \(failures.count) com erro")"
+        return GoogleDrivePublicPDFImportResult(folderName: folder.name, localURLs: imported, failures: failures)
+    }
+
+    private static func importDirectory(folderID: String) throws -> URL {
+        let root = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let safeID = String(folderID.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || "-_".unicodeScalars.contains($0) })
+        let directory = root.appendingPathComponent("Pregar/Library/Google Drive/\(safeID)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private static func localFilename(for file: GoogleDriveFile) -> String {
+        let basename = URL(fileURLWithPath: file.name).deletingPathExtension().lastPathComponent
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " -_()."))
+        let cleaned = basename.unicodeScalars.map { allowed.contains($0) ? String($0) : "_" }
+            .joined()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeName = cleaned.isEmpty ? "Comentario" : cleaned
+        let safeID = String(file.id.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || "-_".unicodeScalars.contains($0) })
+        return "\(safeName) [\(safeID)].pdf"
+    }
 }
 
 @MainActor

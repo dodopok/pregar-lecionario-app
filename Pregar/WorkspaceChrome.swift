@@ -502,6 +502,8 @@ struct ResourceContextPanel: View {
     @AppStorage("pregar.library.records.v1") private var savedPDFRecords = Data()
     @AppStorage("pregar.material-research.reports.v1") private var savedResearchReports = Data()
     @AppStorage("pregar.favorite-site-search.reports.v3") private var savedFavoriteSiteReports = Data()
+    @AppStorage(FavoriteReferenceLibrary.sitesKey) private var savedFavoriteSites = Data()
+    @AppStorage(FavoriteReferenceLibrary.authorsKey) private var savedFavoriteAuthors = Data()
     @Binding var selectedTab: ContextPaneTab
     let reference: String
     let occasion: String?
@@ -550,9 +552,14 @@ struct ResourceContextPanel: View {
             reference: reference,
             occasion: occasion,
             date: liturgicalDate,
-            isSunday: isSunday
+            isSunday: isSunday,
+            sites: favoriteSites,
+            authors: favoriteAuthors
         )
     }
+
+    private var favoriteSites: [FavoriteSite] { FavoriteReferenceLibrary.sites(from: savedFavoriteSites) }
+    private var favoriteAuthors: [FavoriteAuthor] { FavoriteReferenceLibrary.authors(from: savedFavoriteAuthors) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -749,15 +756,20 @@ struct ResourceContextPanel: View {
                 }
             }
 
-            ForEach(FavoriteSite.allCases) { site in
+            ForEach(favoriteSites) { site in
                 favoriteSourceRow(site)
+            }
+            if favoriteSites.isEmpty {
+                Text("Adicione fontes favoritas em Preferências · Biblioteca.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(PrototypeStyle.muted)
             }
         }
     }
 
     @ViewBuilder
     private func favoriteSourceRow(_ site: FavoriteSite) -> some View {
-        let group = favoriteSiteReports[favoriteSiteSearchKey]?.groups.first(where: { $0.site == site })
+        let group = favoriteSiteReports[favoriteSiteSearchKey]?.groups.first(where: { $0.site.id == site.id })
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "globe")
@@ -771,7 +783,7 @@ struct ResourceContextPanel: View {
                         .foregroundStyle(PrototypeStyle.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     Text([
-                        site == .anglicanCompass
+                        site.usesAnglicanCompassDestination
                             ? FavoriteSourceURLs.anglicanCompassDetail(occasion: occasion, date: liturgicalDate, isSunday: isSunday)
                             : site.detail,
                         site.language
@@ -797,11 +809,15 @@ struct ResourceContextPanel: View {
                 .help("Buscar no site")
             }
 
-            if site == .workingPreacher {
+            if site.adapter == .workingPreacherArchive {
                 Text("Arquivo da perícope. Confira o intervalo bíblico em cada resultado.")
                     .font(.system(size: 10))
                     .foregroundStyle(PrototypeStyle.muted)
                     .fixedSize(horizontal: false, vertical: true)
+            } else if site.adapter == .websiteSearch {
+                Text("Abra o site para buscar esta passagem.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(PrototypeStyle.muted)
             } else if let group {
                 if let error = group.errorMessage {
                     Text(error)
@@ -886,7 +902,9 @@ struct ResourceContextPanel: View {
             reference: reference,
             occasion: occasion,
             date: liturgicalDate,
-            isSunday: isSunday
+            isSunday: isSunday,
+            sites: favoriteSites,
+            authors: favoriteAuthors
         )
         guard !Task.isCancelled, favoriteSiteSearchKey == cacheKey else { return }
         favoriteSiteReports[cacheKey] = report
@@ -1004,7 +1022,12 @@ struct ResourceContextPanel: View {
                 let sources = try await AIResearchClient().search(
                     reference: searchReference,
                     occasion: occasion,
-                    configuration: AIResearchConfiguration(provider: provider, model: model, apiKey: key)
+                    configuration: AIResearchConfiguration(
+                        provider: provider,
+                        model: model,
+                        apiKey: key,
+                        priorityAuthors: favoriteAuthors.map(\.name)
+                    )
                 )
                 let report = AIResearchReport(
                     reference: searchReference,

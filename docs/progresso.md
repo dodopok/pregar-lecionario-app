@@ -39,6 +39,14 @@ O projeto é um app nativo para macOS, com armazenamento local e consumo da Est�
 
 A busca de artigos está dentro do painel Materiais e usa endpoints públicos próprios de cada site para três fontes; o Working Preacher permanece como abertura do arquivo por perícope, sem contornar o bloqueio automatizado. Os resultados ficam em cache local por passagem, ocasião e data litúrgica. A integração Google Drive está implementada e testada em contratos simulados, mas depende do OAuth Client ID do app para validar login, permissões e sincronização reais. Com `drive.file` e sem Google Picker, ela cria documentos próprios e não importa um Google Doc antigo. A saída PDF para tablet existe, mas ainda precisa ser validada no Android/iPad real e no ciclo de disponibilidade offline. O OCR precisa ser conferido em um PDF digitalizado real do acervo. A revisão e as perguntas BYOK precisam de avaliação real de qualidade/latência por provedor com conteúdo autorizado pelo usuário.
 
+## Biblioteca configurável e pasta pública do Drive
+
+- Sites e autores favoritos são editáveis nas Preferências da Biblioteca: adicionar, alterar e remover. Working Preacher, Anglican Compass, My Pastoral Ponderings e Ponderings on a Faith Journey vêm como perfis iniciais, junto de N. T. Wright, Michael Bird, Scot McKnight, Fleming Rutledge, Andrew McGowan e Richard Bauckham. Os perfis são locais e podem ser substituídos integralmente.
+- O Leitor preserva os conectores específicos existentes para Working Preacher e Anglican Compass. Os perfis genéricos oferecem adaptadores de WordPress, WordPress.com, Blogger, RSS/Atom e busca via URL configurável; WordPress e Blogger podem localizar resultados estruturados por passagem, enquanto RSS/Atom compara os títulos e resumos já publicados no feed. Templates aceitam `{query}`, `{reference}`, `{book}`, `{chapter}`, `{occasion}` e `{date}`. O cache é invalidado quando muda a biblioteca de fontes/autores.
+- A importação da Biblioteca aceita exclusivamente o link de uma pasta do Google Drive compartilhada como “Qualquer pessoa com o link”. OAuth não é usado nesse fluxo: a Drive API lista os PDFs públicos com chave de API, incluindo links com `resourcekey`, paginação e, se escolhido, subpastas. Os arquivos são copiados para `Application Support/Pregar/Library/Google Drive/<id-da-pasta>` e indexados no acervo local; os originais compartilhados não são alterados. Reimportar atualiza os mesmos caminhos, sem criar cópias duplicadas.
+- A chave da Drive API é salva no Acesso às Chaves deste Mac, separada do refresh token OAuth dos sermões. No Google Cloud, é preciso ativar Google Drive API e criar uma chave de API; recomenda-se restringi-la à Drive API. A pasta precisa permitir acesso de leitor a qualquer pessoa com o link. PDFs acima de 128 MB são rejeitados, e a varredura tem limite de 5.000 PDFs.
+- Testes simulados cobrem link público e validação de host, `resourcekey` na pasta e em arquivos, duas páginas de listagem, travessia de subpasta, download e diferenciação entre chave/API inválida e pasta sem acesso. Nenhuma pasta ou chave real foi usada; falta uma chave pessoal e um link público de teste para validar a importação de ponta a ponta.
+
 ## Host da API
 
 O app inicialmente usava `https://estevao.caminhoanglicano.com.br`, domínio do site que responde com uma página HTML de 404 na rota v2. O deploy e a definição OpenAPI do repositório `estevao-api` identificam `https://api.caminhoanglicano.com.br` como host correto.
@@ -80,6 +88,7 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - O catálogo de traduções foi coberto por teste HTTP simulado, incluindo autenticação, rota v2 e decodificação dos metadados de `bible_versions`. A comparação completa será conferida contra a chave da Estêvão API durante o teste da janela.
 - Google Drive/Docs: testes simulados cobrem OAuth desktop com PKCE e `drive.file`, conversão de RTF/texto e estilos de parágrafo, cabeçalho Bearer, extração de texto, revisão obrigatória, revisão retornada pela operação atômica e conflito HTTP sem segunda requisição. Nenhuma conta Google, documento real, chave ou chamada externa foi usada; falta o OAuth Client ID do app.
 - A interface de conexão do Drive abre na Mesa/Tablet/Ideias, não nas Preferências. O rascunho guarda o ID, última revisão, hash do RTF sincronizado, horário e erro; só sincroniza automaticamente depois do vínculo explícito e somente quando o conteúdo local mudou. A aba Ideias cria um Doc separado, atualiza ao entrar e oferece inserção manual por nota preservando a origem.
+- A última execução completa da suíte passou com 60 testes e zero falhas, incluindo as rotas genéricas dos sites, personalização de destinos padrão e importação de pasta pública simulada. O test host foi assinado pela identidade Apple Development configurada no projeto; o import real ainda depende da chave de API e do link público do usuário.
 - Na validação desta etapa, a suíte completa passou com 26 testes e nenhuma falha; `codesign` confirmou `Apple Development: DOUGLAS DE ARAUJO SILVA` e `TeamIdentifier=R573HPN65Q`.
 - Após integrar revisão, perguntas e limite de volume, a suíte completa passou com 20 testes e nenhuma falha; `codesign` confirmou `Apple Development: DOUGLAS DE ARAUJO SILVA` e `TeamIdentifier=R573HPN65Q` na build de teste.
 - A build assinada de 27/09/2026 compilou com `Apple Development` e o Team `R573HPN65Q`; `codesign -dv` confirmou `TeamIdentifier=R573HPN65Q`. Não foi usada assinatura ad hoc nem build unsigned.
@@ -106,6 +115,13 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - Na Bíblia, toda tradução aberta agora aparece como controle próprio; traduções adicionais são escolhidas no catálogo completo de `bible_versions`, e as comparações podem ser removidas individualmente. Os controles Perícope/Capítulo também têm alvo de toque ampliado. A tipografia dos versículos foi reduzida de 23 para 19 pt, mantendo as colunas alinhadas na rolagem compartilhada.
 - O XcodeGen regenerou o projeto para incluir `LiturgicalAPITests.swift`, que estava ausente do target no `.xcodeproj`; por isso a primeira contagem não exercitava os contratos da API. Com o target corrigido, 53 testes passaram, incluindo a consulta leve dos nomes dos domingos. A build macOS foi assinada com `Apple Development: DOUGLAS DE ARAUJO SILVA` e `TeamIdentifier=R573HPN65Q`. A janela da Mesa já aberta não foi reiniciada durante a validação, para não interferir no rascunho em uso; a conferência visual final da build atual depende de reabri-la quando o documento estiver salvo.
 
+## Seletor de livro de oração
+
+- Preferências deixou de pedir o código técnico do livro. O seletor consulta o catálogo v2 autenticado e apresenta capas/miniaturas, nome, jurisdição, ano e descrição, com busca textual e destaque do livro selecionado; a preferência continua persistindo o código esperado pela API.
+- Livros sem imagem usam uma capa de reserva visual. O registro atual de REB 2027 na Estêvão API não publica `thumbnail_url` nem `image_url`, então a miniatura real aparecerá quando esse metadado for adicionado ao catálogo.
+- A seleção mostra uma orientação quando ainda não há chave e oferece nova tentativa em caso de falha de rede. A consulta solicita apenas os campos usados pelo seletor.
+- A suíte completa passou com 61 testes; o novo teste cobre autenticação, campos do catálogo, decodificação dos metadados e URL relativa de miniatura. A build de teste está assinada com `Apple Development: DOUGLAS DE ARAUJO SILVA`, `TeamIdentifier=R573HPN65Q`; nenhuma janela do app foi aberta.
+
 ## Performance
 
 - Uma amostra de 8 segundos do processo aberto encontrou a thread principal aguardando eventos do AppKit, sem loop ativo durante o intervalo ocioso. O footprint era 68,2 MB naquele instante e o pico desde a abertura era 224,3 MB; é uma fotografia pontual, não um benchmark de rolagem ou troca de abas.
@@ -119,7 +135,7 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 
 ## Próximos passos
 
-1. Criar o OAuth Client ID do app no Google Cloud e validar a autenticação/sincronização com a conta real, inclusive uma edição simultânea no celular.
+1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.
 2. Validar o PDF exportado no Android/iPad, na pasta sincronizada do Drive e com disponibilidade offline antes da pregação.
 3. Conferir o OCR num PDF digitalizado real do acervo e ampliar a validação da localização para outros volumes.
 4. Validar visualmente os resultados nativos no painel e conferir manualmente se a correspondência editorial dos artigos por passagem está adequada; manter Working Preacher no arquivo por perícope.

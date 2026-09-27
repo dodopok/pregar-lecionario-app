@@ -4,6 +4,14 @@ struct AIResearchConfiguration: Sendable {
     let provider: AIProvider
     let model: String
     let apiKey: String
+    let priorityAuthors: [String]
+
+    init(provider: AIProvider, model: String, apiKey: String, priorityAuthors: [String] = FavoriteAuthor.defaults.map(\.name)) {
+        self.provider = provider
+        self.model = model
+        self.apiKey = apiKey
+        self.priorityAuthors = priorityAuthors
+    }
 }
 
 struct AIResearchSource: Codable, Equatable, Identifiable, Sendable {
@@ -79,8 +87,15 @@ struct AIResearchClient {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
+        let preferredAuthors = configuration.priorityAuthors
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        let authorInstruction = preferredAuthors.isEmpty
+            ? "Do not invent a source or author."
+            : "Prioritize these user-selected authors when relevant: \(preferredAuthors). Do not invent a source or author."
         let instructions = """
-        Find existing web sources about the specified biblical passage. Search for biblical commentaries, exegetical articles, lectionary reflections, or sermons by serious Anglican, Catholic, and Protestant scholars and institutions. Prioritize N. T. Wright, Michael Bird, Scot McKnight, Fleming Rutledge, Andrew McGowan, and Richard Bauckham, but do not invent a source or author. Return source links and titles only. Do not interpret the passage, summarize theology, suggest sermon ideas or applications, or draft any wording. Search only for this public passage and occasion; no sermon manuscript or personal text is provided.
+        Find existing web sources about the specified biblical passage. Search for biblical commentaries, exegetical articles, lectionary reflections, or sermons by serious Anglican, Catholic, and Protestant scholars and institutions. \(authorInstruction) Return source links and titles only. Do not interpret the passage, summarize theology, suggest sermon ideas or applications, or draft any wording. Search only for this public passage and occasion; no sermon manuscript or personal text is provided.
         """
 
         let endpoint: URL

@@ -16,6 +16,7 @@
 		174BE0C81CF839CEB026C8B4 /* SermonHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1C17D3DB8E8C292118A7FF /* SermonHistory.swift */; };
 		1C294EB6B8A9CCADA6AF6D55 /* FavoriteSiteSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89B828392C615A2131C4ABEF /* FavoriteSiteSearch.swift */; };
 		2236BE23F5A46EA6012ECFD1 /* PrototypeStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */; };
+		345DF5486A576389C6FF9E7B /* FavoriteReferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5059C3EAB679E80929E3A17 /* FavoriteReferences.swift */; };
 		39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */; };
 		3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495567BA510561B3883455A /* LibraryArchiveViews.swift */; };
 		3AE4D461A05EE1772CD35DC4 /* AIReviewMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1C3731E589A46BFCE0F8FB /* AIReviewMaterials.swift */; };
@@ -82,6 +83,7 @@
 		D197D272EBD91D154ABF1AB6 /* GoogleDrive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDrive.swift; sourceTree = "<group>"; };
 		D6ACD579D8F2E7611FB24671 /* PregarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PregarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F3C58A2501218EC111B74290 /* SermonReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonReview.swift; sourceTree = "<group>"; };
+		F5059C3EAB679E80929E3A17 /* FavoriteReferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteReferences.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -125,6 +127,7 @@
 				3DCCDA011317AD64332990C8 /* AISettings.swift */,
 				74D8516E9667268B7075CEB2 /* APISettings.swift */,
 				62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */,
+				F5059C3EAB679E80929E3A17 /* FavoriteReferences.swift */,
 				89B828392C615A2131C4ABEF /* FavoriteSiteSearch.swift */,
 				D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */,
 				D197D272EBD91D154ABF1AB6 /* GoogleDrive.swift */,
@@ -248,6 +251,7 @@
 				0B931865BC2CBFCE6E3D9D9C /* AISettings.swift in Sources */,
 				AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */,
 				39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */,
+				345DF5486A576389C6FF9E7B /* FavoriteReferences.swift in Sources */,
 				1C294EB6B8A9CCADA6AF6D55 /* FavoriteSiteSearch.swift in Sources */,
 				70F9C5A32F020FED083C6C2E /* FavoriteSourceURLs.swift in Sources */,
 				7D6CB8C856A40027094C3151 /* GoogleDrive.swift in Sources */,

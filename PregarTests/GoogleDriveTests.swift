@@ -143,6 +143,100 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(requests, 1)
     }
 
+    func testPublicDriveFolderLinkKeepsResourceKeyAndRejectsUnrelatedHosts() throws {
+        let link = try XCTUnwrap(GoogleDrivePublicFolderLink.parse(
+            " https://drive.google.com/drive/folders/folder_123?usp=sharing&resourcekey=share-key "
+        ))
+
+        XCTAssertEqual(link.folderID, "folder_123")
+        XCTAssertEqual(link.resourceKey, "share-key")
+        XCTAssertEqual(GoogleDrivePublicFolderLink.parse("https://drive.google.com/open?id=folder_123")?.folderID, "folder_123")
+        XCTAssertNil(GoogleDrivePublicFolderLink.parse("http://drive.google.com/drive/folders/folder_123"))
+        XCTAssertNil(GoogleDrivePublicFolderLink.parse("https://drive.google.com.evil.example/drive/folders/folder_123"))
+        XCTAssertNil(GoogleDrivePublicFolderLink.parse("https://docs.google.com/document/d/folder_123"))
+    }
+
+    func testPublicDriveClientListsPagesAndNestedFoldersWithResourceKeys() async throws {
+        var requests: [URLRequest] = []
+        GoogleDriveStubURLProtocol.setHandler { request in
+            requests.append(request)
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
+            let query = Dictionary(components.queryItems?.map { ($0.name, $0.value ?? "") } ?? [], uniquingKeysWith: { first, _ in first })
+
+            if components.path.hasSuffix("/folder-root") {
+                return (200, Data(#"{"id":"folder-root","name":"Comentários","mimeType":"application/vnd.google-apps.folder","resourceKey":"root-key"}"#.utf8))
+            }
+            if query["alt"] == "media" {
+                return (200, Data("%PDF-1.7\nmock pdf".utf8))
+            }
+            if query["pageToken"] == "page-2" {
+                return (200, Data(#"{"files":[{"id":"second-pdf","name":"Segundo.pdf","mimeType":"application/pdf","size":12}]}"#.utf8))
+            }
+            if query["q"]?.contains("'folder-nested'") == true {
+                return (200, Data(#"{"files":[{"id":"nested-pdf","name":"Subpasta.pdf","mimeType":"application/pdf","size":"16","resourceKey":"pdf-key"}]}"#.utf8))
+            }
+            return (200, Data(#"{"nextPageToken":"page-2","files":[{"id":"folder-nested","name":"Subpasta","mimeType":"application/vnd.google-apps.folder","resourceKey":"nested-key"},{"id":"root-pdf","name":"Primeiro.pdf","mimeType":"application/pdf","size":"10","resourceKey":"root-pdf-key"}]}"#.utf8))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let client = GoogleDrivePublicFolderClient(apiKey: "test-key", session: session)
+        let link = try XCTUnwrap(GoogleDrivePublicFolderLink.parse(
+            "https://drive.google.com/drive/folders/folder-root?resourcekey=link-root-key"
+        ))
+
+        let folder = try await client.folder(for: link)
+        let pdfs = try await client.pdfFiles(in: folder, rootResourceKey: link.resourceKey, includeSubfolders: true)
+        let nestedPDF = try XCTUnwrap(pdfs.first(where: { $0.file.id == "nested-pdf" }))
+        let bytes = try await client.download(nestedPDF)
+
+        XCTAssertEqual(pdfs.map(\.file.id).sorted(), ["nested-pdf", "root-pdf", "second-pdf"])
+        XCTAssertTrue(bytes.starts(with: Data("%PDF-".utf8)))
+        XCTAssertEqual(requests.first?.value(forHTTPHeaderField: "X-Goog-Drive-Resource-Keys"), "folder-root/link-root-key")
+
+        let rootPages = requests.filter {
+            URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "q" })?.value?.contains("'folder-root'") == true
+        }
+        XCTAssertEqual(rootPages.count, 2)
+        XCTAssertEqual(URLComponents(url: rootPages[1].url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "pageToken" })?.value, "page-2")
+        XCTAssertTrue(rootPages.allSatisfy { $0.value(forHTTPHeaderField: "X-Goog-Drive-Resource-Keys") == "folder-root/link-root-key" })
+
+        let nestedListing = try XCTUnwrap(requests.first { URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "q" })?.value?.contains("'folder-nested'") == true })
+        XCTAssertEqual(nestedListing.value(forHTTPHeaderField: "X-Goog-Drive-Resource-Keys"), "folder-nested/nested-key,folder-root/link-root-key")
+        let mediaRequest = try XCTUnwrap(requests.first { URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "alt" && $0.value == "media" }) == true })
+        XCTAssertEqual(mediaRequest.value(forHTTPHeaderField: "X-Goog-Drive-Resource-Keys"), "folder-nested/nested-key,folder-root/link-root-key,nested-pdf/pdf-key")
+        XCTAssertEqual(URLComponents(url: mediaRequest.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "key" })?.value, "test-key")
+    }
+
+    func testPublicDriveDistinguishesInvalidAPIKeyFromPrivateFolder() async throws {
+        GoogleDriveStubURLProtocol.setHandler { _ in
+            (403, Data(#"{"error":{"message":"API key not valid. Please pass a valid API key."}}"#.utf8))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let client = GoogleDrivePublicFolderClient(apiKey: "invalid-key", session: session)
+        let link = try XCTUnwrap(GoogleDrivePublicFolderLink.parse("https://drive.google.com/drive/folders/folder-root"))
+
+        do {
+            _ = try await client.folder(for: link)
+            XCTFail("Expected an API key error")
+        } catch let GoogleDriveError.api(status, message) {
+            XCTAssertEqual(status, 403)
+            XCTAssertTrue(message.contains("API key not valid"))
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        GoogleDriveStubURLProtocol.setHandler { _ in
+            (404, Data(#"{"error":{"message":"File not found"}}"#.utf8))
+        }
+        do {
+            _ = try await client.folder(for: link)
+            XCTFail("Expected a public-folder access error")
+        } catch let error as GoogleDriveError {
+            if case .publicDriveFolderIsNotAccessible = error {} else { XCTFail("Unexpected error: \(error)") }
+        }
+    }
+
     private func stubSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [GoogleDriveStubURLProtocol.self]
