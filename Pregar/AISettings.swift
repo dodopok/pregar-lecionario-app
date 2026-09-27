@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import Security
 
-enum AIProvider: String, CaseIterable, Identifiable {
+enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     case openAI = "openai"
     case anthropic = "anthropic"
     case google = "google"
@@ -69,7 +69,8 @@ private enum AIKeychain {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: provider.rawValue
+            kSecAttrAccount as String: provider.rawValue,
+            kSecUseDataProtectionKeychain as String: true
         ]
     }
 }
@@ -80,7 +81,11 @@ final class AISettingsStore: ObservableObject {
     @Published private(set) var researchProvider: AIProvider
     @Published private(set) var reviewModel: String
     @Published private(set) var researchModel: String
+    @Published private(set) var keyedProviders = Set<AIProvider>()
+    @Published private(set) var isLoadingKeys = true
+    @Published private(set) var keyReadTimedOut = false
     @Published private(set) var revision = 0
+    private var changedKeyProviders = Set<AIProvider>()
 
     init() {
         let defaults = UserDefaults.standard
@@ -88,19 +93,48 @@ final class AISettingsStore: ObservableObject {
         researchProvider = AIProvider(rawValue: defaults.string(forKey: "ai.researchProvider") ?? "perplexity") ?? .perplexity
         reviewModel = defaults.string(forKey: "ai.reviewModel") ?? "claude-sonnet-5"
         researchModel = defaults.string(forKey: "ai.researchModel") ?? "search-api"
+
+        let readTask = Task.detached(priority: .utility) {
+            Set(AIProvider.allCases.filter { AIKeychain.read(for: $0) != nil })
+        }
+        Task { [weak self] in
+            let savedProviders = await readTask.value
+            guard let self else { return }
+            for provider in AIProvider.allCases where !self.changedKeyProviders.contains(provider) {
+                if savedProviders.contains(provider) { self.keyedProviders.insert(provider) }
+                else { self.keyedProviders.remove(provider) }
+            }
+            self.keyReadTimedOut = false
+            self.isLoadingKeys = false
+            self.revision += 1
+        }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard let self, self.isLoadingKeys else { return }
+            self.keyReadTimedOut = true
+            self.isLoadingKeys = false
+            self.revision += 1
+        }
     }
 
-    func hasKey(for provider: AIProvider) -> Bool { AIKeychain.read(for: provider) != nil }
+    func hasKey(for provider: AIProvider) -> Bool { keyedProviders.contains(provider) }
 
-    func saveKey(_ key: String, for provider: AIProvider) throws {
+    func saveKey(_ key: String, for provider: AIProvider) async throws {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        try AIKeychain.save(trimmed, for: provider)
+        try await Task.detached(priority: .utility) { try AIKeychain.save(trimmed, for: provider) }.value
+        changedKeyProviders.insert(provider)
+        keyedProviders.insert(provider)
+        keyReadTimedOut = false
         revision += 1
     }
 
-    func removeKey(for provider: AIProvider) throws {
-        try AIKeychain.delete(for: provider)
+    func removeKey(for provider: AIProvider) async throws {
+        try await Task.detached(priority: .utility) { try AIKeychain.delete(for: provider) }.value
+        changedKeyProviders.insert(provider)
+        keyedProviders.remove(provider)
+        keyReadTimedOut = false
+        isLoadingKeys = false
         revision += 1
     }
 

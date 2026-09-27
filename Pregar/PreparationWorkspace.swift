@@ -85,10 +85,16 @@ struct PreparationWorkspace: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if isLoading || day == nil {
                     VStack(spacing: 12) {
-                        ProgressView().tint(accentColor)
-                        Text(settingsStore.hasAPIKey ? "Consultando o calendário…" : "Configure sua chave da Estêvão API")
+                        if settingsStore.isLoadingCredential || (settingsStore.hasAPIKey && isLoading) {
+                            ProgressView().tint(accentColor)
+                        } else {
+                            Image(systemName: "key.horizontal")
+                                .font(.system(size: 22))
+                                .foregroundStyle(PrototypeStyle.muted)
+                        }
+                        Text(settingsStore.isLoadingCredential ? "Preparando a conexão…" : (settingsStore.hasAPIKey ? "Consultando o calendário…" : "Configure sua chave da Estêvão API"))
                             .font(.system(size: 13)).foregroundStyle(PrototypeStyle.muted)
-                        if !settingsStore.hasAPIKey {
+                        if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey {
                             Button("Configurar Estêvão API") { showingSettings = true }
                                 .buttonStyle(.borderedProminent)
                                 .tint(accentColor)
@@ -184,7 +190,10 @@ struct PreparationWorkspace: View {
         .onAppear {
             ensureDraft(for: selectedDate)
             selectedBible = settingsStore.settings.bible
-            if !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
+            if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
+        }
+        .onChange(of: settingsStore.isLoadingCredential) { _, loading in
+            if !loading && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
         .onChange(of: selectedDayKey) { _, _ in
             ensureDraft(for: selectedDate)
@@ -521,6 +530,10 @@ struct PreparationWorkspace: View {
 
     @MainActor
     private func loadDay() async {
+        guard !settingsStore.isLoadingCredential else {
+            isLoading = true
+            return
+        }
         guard settingsStore.hasAPIKey, let key = settingsStore.credential else {
             day = nil
             loadError = nil

@@ -45,7 +45,11 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - Projeto regenerado com XcodeGen após incluir as novas telas.
 - `xcodebuild -quiet -project Pregar.xcodeproj -scheme Pregar -destination 'platform=macOS' -derivedDataPath /private/tmp/pregar-prototype-derivedData build` concluiu com código 0.
 - Não há suíte automatizada de testes.
-- A abertura da build recém-compilada por LaunchServices falhou com `kLSNoExecutableErr`, apesar do executável estar presente no bundle. Portanto a nova interface ainda não teve conferência visual dentro do app. A compilação não valida a renderização em runtime.
+- Na primeira tentativa, a cena do SwiftUI não aparecia porque `APISettingsStore.init()` lia o Acesso às Chaves sincronamente no ator principal. A amostragem do processo mostrou a thread principal parada em `SecItemCopyMatching`/descriptografia do chaveiro durante a criação da janela.
+- O carregamento de credenciais foi movido para background; as novas operações usam o Data Protection Keychain do macOS. Leituras que não respondam em três segundos deixam de segurar o estado de inicialização; o app abre as Preferências para que a chave seja informada novamente. A cópia antiga no chaveiro legado não é apagada.
+- Build atual compilada e aberta via LaunchServices. A árvore de acessibilidade confirmou a janela de Preferências e, depois de fechá-la, a Mesa nativa com calendário e estado explícito “Configure sua chave da Estêvão API”, sem spinner enganoso quando não há chave acessível.
+- O calendário real ainda depende de uma chave válida informada no campo X-API-Key. A consulta autenticada da API não foi testada nesta sessão porque a credencial antiga não apareceu no Data Protection Keychain e não vou digitar ou transmitir uma chave privada em nome do usuário.
+- O erro `kLSNoExecutableErr` observado ao executar `open` sem elevação era do sandbox de execução: o mesmo erro ocorreu com o app Calculadora do sistema; a abertura elevada da build funcionou.
 - O protótipo web publicado foi navegado; nenhuma ação de enviar revisão ou alterar dados externos foi acionada.
 
 ## Próximos passos

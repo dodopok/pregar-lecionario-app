@@ -132,15 +132,17 @@ struct APISettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 PreferenceRow(label: "Chave X-API-Key") {
-                    SecureField(store.hasAPIKey ? "Chave salva; deixe vazio para mantê-la" : "estevao_…", text: $enteredKey)
+                    SecureField(keyPlaceholder, text: $enteredKey)
                         .textFieldStyle(.roundedBorder)
                 }
                 HStack {
-                    Label(store.hasAPIKey ? "Chave salva neste Mac" : "Nenhuma chave salva", systemImage: store.hasAPIKey ? "key.fill" : "key")
-                        .foregroundStyle(store.hasAPIKey ? accent : PrototypeStyle.muted)
+                    Label(apiKeyStatus, systemImage: apiKeyStatusSymbol)
+                        .foregroundStyle(store.credentialReadTimedOut ? .orange : (store.hasAPIKey ? accent : PrototypeStyle.muted))
                     Spacer()
                     if store.hasAPIKey {
-                        Button("Remover chave", systemImage: "trash", role: .destructive, action: removeAPIKey)
+                        Button("Remover chave", systemImage: "trash", role: .destructive) {
+                            Task { await removeAPIKey() }
+                        }
                             .buttonStyle(.plain)
                     }
                 }
@@ -344,6 +346,25 @@ struct APISettingsView: View {
         }
     }
 
+    private var keyPlaceholder: String {
+        if store.hasAPIKey { return "Chave salva; deixe vazio para mantê-la" }
+        if store.credentialReadTimedOut { return "Informe novamente a chave deste Mac" }
+        return "estevao_…"
+    }
+
+    private var apiKeyStatus: String {
+        if store.isLoadingCredential { return "Verificando Acesso às Chaves…" }
+        if store.hasAPIKey { return "Chave salva neste Mac" }
+        if store.credentialReadTimedOut { return "A leitura demorou; você pode informar a chave novamente" }
+        return "Nenhuma chave salva"
+    }
+
+    private var apiKeyStatusSymbol: String {
+        if store.isLoadingCredential { return "hourglass" }
+        if store.hasAPIKey { return "key.fill" }
+        return store.credentialReadTimedOut ? "exclamationmark.triangle.fill" : "key"
+    }
+
     private func statusMessage(_ message: String, success: Bool) -> some View {
         Label(message, systemImage: success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
             .font(.system(size: 13)).foregroundStyle(success ? accent : .orange)
@@ -356,7 +377,7 @@ struct APISettingsView: View {
         isTesting = true
         resultMessage = nil
         do {
-            try store.save(settings: settings, enteredKey: enteredKey)
+            try await store.save(settings: settings, enteredKey: enteredKey)
             enteredKey = ""
             guard let key = store.credential else {
                 throw LiturgicalAPIError(message: "Informe sua chave pessoal da Estêvão API para consultar a v2.")
@@ -377,9 +398,10 @@ struct APISettingsView: View {
         testSucceeded = true
     }
 
-    private func removeAPIKey() {
+    @MainActor
+    private func removeAPIKey() async {
         do {
-            try store.removeKey()
+            try await store.removeKey()
             resultMessage = "Chave removida deste Mac."
             testSucceeded = true
         } catch {
@@ -400,33 +422,41 @@ private struct AIProviderKeyRow: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(provider.name).font(.system(size: 14, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
-                Label(store.hasKey(for: provider) ? "Chave salva neste Mac" : "Sem chave", systemImage: store.hasKey(for: provider) ? "key.fill" : "key")
+                Label(keyStatus, systemImage: store.hasKey(for: provider) ? "key.fill" : "key")
                     .font(.system(size: 11)).foregroundStyle(store.hasKey(for: provider) ? accent : PrototypeStyle.muted)
                 if let feedback { Text(feedback).font(.system(size: 11)).foregroundStyle(.secondary) }
             }
             .frame(width: 185, alignment: .leading)
             SecureField("Cole a chave da API", text: $key)
                 .textFieldStyle(.roundedBorder)
-            Button("Salvar") { saveKey() }.disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if store.hasKey(for: provider) {
-                Button("Remover", systemImage: "trash", role: .destructive) { removeKey() }
+            Button("Salvar") { Task { await saveKey() } }.disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if !store.isLoadingKeys && store.hasKey(for: provider) {
+                Button("Remover", systemImage: "trash", role: .destructive) { Task { await removeKey() } }
                     .labelStyle(.iconOnly).help("Remover chave de \(provider.name)")
             }
         }
         .frame(minHeight: 54)
     }
 
-    private func saveKey() {
+    private var keyStatus: String {
+        if store.isLoadingKeys { return "Verificando Acesso às Chaves…" }
+        if store.keyReadTimedOut { return "Leitura demorou; salve a chave novamente" }
+        return store.hasKey(for: provider) ? "Chave salva neste Mac" : "Sem chave"
+    }
+
+    @MainActor
+    private func saveKey() async {
         do {
-            try store.saveKey(key, for: provider)
+            try await store.saveKey(key, for: provider)
             key = ""
             feedback = "Salva no Acesso às Chaves."
         } catch { feedback = error.localizedDescription }
     }
 
-    private func removeKey() {
+    @MainActor
+    private func removeKey() async {
         do {
-            try store.removeKey(for: provider)
+            try await store.removeKey(for: provider)
             feedback = "Chave removida."
         } catch { feedback = error.localizedDescription }
     }
