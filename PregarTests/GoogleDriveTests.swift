@@ -409,6 +409,45 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(URLComponents(url: mediaRequest.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "key" })?.value, "test-key")
     }
 
+    @MainActor
+    func testPublicDriveDownloadsAreBoundedAndYieldEachFile() async throws {
+        let tracker = DriveDownloadConcurrencyTracker()
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let client = GoogleDrivePublicFolderClient(apiKey: "test-key", session: session)
+        let files = (0..<5).map { index in
+            GoogleDrivePublicPDF(
+                file: GoogleDriveFile(
+                    id: "pdf-\(index)",
+                    name: "Comentário \(index).pdf",
+                    mimeType: "application/pdf",
+                    webViewLink: nil,
+                    size: 12
+                ),
+                parentResourceKeys: [:]
+            )
+        }
+        var outcomes: [GoogleDrivePublicPDFDownloadResult] = []
+
+        await client.downloadConcurrently(
+            files,
+            maximumConcurrentDownloads: 2,
+            download: { _ in
+                await tracker.beginRequest()
+                try await Task.sleep(for: .milliseconds(40))
+                await tracker.endRequest()
+                return Data("%PDF-1.7\nmock".utf8)
+            },
+            onCompletion: { outcome in outcomes.append(outcome) }
+        )
+
+        let maximumConcurrentRequests = await tracker.maximumConcurrentRequests
+        XCTAssertEqual(maximumConcurrentRequests, 2)
+        XCTAssertEqual(outcomes.count, files.count)
+        XCTAssertEqual(outcomes.map(\.index).sorted(), Array(files.indices))
+        XCTAssertTrue(outcomes.allSatisfy { $0.errorMessage == nil && $0.data?.starts(with: Data("%PDF-".utf8)) == true })
+    }
+
     func testPublicDriveDistinguishesInvalidAPIKeyFromPrivateFolder() async throws {
         GoogleDriveStubURLProtocol.setHandler { _ in
             (403, Data(#"{"error":{"message":"API key not valid. Please pass a valid API key."}}"#.utf8))
@@ -459,6 +498,22 @@ final class GoogleDriveTests: XCTestCase {
             body.append(buffer, count: count)
         }
         return body
+    }
+}
+
+private actor DriveDownloadConcurrencyTracker {
+    private var activeRequests = 0
+    private var maximumRequests = 0
+
+    var maximumConcurrentRequests: Int { maximumRequests }
+
+    func beginRequest() {
+        activeRequests += 1
+        maximumRequests = max(maximumRequests, activeRequests)
+    }
+
+    func endRequest() {
+        activeRequests -= 1
     }
 }
 

@@ -901,9 +901,17 @@ struct GoogleDrivePublicPDF: Equatable, Sendable {
     let parentResourceKeys: [String: String]
 }
 
+struct GoogleDrivePublicPDFDownloadResult: Sendable {
+    let index: Int
+    let pdf: GoogleDrivePublicPDF
+    let data: Data?
+    let errorMessage: String?
+}
+
 struct GoogleDrivePublicFolderClient {
     static let filesURL = URL(string: "https://www.googleapis.com/drive/v3/files")!
     static let maximumPDFSize = 128 * 1_024 * 1_024
+    static let importConcurrency = 2
 
     let apiKey: String
     var session: URLSession = .shared
@@ -959,6 +967,46 @@ struct GoogleDrivePublicFolderClient {
         guard data.count <= Self.maximumPDFSize else { throw GoogleDriveError.driveImportFileTooLarge(pdf.file.name) }
         guard data.starts(with: Data("%PDF-".utf8)) else { throw GoogleDriveError.driveImportInvalidPDF(pdf.file.name) }
         return data
+    }
+
+    func downloadConcurrently(
+        _ pdfs: [GoogleDrivePublicPDF],
+        maximumConcurrentDownloads: Int,
+        download: (@Sendable (GoogleDrivePublicPDF) async throws -> Data)? = nil,
+        onCompletion: @escaping @MainActor @Sendable (GoogleDrivePublicPDFDownloadResult) async -> Void
+    ) async {
+        let limit = min(max(1, maximumConcurrentDownloads), pdfs.count)
+        guard limit > 0 else { return }
+        let downloadPDF: @Sendable (GoogleDrivePublicPDF) async throws -> Data = download ?? { try await self.download($0) }
+
+        await withTaskGroup(of: GoogleDrivePublicPDFDownloadResult.self) { group in
+            for index in 0..<limit {
+                let pdf = pdfs[index]
+                group.addTask { await self.downloadResult(index: index, pdf: pdf, using: downloadPDF) }
+            }
+
+            var nextIndex = limit
+            while let result = await group.next() {
+                await onCompletion(result)
+                guard nextIndex < pdfs.count else { continue }
+                let index = nextIndex
+                let pdf = pdfs[index]
+                nextIndex += 1
+                group.addTask { await self.downloadResult(index: index, pdf: pdf, using: downloadPDF) }
+            }
+        }
+    }
+
+    private func downloadResult(
+        index: Int,
+        pdf: GoogleDrivePublicPDF,
+        using download: @escaping @Sendable (GoogleDrivePublicPDF) async throws -> Data
+    ) async -> GoogleDrivePublicPDFDownloadResult {
+        do {
+            return GoogleDrivePublicPDFDownloadResult(index: index, pdf: pdf, data: try await download(pdf), errorMessage: nil)
+        } catch {
+            return GoogleDrivePublicPDFDownloadResult(index: index, pdf: pdf, data: nil, errorMessage: error.localizedDescription)
+        }
     }
 
     private func getFile(id: String, resourceKey: String?) async throws -> GoogleDriveFile {
@@ -1121,23 +1169,30 @@ final class GoogleDrivePublicPDFImporter: ObservableObject {
         guard !files.isEmpty else { throw GoogleDriveError.noPDFsInPublicDriveFolder }
         totalCount = files.count
         let directory = try Self.importDirectory(folderID: folder.id)
-        var imported: [URL] = []
-        var failures: [String] = []
+        status = "Baixando até \(GoogleDrivePublicFolderClient.importConcurrency) PDFs simultaneamente…"
+        var importedByIndex: [Int: URL] = [:]
+        var failuresByIndex: [(Int, String)] = []
 
-        for (index, pdf) in files.enumerated() {
-            status = "Baixando \(index + 1) de \(files.count): \(pdf.file.name)"
-            do {
-                let data = try await client.download(pdf)
-                let destination = directory.appendingPathComponent(Self.localFilename(for: pdf.file), isDirectory: false)
-                try await Task.detached(priority: .utility) {
-                    try data.write(to: destination, options: .atomic)
-                }.value
-                imported.append(destination)
-            } catch {
-                failures.append("\(pdf.file.name): \(error.localizedDescription)")
+        await client.downloadConcurrently(files, maximumConcurrentDownloads: GoogleDrivePublicFolderClient.importConcurrency) { [weak self] result in
+            guard let self else { return }
+            if let data = result.data {
+                let destination = directory.appendingPathComponent(Self.localFilename(for: result.pdf.file), isDirectory: false)
+                do {
+                    try await Task.detached(priority: .utility) {
+                        try data.write(to: destination, options: .atomic)
+                    }.value
+                    importedByIndex[result.index] = destination
+                } catch {
+                    failuresByIndex.append((result.index, "\(result.pdf.file.name): \(error.localizedDescription)"))
+                }
+            } else {
+                failuresByIndex.append((result.index, "\(result.pdf.file.name): \(result.errorMessage ?? "Falha ao baixar o arquivo.")"))
             }
-            completedCount = index + 1
+            self.completedCount += 1
+            self.status = "Processados \(self.completedCount) de \(files.count) PDFs"
         }
+        let imported = importedByIndex.keys.sorted().compactMap { importedByIndex[$0] }
+        let failures = failuresByIndex.sorted { $0.0 < $1.0 }.map(\.1)
         guard !imported.isEmpty else {
             throw GoogleDriveError.api(status: 400, message: failures.first ?? "Nenhum PDF pôde ser baixado.")
         }
