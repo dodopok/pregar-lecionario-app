@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 import XCTest
 @testable import Pregar
@@ -375,7 +376,7 @@ final class GoogleDriveTests: XCTestCase {
                 return (200, Data(#"{"files":[{"id":"second-pdf","name":"Segundo.pdf","mimeType":"application/pdf","size":12}]}"#.utf8))
             }
             if query["q"]?.contains("'folder-nested'") == true {
-                return (200, Data(#"{"files":[{"id":"nested-pdf","name":"Subpasta.pdf","mimeType":"application/pdf","size":"16","resourceKey":"pdf-key"}]}"#.utf8))
+                return (200, Data(#"{"files":[{"id":"nested-pdf","name":"Subpasta.pdf","mimeType":"application/pdf","size":"17","resourceKey":"pdf-key"}]}"#.utf8))
             }
             return (200, Data(#"{"nextPageToken":"page-2","files":[{"id":"folder-nested","name":"Subpasta","mimeType":"application/vnd.google-apps.folder","resourceKey":"nested-key"},{"id":"root-pdf","name":"Primeiro.pdf","mimeType":"application/pdf","size":"10","resourceKey":"root-pdf-key"}]}"#.utf8))
         }
@@ -407,6 +408,65 @@ final class GoogleDriveTests: XCTestCase {
         let mediaRequest = try XCTUnwrap(requests.first { URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "alt" && $0.value == "media" }) == true })
         XCTAssertEqual(mediaRequest.value(forHTTPHeaderField: "X-Goog-Drive-Resource-Keys"), "folder-nested/nested-key,folder-root/link-root-key,nested-pdf/pdf-key")
         XCTAssertEqual(URLComponents(url: mediaRequest.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "key" })?.value, "test-key")
+    }
+
+    func testPublicDriveDownloadChecksFileSizeAndChecksum() async throws {
+        let pdfData = Data("%PDF-1.7\nverified fixture".utf8)
+        let checksum = Insecure.MD5.hash(data: pdfData).map { String(format: "%02x", $0) }.joined()
+        GoogleDriveStubURLProtocol.setHandler { _ in (200, pdfData) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let client = GoogleDrivePublicFolderClient(apiKey: "test-key", session: session)
+        let file = GoogleDriveFile(
+            id: "integrity-pdf",
+            name: "Comentário.pdf",
+            mimeType: "application/pdf",
+            webViewLink: nil,
+            size: Int64(pdfData.count),
+            md5Checksum: checksum
+        )
+        let valid = GoogleDrivePublicPDF(file: file, parentResourceKeys: [:])
+
+        let downloaded = try await client.download(valid)
+        XCTAssertEqual(downloaded, pdfData)
+
+        let invalidFiles = [
+            GoogleDrivePublicPDF(
+                file: GoogleDriveFile(
+                    id: "wrong-size",
+                    name: file.name,
+                    mimeType: file.mimeType,
+                    webViewLink: nil,
+                    size: Int64(pdfData.count + 1),
+                    md5Checksum: checksum
+                ),
+                parentResourceKeys: [:]
+            ),
+            GoogleDrivePublicPDF(
+                file: GoogleDriveFile(
+                    id: "wrong-checksum",
+                    name: file.name,
+                    mimeType: file.mimeType,
+                    webViewLink: nil,
+                    size: Int64(pdfData.count),
+                    md5Checksum: String(repeating: "0", count: 32)
+                ),
+                parentResourceKeys: [:]
+            )
+        ]
+
+        for invalid in invalidFiles {
+            do {
+                _ = try await client.download(invalid)
+                XCTFail("Expected a PDF integrity failure")
+            } catch let error as GoogleDriveError {
+                if case let .driveImportIntegrityMismatch(name) = error {
+                    XCTAssertEqual(name, file.name)
+                } else {
+                    XCTFail("Unexpected error: \(error)")
+                }
+            }
+        }
     }
 
     @MainActor

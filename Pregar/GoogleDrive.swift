@@ -23,6 +23,7 @@ enum GoogleDriveError: LocalizedError {
     case syncInProgress
     case driveImportFileTooLarge(String)
     case driveImportInvalidPDF(String)
+    case driveImportIntegrityMismatch(String)
     case driveImportTooManyFiles
 
     var errorDescription: String? {
@@ -43,6 +44,7 @@ enum GoogleDriveError: LocalizedError {
         case .syncInProgress: "A sincronização anterior ainda está em andamento."
         case let .driveImportFileTooLarge(name): "O PDF \(name) excede o limite de 128 MB e foi ignorado."
         case let .driveImportInvalidPDF(name): "O arquivo \(name) não parece ser um PDF válido."
+        case let .driveImportIntegrityMismatch(name): "O PDF \(name) não passou na verificação de integridade e não foi guardado."
         case .driveImportTooManyFiles: "A pasta contém mais de 5.000 PDFs. Escolha uma pasta menor para importar com segurança."
         }
     }
@@ -966,6 +968,15 @@ struct GoogleDrivePublicFolderClient {
         guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
         guard data.count <= Self.maximumPDFSize else { throw GoogleDriveError.driveImportFileTooLarge(pdf.file.name) }
         guard data.starts(with: Data("%PDF-".utf8)) else { throw GoogleDriveError.driveImportInvalidPDF(pdf.file.name) }
+        if let expectedSize = pdf.file.size, expectedSize != Int64(data.count) {
+            throw GoogleDriveError.driveImportIntegrityMismatch(pdf.file.name)
+        }
+        if let expectedChecksum = pdf.file.md5Checksum {
+            let actualChecksum = Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            guard actualChecksum.caseInsensitiveCompare(expectedChecksum) == .orderedSame else {
+                throw GoogleDriveError.driveImportIntegrityMismatch(pdf.file.name)
+            }
+        }
         return data
     }
 
