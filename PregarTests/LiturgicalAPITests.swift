@@ -117,6 +117,10 @@ final class LiturgicalAPITests: XCTestCase {
         XCTAssertEqual(book.name, "REB - 2027")
         XCTAssertEqual(book.description, "Livro de Oração Comum da Rede Episcopal Brasileira")
         XCTAssertEqual(book.jurisdiction, "Rede Episcopal Brasileira")
+        XCTAssertEqual(book.displaySubtitle, "Rede Episcopal Brasileira · 2027 · pt-BR")
+        XCTAssertEqual(book.displayDescription, "Livro de Oração Comum da Rede Episcopal Brasileira")
+        XCTAssertEqual(book.coverMonogram, "LOC")
+        XCTAssertEqual(book.jurisdictionMonogram, "REB")
         XCTAssertEqual(book.year, 2027)
         XCTAssertEqual(book.isRecommended, true)
         XCTAssertEqual(book.coverURL?.absoluteString, "https://api.caminhoanglicano.com.br/locs/thumbs/loc-2027.png")
@@ -127,6 +131,25 @@ final class LiturgicalAPITests: XCTestCase {
         let queryItems = try XCTUnwrap(URLComponents(url: try XCTUnwrap(captured?.url), resolvingAgainstBaseURL: false)?.queryItems)
         let query = Dictionary(uniqueKeysWithValues: queryItems.compactMap { item in item.value.map { (item.name, $0) } })
         XCTAssertEqual(query["fields[prayer_book]"], "code,name,description,language,jurisdiction,year,is_recommended,image_url,thumbnail_url")
+    }
+
+    func testPrayerBookWithoutCatalogMetadataNeverDisplaysItsTechnicalCode() {
+        let book = PrayerBookCatalogEntry(
+            code: "loc_2027",
+            name: "Livro de oração selecionado",
+            description: nil,
+            language: nil,
+            jurisdiction: nil,
+            year: nil,
+            isRecommended: nil,
+            imageUrl: nil,
+            thumbnailUrl: nil
+        )
+
+        XCTAssertEqual(book.displaySubtitle, "Livro de oração")
+        XCTAssertEqual(book.displayDescription, "Descrição não informada")
+        XCTAssertEqual(book.coverMonogram, "LOC")
+        XCTAssertNil(book.jurisdictionMonogram)
     }
 }
 

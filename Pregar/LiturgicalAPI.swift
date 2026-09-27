@@ -100,6 +100,37 @@ struct PrayerBookCatalogEntry: Decodable, Equatable, Identifiable, Sendable {
 
     var id: String { code }
 
+    var displaySubtitle: String {
+        let parts = [jurisdiction, year.map(String.init), language]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? "Livro de oração" : parts.joined(separator: " · ")
+    }
+
+    var displayDescription: String {
+        let value = description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value, !value.isEmpty else { return "Descrição não informada" }
+        return value
+    }
+
+    var coverMonogram: String {
+        if code.localizedCaseInsensitiveContains("loc") { return "LOC" }
+        let initials = name
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .prefix(3)
+            .compactMap(\.first)
+        return initials.isEmpty ? "LOC" : String(initials).uppercased()
+    }
+
+    var jurisdictionMonogram: String? {
+        guard let jurisdiction else { return nil }
+        let initials = jurisdiction
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .prefix(4)
+            .compactMap(\.first)
+        return initials.isEmpty ? nil : String(initials).uppercased()
+    }
+
     var coverURL: URL? {
         guard let rawURL = thumbnailUrl ?? imageUrl,
               let components = URLComponents(string: rawURL) else { return nil }

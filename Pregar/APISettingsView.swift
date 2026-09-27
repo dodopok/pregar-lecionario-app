@@ -399,7 +399,7 @@ struct APISettingsView: View {
         }
         return PrayerBookCatalogEntry(
             code: settings.prayerBook,
-            name: settings.prayerBook,
+            name: "Livro de oração selecionado",
             description: nil,
             language: nil,
             jurisdiction: nil,
@@ -411,8 +411,7 @@ struct APISettingsView: View {
     }
 
     private func prayerBookSubtitle(_ book: PrayerBookCatalogEntry) -> String {
-        let parts = [book.jurisdiction, book.year.map(String.init)].compactMap { $0 }
-        return parts.isEmpty ? book.code : parts.joined(separator: " · ")
+        book.displaySubtitle
     }
 
     private func favoriteSitePreferenceRow(_ site: FavoriteSite) -> some View {
@@ -767,12 +766,11 @@ private struct PrayerBookPickerSheet: View {
                                 .fixedSize()
                         }
                     }
-                    Text([book.jurisdiction, book.year.map(String.init), book.language]
-                        .compactMap { $0 }.joined(separator: " · "))
+                    Text(book.displaySubtitle)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(PrototypeStyle.muted)
                         .lineLimit(1)
-                    Text(book.description ?? book.code)
+                    Text(book.displayDescription)
                         .font(.system(size: 12))
                         .foregroundStyle(PrototypeStyle.ink.opacity(0.84))
                         .lineLimit(2)
@@ -828,15 +826,38 @@ private struct PrayerBookCover: View {
     }
 
     private var placeholder: some View {
-        VStack(spacing: 4) {
-            Image(systemName: "book.closed.fill")
-                .font(.system(size: min(width * 0.34, 18), weight: .regular))
-            Rectangle().frame(width: width * 0.42, height: 1)
-            Text(book.year.map(String.init) ?? "LOC")
-                .font(.system(size: min(width * 0.17, 9), weight: .semibold))
-                .lineLimit(1)
+        ZStack {
+            RoundedRectangle(cornerRadius: 4).fill(Color(red: 0.15, green: 0.31, blue: 0.25))
+            RoundedRectangle(cornerRadius: 3)
+                .stroke(Color.white.opacity(0.48), lineWidth: 0.7)
+                .padding(3)
+            VStack(spacing: 2) {
+                if height > 60 {
+                    Text("LIVRO DE ORAÇÃO")
+                        .font(.system(size: 5.5, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+                Text(book.coverMonogram)
+                    .font(PrototypeStyle.serif(width > 45 ? 20 : 14, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Rectangle().frame(width: width * 0.46, height: 0.7)
+                Text(book.year.map(String.init) ?? "LOC")
+                    .font(.system(size: width > 45 ? 7 : 6, weight: .medium))
+                    .lineLimit(1)
+                if width > 45, let jurisdictionMonogram = book.jurisdictionMonogram {
+                    Text(jurisdictionMonogram)
+                        .font(.system(size: 6, weight: .semibold))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Color(red: 0.97, green: 0.95, blue: 0.88))
+            .padding(.horizontal, width * 0.12)
+            .padding(.vertical, 6)
         }
-        .foregroundStyle(accent)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
