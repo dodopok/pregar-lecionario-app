@@ -191,6 +191,10 @@ final class PDFLibraryIndexerTests: XCTestCase {
             at: NSPoint(x: 130, y: 1500),
             withAttributes: [.font: NSFont.boldSystemFont(ofSize: 92), .foregroundColor: NSColor.black]
         )
+        ("The command is to love your neighbor." as NSString).draw(
+            at: NSPoint(x: 130, y: 1300),
+            withAttributes: [.font: NSFont.systemFont(ofSize: 64), .foregroundColor: NSColor.black]
+        )
         image.unlockFocus()
 
         let document = PDFDocument()
@@ -209,10 +213,42 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertFalse(section.hasHighConfidence)
         XCTAssertEqual(PDFLibraryIndexer.match(section, reference: "Romans 13:8-14"), .exact)
         XCTAssertEqual(result.record.ocrPageNumbers, [1])
+        let storedRecord = try JSONDecoder().decode(PDFLibraryRecord.self, from: JSONEncoder().encode(result.record))
+        XCTAssertTrue(try XCTUnwrap(storedRecord.ocrTextByPage?[1]).localizedCaseInsensitiveContains("neighbor"))
+
+        let tab = ReaderTab(
+            id: UUID(),
+            title: "Scanned commentary",
+            kind: .pdf,
+            location: url.path,
+            physicalPage: 1,
+            reference: "Romans 13:8-14",
+            includedInReview: true,
+            reviewInclusionConfirmed: true
+        )
+        let sources = try PDFReviewSourceExtractor.extract(
+            tab: tab,
+            targetReference: "Romans 13:8-14",
+            libraryRecords: [storedRecord]
+        )
+        XCTAssertEqual(sources.count, 1)
+        XCTAssertTrue(sources[0].text.localizedCaseInsensitiveContains("neighbor"))
+
+        var missingOCRText = storedRecord
+        missingOCRText.ocrTextByPage = nil
+        XCTAssertThrowsError(try PDFReviewSourceExtractor.extract(
+            tab: tab,
+            targetReference: "Romans 13:8-14",
+            libraryRecords: [missingOCRText]
+        )) { error in
+            XCTAssertEqual(error.localizedDescription, SermonReviewMaterialError.pageUnavailable.errorDescription)
+        }
+
         XCTAssertEqual(try Data(contentsOf: url), original, "OCR must not modify the imported PDF")
 
-        let reindexed = try XCTUnwrap(PDFLibraryIndexer.index(path: url.path, previousRecord: result.record))
+        let reindexed = try XCTUnwrap(PDFLibraryIndexer.index(path: url.path, previousRecord: storedRecord))
         XCTAssertEqual(reindexed.ocrPageNumbers, [1])
+        XCTAssertEqual(reindexed.ocrTextByPage, storedRecord.ocrTextByPage)
         XCTAssertTrue(reindexed.sections?.contains { $0.findingMethod == .ocrHeading } == true)
     }
 
@@ -233,6 +269,7 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertEqual(result.scannedPageCount, 21)
         XCTAssertGreaterThan(result.recognizedTextPageCount, 0)
         XCTAssertEqual(result.record.ocrPageNumbers?.count, 21)
+        XCTAssertEqual(result.record.ocrTextByPage?.count, result.recognizedTextPageCount)
         XCTAssertEqual(try Data(contentsOf: url), original, "OCR must not modify the downloaded source")
     }
 

@@ -23,12 +23,22 @@ enum PDFReviewSourceExtractor {
     static let maximumBytesPerSource = 24_000
     private static let maximumPagesPerSource = 36
 
-    static func extract(tab: ReaderTab, targetReference: String?) throws -> [SermonReviewSource] {
+    static func extract(
+        tab: ReaderTab,
+        targetReference: String?,
+        libraryRecords: [PDFLibraryRecord]? = nil
+    ) throws -> [SermonReviewSource] {
         guard let document = PDFDocument(url: URL(fileURLWithPath: tab.location)), document.pageCount > 0 else {
             throw SermonReviewMaterialError.sourceUnavailable(tab.title)
         }
 
-        let record = libraryRecord(at: tab.location)
+        let record: PDFLibraryRecord?
+        if let libraryRecords {
+            record = libraryRecords.first { $0.path == tab.location }
+        } else {
+            record = libraryRecord(at: tab.location)
+        }
+        let ocrTextByPage = record?.ocrTextByPage ?? [:]
         let sections = record?.sections?.isEmpty == false
             ? record!.sections!
             : PDFLibraryIndexer.sections(for: document, title: record?.displayTitle ?? tab.title)
@@ -47,7 +57,15 @@ enum PDFReviewSourceExtractor {
             let comments = components.filter { $0.kind != .biblicalText }
             var sources: [SermonReviewSource] = []
             for (index, component) in comments.enumerated() {
-                let text = PDFLibraryIndexer.extractedText(in: component.content, from: document)
+                let textPages = component.content.start.page...component.content.end.page
+                guard textPages.allSatisfy({ PDFLibraryIndexer.reviewText(on: $0, in: document, ocrTextByPage: ocrTextByPage) != nil }) else {
+                    throw SermonReviewMaterialError.pageUnavailable
+                }
+                let text = PDFLibraryIndexer.extractedText(
+                    in: component.content,
+                    from: document,
+                    ocrTextByPage: ocrTextByPage
+                )
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { continue }
                 guard text.utf8.count <= maximumBytesPerSource else {
@@ -71,7 +89,11 @@ enum PDFReviewSourceExtractor {
         let nextSection = sections.indices.contains(selectedIndex + 1) ? sections[selectedIndex + 1] : nil
         if section.startPage <= lastPage {
             for pageNumber in section.startPage...lastPage {
-                guard let pageText = document.page(at: pageNumber - 1)?.string else { continue }
+                guard let pageText = PDFLibraryIndexer.reviewText(
+                    on: pageNumber,
+                    in: document,
+                    ocrTextByPage: ocrTextByPage
+                ) else { throw SermonReviewMaterialError.pageUnavailable }
                 let pageRange = sectionBoundedText(
                     pageText,
                     pageNumber: pageNumber,

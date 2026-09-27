@@ -16,6 +16,7 @@ struct PDFLibraryRecord: Codable, Identifiable, Equatable, Sendable {
     var copyLabel: String? = nil
     var metadataOverrides: PDFLibraryMetadataOverrides? = nil
     var ocrPageNumbers: [Int]? = nil
+    var ocrTextByPage: [Int: String]? = nil
     var fileSizeBytes: Int64? = nil
     var fileModificationDate: Date? = nil
 
@@ -371,6 +372,7 @@ enum PDFLibraryIndexer {
         let mergedSections = mergingOCRSections(recognizedSections, into: record.sections ?? [])
         record.sections = enrichFeastingSections(mergedSections, document: document, title: record.title)
         record.ocrPageNumbers = attemptedPages.sorted()
+        record.ocrTextByPage = (record.ocrTextByPage ?? [:]).merging(recognizedText) { _, new in new }
         return PDFLibraryOCRResult(
             record: record,
             candidatePageCount: candidatePages.count,
@@ -425,6 +427,7 @@ enum PDFLibraryIndexer {
         if hasSameFileContents(record, previousRecord),
            let previousRecord {
             record.ocrPageNumbers = previousRecord.ocrPageNumbers
+            record.ocrTextByPage = previousRecord.ocrTextByPage
             let mergedSections = mergingOCRSections(
                 (previousRecord.sections ?? []).filter { $0.findingMethod == .ocrHeading },
                 into: record.sections ?? []
@@ -728,13 +731,18 @@ enum PDFLibraryIndexer {
         return components
     }
 
-    static func extractedText(in span: PDFTextSpan, from document: PDFDocument) -> String {
+    static func extractedText(
+        in span: PDFTextSpan,
+        from document: PDFDocument,
+        ocrTextByPage: [Int: String] = [:]
+    ) -> String {
         guard span.start.page > 0,
               span.start.page <= span.end.page,
               span.end.page <= document.pageCount else { return "" }
         var fragments: [String] = []
         for pageNumber in span.start.page...span.end.page {
-            guard let text = document.page(at: pageNumber - 1)?.string else { continue }
+            let pdfText = document.page(at: pageNumber - 1)?.string
+            let text = nonempty(pdfText) ?? nonempty(ocrTextByPage[pageNumber]) ?? ""
             let pageText = text as NSString
             let start = pageNumber == span.start.page ? min(span.start.utf16Offset, pageText.length) : 0
             let end = pageNumber == span.end.page ? min(span.end.utf16Offset, pageText.length) : pageText.length
@@ -742,6 +750,17 @@ enum PDFLibraryIndexer {
             fragments.append(pageText.substring(with: NSRange(location: start, length: end - start)))
         }
         return fragments.joined(separator: "\n")
+    }
+
+    static func reviewText(on pageNumber: Int, in document: PDFDocument, ocrTextByPage: [Int: String]) -> String? {
+        guard pageNumber > 0, pageNumber <= document.pageCount else { return nil }
+        return nonempty(document.page(at: pageNumber - 1)?.string)
+            ?? nonempty(ocrTextByPage[pageNumber])
+    }
+
+    private static func nonempty(_ text: String?) -> String? {
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return text
     }
 
     private static func indexedLines(in text: String, page: Int) -> [IndexedPDFLine] {

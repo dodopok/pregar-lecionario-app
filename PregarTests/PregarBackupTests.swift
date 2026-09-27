@@ -39,7 +39,9 @@ final class PregarBackupTests: XCTestCase {
             path: pdfURL.path,
             pageCount: 1,
             bookmarkCount: 0,
-            author: "Autora de teste"
+            author: "Autora de teste",
+            ocrPageNumbers: [1],
+            ocrTextByPage: [1: "Romans 13:8-14\nCommentary text"]
         )
         defaults.set(try JSONEncoder().encode([record]), forKey: "pregar.library.records.v1")
         defaults.set(3, forKey: "pregar.library.records.revision.v1")
@@ -143,6 +145,7 @@ final class PregarBackupTests: XCTestCase {
             from: try XCTUnwrap(defaults.data(forKey: "pregar.library.records.v1"))
         )
         XCTAssertEqual(restoredRecords.first?.displayTitle, "Comentário de teste")
+        XCTAssertEqual(restoredRecords.first?.ocrTextByPage, [1: "Romans 13:8-14\nCommentary text"])
         XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(restoredRecords.first?.path)))
         XCTAssertTrue(FileManager.default.fileExists(atPath: restoredHistory.appendingPathComponent("2026-10-04.json").path))
         XCTAssertEqual(try Data(contentsOf: restoredHistory.appendingPathComponent("2026-10-04.json")), historyData)
