@@ -674,6 +674,26 @@ struct GoogleDriveAPI {
         return revisionID
     }
 
+    func synchronizeDocument(
+        id: String,
+        content: GoogleDocsContent,
+        expectedRevisionID: String?,
+        overwriteRemote: Bool
+    ) async throws -> String {
+        let remote = try await getDocument(id: id)
+        if !overwriteRemote,
+           let expectedRevisionID,
+           expectedRevisionID != remote.revisionID {
+            throw GoogleDriveError.documentConflict
+        }
+        return try await replaceDocument(
+            id: id,
+            content: content,
+            currentEndIndex: remote.endIndex,
+            requiredRevisionID: remote.revisionID
+        )
+    }
+
     static func batchUpdateBody(content: GoogleDocsContent, currentEndIndex: Int, requiredRevisionID: String) -> [String: Any] {
         let length = (content.text as NSString).length
         var requests: [[String: Any]] = []
@@ -1267,17 +1287,11 @@ final class GoogleDriveStore: ObservableObject {
                 try modelContext.save()
             }
 
-            let remote = try await api.getDocument(id: documentID)
-            if !overwriteRemote,
-               let expected = draft.googleDriveRevisionID,
-               expected != remote.revisionID {
-                throw GoogleDriveError.documentConflict
-            }
-            let updatedRevisionID = try await api.replaceDocument(
+            let updatedRevisionID = try await api.synchronizeDocument(
                 id: documentID,
                 content: content,
-                currentEndIndex: remote.endIndex,
-                requiredRevisionID: remote.revisionID
+                expectedRevisionID: draft.googleDriveRevisionID,
+                overwriteRemote: overwriteRemote
             )
             draft.googleDriveDocumentID = documentID
             draft.googleDriveRevisionID = updatedRevisionID

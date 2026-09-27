@@ -239,6 +239,34 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(requests, 1)
     }
 
+    func testRemoteGoogleDocsEditBlocksLocalSynchronizationBeforeWrite() async throws {
+        var requests: [URLRequest] = []
+        GoogleDriveStubURLProtocol.setHandler { request in
+            requests.append(request)
+            return (200, Data(#"{"revisionId":"remote-rev-3","body":{"content":[{"startIndex":0,"endIndex":1},{"startIndex":1,"endIndex":12,"paragraph":{"elements":[{"textRun":{"content":"Edição remota\n"}}]}}]}}"#.utf8))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let api = GoogleDriveAPI(session: session, accessToken: { "test-access-token" })
+        let content = GoogleDocsContent(text: "Texto local\n", styles: [])
+
+        do {
+            _ = try await api.synchronizeDocument(
+                id: "doc-1",
+                content: content,
+                expectedRevisionID: "local-rev-2",
+                overwriteRemote: false
+            )
+            XCTFail("Expected a conflict after an external edit")
+        } catch let error as GoogleDriveError {
+            if case .documentConflict = error {} else { XCTFail("Unexpected error: \(error)") }
+        }
+
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.httpMethod, "GET")
+        XCTAssertEqual(requests.first?.url?.host, "docs.googleapis.com")
+    }
+
     func testPublicDriveFolderLinkKeepsResourceKeyAndRejectsUnrelatedHosts() throws {
         let link = try XCTUnwrap(GoogleDrivePublicFolderLink.parse(
             " https://drive.google.com/drive/folders/folder_123?usp=sharing&resourcekey=share-key "
