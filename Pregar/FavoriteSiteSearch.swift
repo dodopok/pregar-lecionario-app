@@ -473,7 +473,7 @@ private struct WordPressV2Post: Decodable {
     }
 
     struct Author: Decodable {
-        let name: String
+        let name: String?
     }
 }
 

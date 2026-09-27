@@ -173,6 +173,31 @@ final class FavoriteSiteSearchTests: XCTestCase {
         XCTAssertEqual(results.first?.publishedAt, ISO8601DateFormatter().date(from: "2026-09-20T12:00:00Z"))
     }
 
+    func testWordPressEmbeddedAuthorErrorDoesNotDiscardTheArticle() throws {
+        let data = try JSONSerialization.data(withJSONObject: [[
+            "date": "2026-09-20T12:00:00",
+            "link": "https://anglicancompass.com/matthew-21-commentary/",
+            "title": ["rendered": "Matthew 21:28-32"],
+            "excerpt": ["rendered": "A reflection on Matthew 21:28-32."],
+            "_embedded": ["author": [[
+                "code": "rest_no_route",
+                "message": "No route was found matching the URL and request method.",
+                "data": ["status": 404]
+            ]]]
+        ]])
+
+        let article = try XCTUnwrap(FavoriteSiteSearchClient.articles(
+            from: data,
+            site: .anglicanCompass,
+            targetReference: "Matthew 21:28-32"
+        ).first)
+
+        XCTAssertNil(article.author)
+        XCTAssertEqual(article.title, "Matthew 21:28-32")
+        XCTAssertEqual(article.match, .same)
+        XCTAssertEqual(article.url.host, "anglicancompass.com")
+    }
+
     func testWordPressComResultsClassifyPassageRangesAndExcerptMentionsAsContext() throws {
         let data = try JSONSerialization.data(withJSONObject: ["posts": [
             post(title: "Romans 13:8-14", url: "http://mypastoralponderings.com/same", date: "2026-09-20T12:00:00-04:00"),
@@ -328,6 +353,32 @@ final class FavoriteSiteSearchTests: XCTestCase {
         XCTAssertEqual(report.groups.first(where: { $0.site == .anglicanCompass })?.articles.count, 1)
         XCTAssertNotNil(report.groups.first(where: { $0.site == .myPastoralPonderings })?.errorMessage)
         XCTAssertEqual(report.groups.first(where: { $0.site == .bobCornwall })?.articles.count, 1)
+    }
+
+    func testLiveFavoriteSiteAdaptersWhenExplicitlyEnabled() async throws {
+        guard ProcessInfo.processInfo.environment["PREGAR_LIVE_SITE_TESTS"] == "1" else {
+            throw XCTSkip("Defina PREGAR_LIVE_SITE_TESTS=1 para consultar apenas passagens públicas.")
+        }
+
+        let sites: [FavoriteSite] = [.anglicanCompass, .myPastoralPonderings, .bobCornwall]
+        let date = ISO8601DateFormatter().date(from: "2026-09-27T12:00:00Z")!
+        let report = await FavoriteSiteSearchClient().search(
+            reference: "Romanos 13:8-14",
+            occasion: nil,
+            date: date,
+            isSunday: false,
+            sites: sites
+        )
+
+        XCTAssertEqual(report.groups.map(\.site.id), sites.map(\.id))
+        for group in report.groups {
+            XCTAssertNil(group.errorMessage, "\(group.site.title): \(group.errorMessage ?? "")")
+            for article in group.articles {
+                XCTAssertEqual(article.url.scheme, "https")
+                XCTAssertEqual(article.site.id, group.site.id)
+            }
+        }
+        XCTAssertTrue(report.groups.contains(where: { !$0.articles.isEmpty }))
     }
 
     private func post(title: String, url: String, date: String) -> [String: Any] {
