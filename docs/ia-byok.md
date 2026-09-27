@@ -1,6 +1,6 @@
 # IA com BYOK
 
-Planejamento técnico complementar ao [plano de produto](plano-produto.md). Pesquisa documental em 26 de setembro de 2026. Nenhuma integração foi implementada, nenhuma chave foi solicitada e nenhuma chamada de geração foi executada.
+Planejamento e registro da implementação complementar ao [plano de produto](plano-produto.md). A revisão BYOK foi conectada em 27 de setembro de 2026; nenhuma chave ou conteúdo de sermão foi enviado a um provedor durante o desenvolvimento.
 
 ## 1. Requisito confirmado
 
@@ -27,7 +27,7 @@ Esta tabela é uma proposta baseada nos catálogos oficiais consultados, e não 
 | OpenAI | `gpt-6-sol` | A documentação o posiciona como equilíbrio entre capacidade e custo; suporta respostas estruturadas. |
 | Anthropic | `claude-sonnet-5` | Candidato da família Sonnet para avaliar revisão e obediência aos limites. |
 | Google | `gemini-3.8-flash` | Candidato estável da família Flash; suporta respostas estruturadas. |
-| Perplexity | Agent API com modelo explícito, por exemplo `google/gemini-3.8-flash` | Usa a chave Perplexity; o catálogo inclui modelos de outros fornecedores. Configurar as ferramentas de acordo com a tarefa. |
+| Perplexity | `perplexity/sonar` | Revisão sem ferramentas; a pesquisa de materiais permanece um fluxo separado. |
 
 Fontes: [OpenAI: modelos](https://developers.openai.com/api/docs/models), [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol), [Claude: modelos](https://platform.claude.com/docs/en/models/overview), [Gemini 3.8 Flash](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash) e [Perplexity: modelos da Agent API](https://docs.perplexity.ai/docs/agent-api/models).
 
@@ -136,3 +136,17 @@ Comparar modelos com o mesmo conjunto de manuscritos e comentários e julgamento
 - Resposta interrompida, inválida ou com trechos que não existem no manuscrito.
 
 Só recomendar um modelo após ele atender aos limites de autoria e fundamentação, além de apresentar custo e latência aceitáveis. O cumprimento perfeito dessas restrições não deve ser prometido apenas com base nas instruções enviadas ao modelo.
+
+## 9. Implementação atual
+
+- As chaves existentes no Acesso às Chaves são lidas fora da thread principal e usadas diretamente pelo app; as chamadas seguem ao endpoint oficial do provedor, sem passar por um servidor Pregar. A tela informa o provedor e o modelo antes do envio.
+- A ação Revisar permite selecionar Ortografia, Fidelidade, Estrutura, Clareza e Tom. O sermão só é enviado após o clique explícito em “Enviar revisão”. O app não fornece ao modelo ferramentas de edição.
+- Fidelidade exige que o texto bíblico principal esteja carregado. Apenas nessa categoria são incluídas as traduções disponíveis e as abas do Leitor que foram marcadas explicitamente. Abas antigas não são consideradas consentimento; páginas Web e PDFs novos começam desmarcados. PDFs enviam a seção localizada da referência ou da página, sem o caminho local do arquivo; para o Feasting, os ensaios e autores são preservados.
+- Sem Fidelidade, somente o manuscrito e os critérios selecionados são enviados. Fontes não marcadas e a biblioteca inteira não entram na chamada.
+- O tamanho combinado de manuscrito e fontes é limitado a 120 KB antes da requisição. Se exceder, o envio é bloqueado e o app pede uma seleção menor, sem truncar ou descartar materiais silenciosamente.
+- Os quatro provedores usam saída JSON estruturada. Antes da exibição, o app valida critério, campos permitidos e trechos literais do manuscrito/fonte; a correção de Ortografia aceita somente uma palavra. Resposta que falha na validação não é exibida como revisão.
+- O texto é enviado diretamente ao provedor com sua chave, e as regras de retenção do respectivo provedor se aplicam. No pedido Perplexity não são habilitadas ferramentas; OpenAI e Perplexity recebem `store: false`.
+- A interface não recebe nem persiste o manuscrito completo no relatório. Guarda localmente o provedor/modelo, critérios, trechos citados, observações, horário e impressão digital do texto analisado; relatórios ficam no Mac e as observações aparecem como antigas se o manuscrito mudar.
+- A suíte automatizada cobre contratos HTTP simulados dos quatro provedores, autenticação, formato estruturado, seleção explícita de abas, rejeição de citação não verificável/sugestão explícita e persistência sem manuscrito integral. Nenhuma chamada real foi feita.
+
+Limite importante: validações estruturais e filtros de linguagem não conseguem provar que uma interpretação está correta nem detectar toda sugestão indireta. Antes de uso pastoral, ainda é necessário avaliar respostas reais de cada provedor com sermões de teste escolhidos pelo usuário. Perguntas de emergência, sincronização do Drive e a conexão do documento separado de ideias continuam pendentes.

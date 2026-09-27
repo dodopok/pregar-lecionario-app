@@ -24,6 +24,7 @@ struct PreparationWorkspace: View {
     @State private var historyDirty = false
     @State private var historySaveTask: Task<Void, Never>?
     @State private var historyErrorMessage: String?
+    @State private var reviewReports: [SermonReviewReport] = []
     @State private var isSidebarVisible = true
     @State private var isReadingsVisible = true
     @State private var isContextVisible = true
@@ -35,6 +36,7 @@ struct PreparationWorkspace: View {
     @State private var contextTab: ContextPaneTab = .materials
     @StateObject private var editorCommands = EditorCommands()
     private let revisionStore = SermonRevisionStore.shared
+    private let reviewReportStore = SermonReviewReportStore.shared
 
     private var selectedDayKey: String {
         let formatter = DateFormatter()
@@ -107,14 +109,17 @@ struct PreparationWorkspace: View {
                         Rectangle().fill(PrototypeStyle.line).frame(width: 1)
                         ResourceContextPanel(
                             selectedTab: $contextTab,
-                            reference: activeDraft?.mainReadingReference ?? "esta preparação",
+                            reference: activeDraft?.mainReadingReference ?? "",
                             occasion: selectedDay?.sundayName ?? selectedDay?.celebration?.name,
                             liturgicalDate: selectedDate,
                             isSunday: selectedDay?.isSunday == true,
+                            reviewReports: reviewReports,
+                            manuscript: activeDraft.map { SermonReviewText.plainText(from: $0.rtfData) } ?? "",
                             accent: accentColor,
                             openSettings: openPreferences,
                             openLibrary: { openWindow(id: "library") },
                             newReview: { showingReview = true },
+                            selectQuote: { editorCommands.selectQuote($0) },
                             emergencyQuestions: { showingQuestions = true },
                             collapse: { isContextVisible = false }
                         )
@@ -136,9 +141,21 @@ struct PreparationWorkspace: View {
         .preferredColorScheme(.light)
         .tint(accentColor)
         .sheet(isPresented: $showingReview) {
-            ReviewRequestSheet(accent: accentColor) {
-                showingReview = false
-                openPreferences()
+            if let draft = activeDraft {
+                ReviewRequestSheet(
+                    accent: accentColor,
+                    context: reviewContext(for: draft),
+                    bibleSources: reviewBibleSources(for: draft),
+                    onReport: { report in
+                        reviewReports.append(report)
+                        contextTab = .review
+                    },
+                    selectQuote: { editorCommands.selectQuote($0) },
+                    configureAI: {
+                        showingReview = false
+                        openPreferences()
+                    }
+                )
             }
         }
         .sheet(isPresented: $showingQuestions) {
@@ -167,6 +184,7 @@ struct PreparationWorkspace: View {
         .onAppear {
             ensureDraft(for: selectedDate)
             Task { await loadHistory(for: selectedDate) }
+            Task { await loadReviewReports(for: selectedDayKey) }
             selectedBible = settingsStore.settings.bible
             appearanceStore.accent = accentColor
             if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
@@ -181,6 +199,7 @@ struct PreparationWorkspace: View {
             historyDirty = false
             ensureDraft(for: selectedDate)
             Task { await loadHistory(for: selectedDate) }
+            Task { await loadReviewReports(for: selectedDayKey) }
             if !Calendar.current.isDate(selectedDate, equalTo: calendarMonth, toGranularity: .month) {
                 calendarMonth = selectedDate
             }
@@ -614,6 +633,58 @@ struct PreparationWorkspace: View {
             }
         }
         draft.modifiedAt = .now
+    }
+
+    private func reviewContext(for draft: SermonDraft) -> SermonReviewContext {
+        SermonReviewContext(
+            dateKey: selectedDayKey,
+            title: draft.title,
+            mainReference: draft.mainReadingReference ?? "",
+            manuscript: SermonReviewText.plainText(from: draft.rtfData),
+            criteria: []
+        )
+    }
+
+    private func reviewBibleSources(for draft: SermonDraft) -> [SermonReviewSource] {
+        guard let readings = selectedDay?.readings,
+              let reference = draft.mainReadingReference,
+              let reading = readings.first(where: {
+                  $0.reference == reference && ($0.slot == draft.mainReadingSlot || draft.mainReadingSlot == nil)
+              }) ?? readings.first(where: { $0.reference == reference }) else { return [] }
+
+        func source(_ text: BiblePassageText?, bible: String) -> SermonReviewSource? {
+            let content: String
+            if let verses = text?.verses, !verses.isEmpty {
+                content = verses.map { "\($0.number) \($0.text)" }.joined(separator: "\n")
+            } else {
+                content = text?.content ?? ""
+            }
+            guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            return SermonReviewSource(
+                id: "bible:\(bible.lowercased())",
+                title: bible.uppercased(),
+                citation: "\(reading.reference) · \(bible.uppercased())",
+                text: content
+            )
+        }
+
+        var sources = [source(reading.text, bible: settingsStore.settings.bible)].compactMap { $0 }
+        for (bible, texts) in alternativeTexts.sorted(by: { $0.key < $1.key }) {
+            guard let passage = texts[reading.id], let translated = source(passage, bible: bible) else { continue }
+            sources.append(translated)
+        }
+        return sources
+    }
+
+    @MainActor
+    private func loadReviewReports(for dateKey: String) async {
+        do {
+            let loaded = try await reviewReportStore.reports(for: dateKey)
+            guard selectedDayKey == dateKey else { return }
+            reviewReports = loaded
+        } catch {
+            reviewReports = []
+        }
     }
 
     private func ensureDraft(for date: Date) {

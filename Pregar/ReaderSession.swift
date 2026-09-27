@@ -13,6 +13,9 @@ struct ReaderTab: Codable, Identifiable, Equatable {
     var physicalPage: Int
     var reference: String?
     var includedInReview: Bool
+    var reviewInclusionConfirmed: Bool? = nil
+
+    var isIncludedForReview: Bool { includedInReview && reviewInclusionConfirmed == true }
 }
 
 struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
@@ -137,7 +140,7 @@ final class ReaderSessionStore: ObservableObject {
             let tab = ReaderTab(
                 id: UUID(), title: title, kind: .pdf, location: location,
                 physicalPage: min(max(remembered ?? page, 1), document.pageCount),
-                reference: reference, includedInReview: true
+                reference: reference, includedInReview: false, reviewInclusionConfirmed: true
             )
             tabs.append(tab)
             selectedID = tab.id
@@ -159,7 +162,7 @@ final class ReaderSessionStore: ObservableObject {
         } else {
             let tab = ReaderTab(
                 id: UUID(), title: title, kind: .web, location: address,
-                physicalPage: 1, reference: reference, includedInReview: true
+                physicalPage: 1, reference: reference, includedInReview: false, reviewInclusionConfirmed: true
             )
             tabs.append(tab)
             selectedID = tab.id
@@ -252,7 +255,36 @@ final class ReaderSessionStore: ObservableObject {
     func setReviewInclusion(_ included: Bool, for tabID: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
         tabs[index].includedInReview = included
+        tabs[index].reviewInclusionConfirmed = true
         persist()
+    }
+
+    func materialsMarkedForReview() -> [ReaderTab] {
+        tabs.filter(\.isIncludedForReview)
+    }
+
+    func reviewSources(for reference: String?) async throws -> [SermonReviewSource] {
+        var sources: [SermonReviewSource] = []
+        for tab in materialsMarkedForReview() {
+            try Task.checkCancellation()
+            switch tab.kind {
+            case .pdf:
+                let extracted = try await Task.detached(priority: .utility) {
+                    try PDFReviewSourceExtractor.extract(tab: tab, targetReference: reference)
+                }.value
+                sources.append(contentsOf: extracted)
+            case .web:
+                guard let session = webSession(for: tab) else { throw SermonReviewMaterialError.sourceUnavailable(tab.title) }
+                let page = try await session.reviewPageText()
+                sources.append(SermonReviewSource(
+                    id: "web:\(tab.id.uuidString)",
+                    title: page.title.isEmpty ? tab.title : page.title,
+                    citation: page.citation,
+                    text: String(page.text.prefix(PDFReviewSourceExtractor.maximumCharactersPerSource))
+                ))
+            }
+        }
+        return sources
     }
 
     func updateWebLocation(_ location: String, for tabID: UUID) {
@@ -329,6 +361,35 @@ final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate {
 
     func goBack() { if webView.canGoBack { webView.goBack() } }
     func goForward() { if webView.canGoForward { webView.goForward() } }
+
+    func reviewPageText() async throws -> (title: String, citation: String, text: String) {
+        guard !isLoading else { throw SermonReviewMaterialError.pageStillLoading }
+        return try await withCheckedThrowingContinuation { continuation in
+            let script = """
+            (() => {
+              const article = document.querySelector('article') || document.querySelector('main');
+              return { title: document.title || '', text: (article || document.body)?.innerText || '' };
+            })()
+            """
+            webView.evaluateJavaScript(script) { result, error in
+                if error != nil {
+                    continuation.resume(throwing: SermonReviewMaterialError.pageUnavailable)
+                    return
+                }
+                guard let value = result as? [String: Any],
+                      let text = value["text"] as? String,
+                      !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    continuation.resume(throwing: SermonReviewMaterialError.pageUnavailable)
+                    return
+                }
+                var components = URLComponents(url: self.currentURL, resolvingAgainstBaseURL: false)
+                components?.query = nil
+                components?.fragment = nil
+                let citation = components?.string ?? self.currentURL.host ?? self.currentURL.absoluteString
+                continuation.resume(returning: (value["title"] as? String ?? "", citation, text))
+            }
+        }
+    }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         currentURL = webView.url ?? currentURL
@@ -655,7 +716,7 @@ struct ReaderWindowView: View {
                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
             }
             Toggle("Incluído", isOn: Binding(
-                get: { reader.selectedTab?.includedInReview ?? false },
+                get: { reader.selectedTab?.isIncludedForReview ?? false },
                 set: { reader.setReviewInclusion($0, for: tab.id) }
             ))
             .font(.system(size: 13))

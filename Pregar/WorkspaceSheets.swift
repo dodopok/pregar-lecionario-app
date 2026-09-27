@@ -287,67 +287,260 @@ struct BibleComparisonView: View {
 
 struct ReviewRequestSheet: View {
     let accent: Color
+    let context: SermonReviewContext
+    let bibleSources: [SermonReviewSource]
+    let onReport: (SermonReviewReport) -> Void
+    let selectQuote: (String) -> Void
     let configureAI: () -> Void
+    @EnvironmentObject private var aiSettings: AISettingsStore
+    @EnvironmentObject private var readerSession: ReaderSessionStore
     @Environment(\.dismiss) private var dismiss
-    @State private var selected: Set<String> = ["Ortografia", "Fidelidade", "Estrutura", "Clareza", "Tom"]
-    private let criteria = ["Ortografia", "Fidelidade", "Estrutura", "Clareza", "Tom"]
+    @State private var selected = Set(SermonReviewCriterion.allCases)
+    @State private var isSending = false
+    @State private var report: SermonReviewReport?
+    @State private var errorMessage: String?
+
+    private var selectedCriteria: [SermonReviewCriterion] {
+        selected.sorted { $0.rawValue < $1.rawValue }
+    }
+
+    private var selectedMaterials: [ReaderTab] { readerSession.materialsMarkedForReview() }
+    private var configuredProvider: AIProvider { aiSettings.reviewProvider }
+    private var needsBible: Bool { selected.contains(.fidelity) }
+    private var canSend: Bool {
+        !isSending
+            && !context.manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !selected.isEmpty
+            && aiSettings.hasKey(for: configuredProvider)
+            && (!needsBible || bibleSources.contains(where: { $0.id.hasPrefix("bible:") && !$0.text.isEmpty }))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
-            Text("Nova revisão").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-            Text("Aponta e fundamenta. Não escreve, não completa, não sugere frases.")
-                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+            if let report {
+                reportView(report)
+            } else {
+                Text("Nova revisão").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+                Text("Aponta e fundamenta. Não escreve, não completa, não sugere frases.")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
 
-            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 8) {
-                ForEach(criteria, id: \.self) { criterion in
-                    Toggle(criterion, isOn: Binding(
-                        get: { selected.contains(criterion) },
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 8) {
+                    ForEach(SermonReviewCriterion.allCases) { criterion in
+                        Toggle(criterion.title, isOn: Binding(
+                            get: { selected.contains(criterion) },
                         set: { isSelected in
-                            if isSelected { selected.insert(criterion) }
-                            else { selected.remove(criterion) }
-                        }
-                    ))
-                    .toggleStyle(.checkbox)
-                    .font(.system(size: 12))
+                                if isSelected { selected.insert(criterion) }
+                                else { selected.remove(criterion) }
+                            }
+                        ))
+                        .toggleStyle(.checkbox)
+                        .font(.system(size: 12))
+                    }
                 }
-            }
-            .padding(13)
-            .background(.white, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9).stroke(PrototypeStyle.line, lineWidth: 1))
+                .padding(13)
+                .background(.white, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(PrototypeStyle.line, lineWidth: 1))
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("PARA A REVISÃO").font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
-                Text("A passagem principal e os materiais marcados como ‘na revisão’ serão enviados ao provedor escolhido.")
-                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(13)
-            .background(.white, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9).stroke(PrototypeStyle.line, lineWidth: 1))
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("PARA A REVISÃO").font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+                    Text(payloadDescription)
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
+                    if !needsBible {
+                        Text("Os materiais marcados só serão enviados quando Fidelidade estiver selecionada.")
+                            .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                    } else {
+                        if selectedMaterials.isEmpty {
+                            Text("Nenhum material do Leitor está marcado.")
+                                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                        } else {
+                            Text(selectedMaterials.prefix(4).map(\.title).joined(separator: " · "))
+                                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.ink).lineLimit(2)
+                            if selectedMaterials.count > 4 {
+                                Text("e mais \(selectedMaterials.count - 4) materiais")
+                                    .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                            }
+                        }
+                    }
+                }
+                .padding(13)
+                .background(.white, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(PrototypeStyle.line, lineWidth: 1))
 
-            HStack(spacing: 8) {
-                Image(systemName: "key.fill").foregroundStyle(accent)
-                Text("Nenhum provedor de IA configurado neste Mac.")
-                    .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
-                Spacer(minLength: 0)
-                Button("Configurar") { configureAI() }
-                    .font(.system(size: 11, weight: .medium))
-                    .buttonStyle(.plain)
-                    .foregroundStyle(accent)
-            }
+                HStack(spacing: 8) {
+                    Image(systemName: "key.fill").foregroundStyle(accent)
+                    Text(aiSettings.hasKey(for: configuredProvider)
+                         ? "\(configuredProvider.name) · \(aiSettings.reviewModel) · chave salva neste Mac"
+                         : "Nenhuma chave salva para \(configuredProvider.name).")
+                        .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                    Spacer(minLength: 0)
+                    Button("Configurar") { configureAI() }
+                        .font(.system(size: 11, weight: .medium))
+                        .buttonStyle(.plain)
+                        .foregroundStyle(accent)
+                }
+                if needsBible && !bibleSources.contains(where: { $0.id.hasPrefix("bible:") && !$0.text.isEmpty }) {
+                    Label("O texto bíblico ainda não foi carregado; Fidelidade ficará indisponível.", systemImage: "exclamationmark.triangle")
+                        .font(.system(size: 11)).foregroundStyle(.orange)
+                }
+                if let errorMessage {
+                    Text(errorMessage).font(.system(size: 11)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                }
 
-            HStack {
-                Spacer()
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Enviar revisão") {}
+                HStack {
+                    Spacer()
+                    Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                    Button {
+                        Task { await sendReview() }
+                    } label: {
+                        if isSending {
+                            Label("Revisando…", systemImage: "hourglass")
+                        } else {
+                            Text("Enviar revisão")
+                        }
+                    }
                     .buttonStyle(.borderedProminent)
                     .tint(accent)
-                    .disabled(true)
-                    .help("Configure um provedor BYOK antes de enviar o manuscrito")
+                    .disabled(!canSend)
+                    .help("O manuscrito e as fontes listadas serão enviados ao provedor selecionado")
+                }
             }
         }
         .padding(22)
         .frame(width: 540)
+        .frame(minHeight: 300)
         .background(PrototypeStyle.canvas)
+    }
+
+    private var payloadDescription: String {
+        var sourceParts: [String] = []
+        if needsBible {
+            sourceParts.append("a leitura bíblica e as traduções disponíveis")
+            if !selectedMaterials.isEmpty { sourceParts.append("os materiais marcados") }
+        }
+        let selectedDescription = sourceParts.isEmpty
+            ? "O manuscrito"
+            : "O manuscrito, " + sourceParts.joined(separator: " e ")
+        return "\(selectedDescription) serão enviados diretamente a \(configuredProvider.name) ao clicar em Enviar revisão. A chamada usa sua chave, não passa pelo app Pregar, e nunca altera o manuscrito. Aplicam-se as regras de retenção do provedor."
+    }
+
+    @ViewBuilder
+    private func reportView(_ report: SermonReviewReport) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Revisão").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+                Spacer()
+                Text("\(report.provider.name) · \(report.model)")
+                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+            }
+            if report.isEmpty {
+                ContentUnavailableView("Nenhuma observação", systemImage: "checkmark.circle", description: Text("Não encontrei apontamentos fundamentados nos critérios escolhidos."))
+                    .frame(minHeight: 150)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(report.findings) { finding in
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text(finding.criterion.title.uppercased())
+                                        .font(.system(size: 10, weight: .bold)).foregroundStyle(accent)
+                                    Spacer()
+                                    Text(finding.severity == .attention ? "verificar" : "nota")
+                                        .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                                }
+                                if !finding.manuscriptQuote.isEmpty {
+                                    Text("“\(finding.manuscriptQuote)”")
+                                        .font(.system(size: 12, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Button("Ir ao trecho", systemImage: "text.viewfinder") {
+                                        selectQuote(finding.manuscriptQuote)
+                                        dismiss()
+                                    }
+                                    .font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(accent)
+                                }
+                                Text(finding.observation)
+                                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if !finding.correction.isEmpty {
+                                    Text("Grafia: \(finding.correction)")
+                                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(accent)
+                                }
+                                if !finding.evidenceQuote.isEmpty {
+                                    Text("“\(finding.evidenceQuote)”")
+                                        .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text([finding.evidenceSourceTitle, finding.evidenceCitation].compactMap { $0 }.joined(separator: " · "))
+                                        .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                                }
+                            }
+                            .padding(.vertical, 9)
+                            .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                        }
+                    }
+                }
+                .frame(maxHeight: 430)
+            }
+            HStack {
+                Text("Relatório salvo neste Mac · \(report.createdAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                Spacer()
+                Button("Concluído") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    @MainActor
+    private func sendReview() async {
+        guard canSend else { return }
+        isSending = true
+        errorMessage = nil
+        defer { isSending = false }
+        let provider = configuredProvider
+        do {
+            guard let key = await aiSettings.key(for: provider), !key.isEmpty else { throw SermonReviewError.noKey }
+            var sources = needsBible ? bibleSources : []
+            if needsBible {
+                sources.append(contentsOf: try await readerSession.reviewSources(for: context.mainReference))
+            }
+            let criteria = selectedCriteria
+            let requestContext = SermonReviewContext(
+                dateKey: context.dateKey,
+                title: context.title,
+                mainReference: context.mainReference,
+                manuscript: context.manuscript,
+                criteria: criteria
+            )
+            let findings = try await SermonAIReviewClient().review(
+                context: requestContext,
+                sources: sources,
+                configuration: SermonReviewConfiguration(
+                    provider: provider,
+                    model: aiSettings.reviewModel,
+                    apiKey: key
+                )
+            )
+            let completed = SermonReviewReport(
+                id: UUID(),
+                createdAt: .now,
+                dateKey: context.dateKey,
+                title: context.title,
+                mainReference: context.mainReference,
+                provider: provider,
+                model: aiSettings.reviewModel,
+                manuscriptFingerprint: SermonReviewReport.fingerprint(context.manuscript),
+                criteria: criteria,
+                findings: findings
+            )
+            do {
+                _ = try await SermonReviewReportStore.shared.save(completed)
+                onReport(completed)
+                report = completed
+            } catch {
+                report = completed
+                errorMessage = "Revisão concluída, mas não foi possível guardar o relatório: \(error.localizedDescription)"
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 

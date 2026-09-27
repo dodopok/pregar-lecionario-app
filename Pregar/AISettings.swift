@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import Security
 
-enum AIProvider: String, CaseIterable, Identifiable, Sendable {
+enum AIProvider: String, CaseIterable, Codable, Identifiable, Sendable {
     case openAI = "openai"
     case anthropic = "anthropic"
     case google = "google"
@@ -22,9 +22,9 @@ enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     var models: [String] {
         switch self {
         case .openAI: ["gpt-6-sol", "gpt-6-luna"]
-        case .anthropic: ["claude-sonnet-5", "claude-haiku-5"]
+        case .anthropic: ["claude-sonnet-5", "claude-haiku-4-5"]
         case .google: ["gemini-3.8-flash", "gemini-3.8-pro"]
-        case .perplexity: ["search-api"]
+        case .perplexity: ["perplexity/sonar"]
         }
     }
 
@@ -88,10 +88,14 @@ final class AISettingsStore: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
-        reviewProvider = AIProvider(rawValue: defaults.string(forKey: "ai.reviewProvider") ?? "anthropic") ?? .anthropic
-        researchProvider = AIProvider(rawValue: defaults.string(forKey: "ai.researchProvider") ?? "perplexity") ?? .perplexity
-        reviewModel = defaults.string(forKey: "ai.reviewModel") ?? "claude-sonnet-5"
-        researchModel = defaults.string(forKey: "ai.researchModel") ?? "search-api"
+        let savedReviewProvider = AIProvider(rawValue: defaults.string(forKey: "ai.reviewProvider") ?? "anthropic") ?? .anthropic
+        let savedResearchProvider = AIProvider(rawValue: defaults.string(forKey: "ai.researchProvider") ?? "perplexity") ?? .perplexity
+        let savedReviewModel = defaults.string(forKey: "ai.reviewModel")
+        let savedResearchModel = defaults.string(forKey: "ai.researchModel")
+        reviewProvider = savedReviewProvider
+        researchProvider = savedResearchProvider
+        reviewModel = savedReviewModel.flatMap { savedReviewProvider.models.contains($0) ? $0 : nil } ?? savedReviewProvider.suggestedModel
+        researchModel = savedResearchModel.flatMap { savedResearchProvider.models.contains($0) ? $0 : nil } ?? savedResearchProvider.suggestedModel
 
         let readTask = Task.detached(priority: .utility) {
             Set(AIProvider.allCases.filter { AIKeychain.read(for: $0) != nil })
@@ -117,6 +121,10 @@ final class AISettingsStore: ObservableObject {
     }
 
     func hasKey(for provider: AIProvider) -> Bool { keyedProviders.contains(provider) }
+
+    func key(for provider: AIProvider) async -> String? {
+        await Task.detached(priority: .utility) { AIKeychain.read(for: provider) }.value
+    }
 
     func saveKey(_ key: String, for provider: AIProvider) async throws {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)

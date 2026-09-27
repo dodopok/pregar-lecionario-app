@@ -449,10 +449,13 @@ struct ResourceContextPanel: View {
     let occasion: String?
     let liturgicalDate: Date
     let isSunday: Bool
+    let reviewReports: [SermonReviewReport]
+    let manuscript: String
     let accent: Color
     let openSettings: () -> Void
     let openLibrary: () -> Void
     let newReview: () -> Void
+    let selectQuote: (String) -> Void
     let emergencyQuestions: () -> Void
     let collapse: () -> Void
     @State private var filter: MaterialFilter = .all
@@ -505,7 +508,7 @@ struct ResourceContextPanel: View {
                             Text(tab.rawValue)
                                 .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .medium))
                             if tab == .ideas { badge("0", color: Color(red: 0.78, green: 0.65, blue: 0.29)) }
-                            if tab == .review { badge("0", color: accent) }
+                            if tab == .review { badge("\(reviewReports.last?.findings.count ?? 0)", color: accent) }
                         }
                         .foregroundStyle(selectedTab == tab ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.75))
                         .frame(maxWidth: .infinity)
@@ -741,16 +744,71 @@ struct ResourceContextPanel: View {
     private var reviewContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Revisões do manuscrito").font(PrototypeStyle.serif(17, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-            Text("Ainda não há observações para esta versão.")
-                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-            ForEach(["Ortografia", "Fidelidade", "Estrutura", "Clareza", "Tom"], id: \.self) { criterion in
-                HStack {
-                    Text(criterion).font(.system(size: 12))
-                    Spacer()
-                    Text("0").font(.system(size: 11, design: .rounded).monospacedDigit()).foregroundStyle(PrototypeStyle.muted)
+            if let report = reviewReports.last {
+                let stale = report.isStale(manuscript: manuscript, mainReference: reference)
+                HStack(spacing: 6) {
+                    Text("\(report.provider.name) · \(report.createdAt.formatted(date: .numeric, time: .shortened))")
+                    if stale { Text("· texto alterado").foregroundStyle(.orange) }
                 }
-                .padding(.vertical, 5)
-                .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                ForEach(SermonReviewCriterion.allCases) { criterion in
+                    HStack {
+                        Text(criterion.title).font(.system(size: 12))
+                        Spacer()
+                        Text("\(report.findings.filter { $0.criterion == criterion }.count)")
+                            .font(.system(size: 11, design: .rounded).monospacedDigit()).foregroundStyle(PrototypeStyle.muted)
+                    }
+                    .padding(.vertical, 5)
+                    .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                }
+                if report.isEmpty {
+                    Text("Nenhuma observação fundamentada nos critérios escolhidos.")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                } else {
+                    ForEach(report.findings) { finding in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(finding.criterion.title.uppercased())
+                                .font(.system(size: 10, weight: .bold)).foregroundStyle(accent)
+                            if !finding.manuscriptQuote.isEmpty {
+                                Text("“\(finding.manuscriptQuote)”")
+                                    .font(.system(size: 11, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
+                                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                            }
+                            Text(finding.observation)
+                                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if !finding.correction.isEmpty {
+                                Text("Grafia: \(finding.correction)")
+                                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
+                            }
+                            if !finding.evidenceQuote.isEmpty {
+                                Text("“\(finding.evidenceQuote)”")
+                                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                                Text([finding.evidenceSourceTitle, finding.evidenceCitation].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.system(size: 9)).foregroundStyle(PrototypeStyle.muted)
+                            }
+                            if !finding.manuscriptQuote.isEmpty {
+                                Button("Ir ao trecho", systemImage: "text.viewfinder") { selectQuote(finding.manuscriptQuote) }
+                                    .font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(accent)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                    }
+                }
+            } else {
+                Text("Ainda não há observações para esta versão.")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                ForEach(SermonReviewCriterion.allCases) { criterion in
+                    HStack {
+                        Text(criterion.title).font(.system(size: 12))
+                        Spacer()
+                        Text("0").font(.system(size: 11, design: .rounded).monospacedDigit()).foregroundStyle(PrototypeStyle.muted)
+                    }
+                    .padding(.vertical, 5)
+                    .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                }
             }
             Text("Perguntas de emergência são uma ação separada e nunca são solicitadas automaticamente.")
                 .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)

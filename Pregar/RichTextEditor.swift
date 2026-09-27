@@ -10,6 +10,17 @@ final class EditorCommands: ObservableObject {
         wordCount = text.split(whereSeparator: \.isWhitespace).count
     }
 
+    @discardableResult
+    func selectQuote(_ quote: String) -> Bool {
+        guard let textView, !quote.isEmpty else { return false }
+        let range = (textView.string as NSString).range(of: quote)
+        guard range.location != NSNotFound else { return false }
+        textView.window?.makeFirstResponder(textView)
+        textView.setSelectedRange(range)
+        textView.scrollRangeToVisible(range)
+        return true
+    }
+
     func bold() { toggleFontTrait(.boldFontMask) }
     func italic() { toggleFontTrait(.italicFontMask) }
 
