@@ -46,17 +46,17 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - `xcodebuild -quiet -project Pregar.xcodeproj -scheme Pregar -destination 'platform=macOS' -derivedDataPath /private/tmp/pregar-prototype-derivedData build` concluiu com código 0.
 - Não há suíte automatizada de testes.
 - Na primeira tentativa, a cena do SwiftUI não aparecia porque `APISettingsStore.init()` lia o Acesso às Chaves sincronamente no ator principal. A amostragem do processo mostrou a thread principal parada em `SecItemCopyMatching`/descriptografia do chaveiro durante a criação da janela.
-- O carregamento de credenciais foi movido para background; as novas operações usam o Data Protection Keychain do macOS. Leituras que não respondam em três segundos deixam de segurar o estado de inicialização; o app abre as Preferências para que a chave seja informada novamente. A cópia antiga no chaveiro legado não é apagada.
-- Build atual compilada e aberta via LaunchServices. A árvore de acessibilidade confirmou a janela de Preferências e, depois de fechá-la, a Mesa nativa com calendário e estado explícito “Configure sua chave da Estêvão API”, sem spinner enganoso quando não há chave acessível.
-- O calendário real ainda depende de uma chave válida informada no campo X-API-Key. A consulta autenticada da API não foi testada nesta sessão porque a credencial antiga não apareceu no Data Protection Keychain e não vou digitar ou transmitir uma chave privada em nome do usuário.
+- O carregamento de credenciais continua assíncrono, fora da thread principal, com limite de três segundos para a inicialização. Uma tentativa de migrar as consultas para o Data Protection Keychain retornou `errSecMissingEntitlement` na build local ao salvar; essa rota foi removida. O app voltou ao chaveiro padrão que já continha a credencial, sem apagar ou migrar segredos.
+- A Mesa abre numa janela dimensionada para os três painéis (mínimo 1220×740; abertura inicial 1600×980). Preferências deixou de ser uma folha limitada pela janela da Mesa: é uma janela nativa própria, inicial de 1120×900, redimensionável e com conteúdo rolável.
+- A build atual compilou e abriu via LaunchServices. A inspeção em runtime confirmou a Mesa completa, sem recorte nos três painéis, e Preferências em janela separada com o estado “Chave salva neste Mac”.
+- A credencial preexistente no chaveiro padrão foi lida e usada na consulta autenticada: a Mesa carregou as leituras do LOC 2027 para 2026-09-27 e o teste de conexão das Preferências confirmou resposta para 2026-09-26. Não foi possível determinar se a chave digitada pelo usuário na tentativa anterior era uma rotação; portanto, a verificação comprova a credencial preexistente, não uma eventual chave nova.
 - O erro `kLSNoExecutableErr` observado ao executar `open` sem elevação era do sandbox de execução: o mesmo erro ocorreu com o app Calculadora do sistema; a abertura elevada da build funcionou.
 - O protótipo web publicado foi navegado; nenhuma ação de enviar revisão ou alterar dados externos foi acionada.
 
 ## Próximos passos
 
-1. Conferir a Mesa compilada em runtime e ajustar a hierarquia e as dimensões comparando com a tela 3a.
+1. Implementar o Leitor da tela 3b com abas simultâneas, PDF aberto em página física e navegação web persistente.
 2. Fazer Biblioteca e Arquivo janelas independentes e aproximar os estados das telas 3e e 3f.
-3. Implementar o leitor com abas simultâneas, abertura PDF na página física e navegação web persistida conforme 3b.
-4. Conferir visualmente as Preferências em runtime; a estrutura das quatro áreas já está implementada, com host fixo e credenciais BYOK no Acesso às Chaves.
-5. Implementar chamadas de revisão e Drive, documento de ideias e histórico após validar modelos/contratos e as proteções que impedem alteração do texto do usuário.
-6. Validar o fluxo completo numa preparação real e registrar as diferenças restantes contra o protótipo.
+3. Indexar capítulos/passagens dos PDFs, corrigir localizações manualmente e adicionar OCR sob demanda.
+4. Implementar chamadas de revisão e Drive, documento de ideias e histórico após validar modelos/contratos e as proteções que impedem alteração do texto do usuário.
+5. Validar o fluxo completo numa preparação real e registrar as diferenças restantes contra o protótipo.

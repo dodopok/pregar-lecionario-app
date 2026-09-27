@@ -72,7 +72,7 @@ struct APISettingsView: View {
             Divider()
             footer
         }
-        .frame(width: 920, height: 790)
+        .frame(minWidth: 780, minHeight: 600)
         .background(PrototypeStyle.canvas)
         .preferredColorScheme(.light)
         .tint(accent)
@@ -408,6 +408,16 @@ struct APISettingsView: View {
             resultMessage = error.localizedDescription
             testSucceeded = false
         }
+    }
+}
+
+struct PreferencesSceneView: View {
+    @EnvironmentObject private var store: APISettingsStore
+    @EnvironmentObject private var aiStore: AISettingsStore
+    @EnvironmentObject private var appearance: AppAppearanceStore
+
+    var body: some View {
+        APISettingsView(store: store, aiStore: aiStore, accent: appearance.accent)
     }
 }
 

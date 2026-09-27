@@ -4,7 +4,8 @@ import SwiftUI
 
 struct PreparationWorkspace: View {
     @EnvironmentObject private var settingsStore: APISettingsStore
-    @EnvironmentObject private var aiSettingsStore: AISettingsStore
+    @EnvironmentObject private var appearanceStore: AppAppearanceStore
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SermonDraft.modifiedAt, order: .reverse) private var drafts: [SermonDraft]
 
@@ -13,7 +14,6 @@ struct PreparationWorkspace: View {
     @State private var day: LiturgicalDay?
     @State private var loadError: String?
     @State private var isLoading = false
-    @State private var showingSettings = false
     @State private var showingSettingsOnLaunch = false
     @State private var showingBible = false
     @State private var showingReview = false
@@ -79,7 +79,7 @@ struct PreparationWorkspace: View {
                     } description: {
                         Text(loadError).frame(maxWidth: 440)
                     } actions: {
-                        Button("Configurar conexão") { showingSettings = true }
+                        Button("Configurar conexão", action: openPreferences)
                         Button("Tentar novamente") { Task { await loadDay() } }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -95,7 +95,7 @@ struct PreparationWorkspace: View {
                         Text(settingsStore.isLoadingCredential ? "Preparando a conexão…" : (settingsStore.hasAPIKey ? "Consultando o calendário…" : "Configure sua chave da Estêvão API"))
                             .font(.system(size: 13)).foregroundStyle(PrototypeStyle.muted)
                         if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey {
-                            Button("Configurar Estêvão API") { showingSettings = true }
+                            Button("Configurar Estêvão API", action: openPreferences)
                                 .buttonStyle(.borderedProminent)
                                 .tint(accentColor)
                         }
@@ -129,7 +129,7 @@ struct PreparationWorkspace: View {
                                 selectedTab: $contextTab,
                                 reference: draft.mainReadingReference ?? "esta preparação",
                                 accent: accentColor,
-                                openSettings: { showingSettings = true },
+                                openSettings: openPreferences,
                                 openLibrary: { showingLibrary = true },
                                 newReview: { showingReview = true },
                                 emergencyQuestions: { showingQuestions = true },
@@ -154,9 +154,6 @@ struct PreparationWorkspace: View {
         .preferredColorScheme(.light)
         .tint(accentColor)
         .toolbar(.hidden, for: .windowToolbar)
-        .sheet(isPresented: $showingSettings) {
-            APISettingsView(store: settingsStore, aiStore: aiSettingsStore, accent: accentColor)
-        }
         .sheet(isPresented: $showingBible) {
             BibleComparisonView(
                 reference: activeDraft?.mainReadingReference ?? "",
@@ -168,17 +165,17 @@ struct PreparationWorkspace: View {
         .sheet(isPresented: $showingReview) {
             ReviewRequestSheet(accent: accentColor) {
                 showingReview = false
-                showingSettings = true
+                openPreferences()
             }
         }
         .sheet(isPresented: $showingQuestions) {
             EmergencyQuestionsSheet(accent: accentColor) {
                 showingQuestions = false
-                showingSettings = true
+                openPreferences()
             }
         }
         .sheet(isPresented: $showingTablet) {
-            TabletPreparationSheet(draft: activeDraft, accent: accentColor, openSettings: { showingSettings = true })
+            TabletPreparationSheet(draft: activeDraft, accent: accentColor, openSettings: openPreferences)
         }
         .sheet(isPresented: $showingArchive) {
             SermonArchiveView()
@@ -190,8 +187,10 @@ struct PreparationWorkspace: View {
         .onAppear {
             ensureDraft(for: selectedDate)
             selectedBible = settingsStore.settings.bible
+            appearanceStore.accent = accentColor
             if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
+        .onChange(of: day?.color) { _, _ in appearanceStore.accent = accentColor }
         .onChange(of: settingsStore.isLoadingCredential) { _, loading in
             if !loading && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
@@ -203,7 +202,7 @@ struct PreparationWorkspace: View {
         }
         .onChange(of: showingSettingsOnLaunch) { _, shouldPresent in
             if shouldPresent {
-                showingSettings = true
+                openPreferences()
                 showingSettingsOnLaunch = false
             }
         }
@@ -294,7 +293,7 @@ struct PreparationWorkspace: View {
             .help("Solicitar uma revisão")
 
             Button {
-                showingSettings = true
+                openPreferences()
             } label: {
                 Image(systemName: "sun.max")
                     .font(.system(size: 15))
@@ -312,6 +311,10 @@ struct PreparationWorkspace: View {
     private var toolbarSubtitle: String {
         let date = selectedDate.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "pt_BR")))
         return [date, day?.sundayName].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func openPreferences() {
+        openWindow(id: "preferences")
     }
 
     private func toolbarAction(_ symbol: String, title: String, action: @escaping () -> Void) -> some View {

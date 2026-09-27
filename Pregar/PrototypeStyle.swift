@@ -14,3 +14,8 @@ enum PrototypeStyle {
         .system(size: size, weight: weight, design: .serif)
     }
 }
+
+@MainActor
+final class AppAppearanceStore: ObservableObject {
+    @Published var accent = PrototypeStyle.green
+}

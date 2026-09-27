@@ -69,8 +69,7 @@ private enum AIKeychain {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: provider.rawValue,
-            kSecUseDataProtectionKeychain as String: true
+            kSecAttrAccount as String: provider.rawValue
         ]
     }
 }

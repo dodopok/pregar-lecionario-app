@@ -76,8 +76,7 @@ enum APIKeychain {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecUseDataProtectionKeychain as String: true
+            kSecAttrAccount as String: account
         ]
     }
 
@@ -86,6 +85,9 @@ enum APIKeychain {
         var errorDescription: String? {
             if status == errSecInteractionNotAllowed {
                 return "Desbloqueie o Acesso às Chaves deste Mac e tente novamente."
+            }
+            if status == errSecMissingEntitlement {
+                return "Esta build não tem o entitlement necessário para acessar a chave."
             }
             return SecCopyErrorMessageString(status, nil) as String? ?? "Não foi possível acessar o Acesso às Chaves."
         }
