@@ -131,7 +131,7 @@ final class EditorCommands: ObservableObject {
         storage.append(NSAttributedString(string: "\n\n\(marker) ", attributes: [
             .font: NSFont.systemFont(ofSize: 10)
         ]))
-        textView.setSelectedRange(NSRange(location: storage.length - 1, length: 0))
+        textView.setSelectedRange(NSRange(location: storage.length, length: 0))
         textView.scrollRangeToVisible(textView.selectedRange())
         textView.didChangeText()
     }

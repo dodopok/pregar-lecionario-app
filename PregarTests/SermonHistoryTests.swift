@@ -79,6 +79,119 @@ final class SermonHistoryTests: XCTestCase {
     }
 
     @MainActor
+    func testPoemQuotationsListAndFootnoteSurviveEditorDriveAndTabletExport() throws {
+        let poem = "Na noite, uma janela;\no silêncio aprende a escutar.\n\nA manhã responde."
+        let inlineQuote = "“A esperança não decepciona.”"
+        let blockQuote = "O amor de Deus foi derramado em nossos corações.\n— Romanos 5:5"
+        let listItem = "Uma promessa para hoje"
+        let textView = NSTextView(frame: .zero)
+        textView.isRichText = true
+        textView.string = "Mensagem\n\nPoema:\n\(poem)\n\nCito \(inlineQuote)\n\n\(blockQuote)\n\nLista\n\(listItem)\n\nTexto com nota."
+        let initialRange = NSRange(location: 0, length: (textView.string as NSString).length)
+        textView.textStorage?.addAttribute(
+            .font,
+            value: NSFont(name: "Arial", size: 10) ?? NSFont.systemFont(ofSize: 10),
+            range: initialRange
+        )
+
+        let commands = EditorCommands()
+        commands.textView = textView
+        let source = textView.string as NSString
+
+        textView.setSelectedRange(source.range(of: "Mensagem"))
+        commands.heading()
+        textView.setSelectedRange(source.range(of: inlineQuote))
+        commands.italic()
+        textView.setSelectedRange(source.range(of: blockQuote))
+        commands.quotation()
+        textView.setSelectedRange(source.range(of: listItem))
+        commands.bulletedList()
+        let noteAnchor = (textView.string as NSString).range(of: "nota")
+        textView.setSelectedRange(noteAnchor)
+        commands.footnote()
+        commands.insertText("Referência: Romanos 5:5.")
+
+        let savedRTF = try textView.attributedString().data(
+            from: NSRange(location: 0, length: textView.textStorage?.length ?? 0),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        let reopenedContent = try NSAttributedString(
+            data: savedRTF,
+            options: [.documentType: NSAttributedString.DocumentType.rtf],
+            documentAttributes: nil
+        )
+        let reopenedEditor = NSTextView(frame: .zero)
+        reopenedEditor.isRichText = true
+        reopenedEditor.textStorage?.setAttributedString(reopenedContent)
+        let reopenedRTF = try reopenedEditor.attributedString().data(
+            from: NSRange(location: 0, length: reopenedEditor.textStorage?.length ?? 0),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+
+        XCTAssertEqual(reopenedEditor.string, textView.string)
+        XCTAssertTrue(reopenedEditor.string.contains("Na noite, uma janela;\no silêncio aprende a escutar.\n\nA manhã responde."))
+        XCTAssertTrue(reopenedEditor.string.contains("• \(listItem)"))
+        XCTAssertTrue(reopenedEditor.string.contains("¹ Referência: Romanos 5:5."))
+
+        let reopenedNSString = reopenedEditor.string as NSString
+        let italicRange = reopenedNSString.range(of: inlineQuote)
+        let italicFont = try XCTUnwrap(reopenedEditor.textStorage?.attribute(.font, at: italicRange.location, effectiveRange: nil) as? NSFont)
+        XCTAssertTrue(NSFontManager.shared.traits(of: italicFont).contains(.italicFontMask))
+        let blockRange = reopenedNSString.range(of: blockQuote)
+        let blockStyle = try XCTUnwrap(reopenedEditor.textStorage?.attribute(.paragraphStyle, at: blockRange.location, effectiveRange: nil) as? NSParagraphStyle)
+        XCTAssertEqual(blockStyle.headIndent, 22)
+        XCTAssertNotNil(reopenedEditor.textStorage?.attribute(.backgroundColor, at: blockRange.location, effectiveRange: nil))
+        let markerRange = reopenedNSString.range(of: "¹")
+        let markerOffset = try XCTUnwrap(reopenedEditor.textStorage?.attribute(.baselineOffset, at: markerRange.location, effectiveRange: nil) as? NSNumber)
+        XCTAssertGreaterThan(markerOffset.doubleValue, 0)
+
+        let docsContent = try GoogleDocsContent.fromRTF(reopenedRTF)
+        XCTAssertEqual(docsContent.text, reopenedEditor.string)
+        XCTAssertTrue(docsContent.styles.contains { $0.superscript && $0.range == markerRange })
+        XCTAssertTrue(docsContent.styles.contains { $0.italic && $0.range.contains(italicRange.location) })
+        XCTAssertTrue(docsContent.styles.contains { $0.backgroundColor != nil })
+        XCTAssertTrue(docsContent.paragraphs.contains { $0.indentStart == 22 && $0.spacingBefore == 7 && $0.spacingAfter == 9 })
+
+        let driveBody = GoogleDriveAPI.batchUpdateBody(
+            content: docsContent,
+            currentEndIndex: docsContent.text.utf16.count + 1,
+            requiredRevisionID: "synthetic-revision"
+        )
+        let driveRequests = try XCTUnwrap(driveBody["requests"] as? [[String: Any]])
+        let insertedText = try XCTUnwrap(driveRequests.compactMap { $0["insertText"] as? [String: Any] }.first)
+        XCTAssertEqual(insertedText["text"] as? String, docsContent.text)
+        XCTAssertTrue(driveRequests.contains { $0["updateTextStyle"] != nil })
+        XCTAssertTrue(driveRequests.contains { $0["updateParagraphStyle"] != nil })
+
+        let pdfData = try TabletPDFExporter.makePDF(
+            rtfData: reopenedRTF,
+            title: "Mensagem",
+            subtitle: "LOC 2027 · Domingo",
+            fontName: "Arial",
+            fontSize: 14,
+            includeFootnotes: true
+        )
+        let pdf = try XCTUnwrap(PDFDocument(data: pdfData))
+        let pdfText = (0..<pdf.pageCount).compactMap { pdf.page(at: $0)?.string }.joined(separator: "\n")
+        let pdfPage = try XCTUnwrap(pdf.page(at: 0))
+        let pdfAttributedText = try XCTUnwrap(pdfPage.attributedString)
+        let pdfAttributedNSString = pdfAttributedText.string as NSString
+        let pdfItalicRange = pdfAttributedNSString.range(of: inlineQuote)
+        let pdfItalicFont = try XCTUnwrap(pdfAttributedText.attribute(.font, at: pdfItalicRange.location, effectiveRange: nil) as? NSFont)
+        let bodySelection = try XCTUnwrap(pdf.findString("Cito", withOptions: []).first)
+        let blockSelection = try XCTUnwrap(pdf.findString("O amor de Deus", withOptions: []).first)
+
+        XCTAssertTrue(pdfText.contains("Na noite, uma janela;"))
+        XCTAssertTrue(pdfText.contains("A manhã responde."))
+        XCTAssertTrue(pdfText.contains(inlineQuote))
+        XCTAssertTrue(pdfText.contains("— Romanos 5:5"))
+        XCTAssertTrue(pdfText.contains("• \(listItem)"))
+        XCTAssertTrue(pdfText.contains("Referência: Romanos 5:5."))
+        XCTAssertTrue(NSFontManager.shared.traits(of: pdfItalicFont).contains(.italicFontMask))
+        XCTAssertGreaterThan(blockSelection.bounds(for: pdfPage).minX, bodySelection.bounds(for: pdfPage).minX)
+    }
+
+    @MainActor
     func testFootnoteInsertionReusesLowestFreeNumber() {
         let textView = NSTextView(frame: .zero)
         textView.string = "Texto¹\n\n¹ Primeira nota\n\nTexto³\n\n³ Terceira nota"

@@ -122,6 +122,12 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - A seleção mostra uma orientação quando ainda não há chave e oferece nova tentativa em caso de falha de rede. A consulta solicita apenas os campos usados pelo seletor.
 - A suíte completa passou com 62 testes; os novos casos cobrem catálogo visual do LOC e conversão de cores, citações e notas para Google Docs. A build de teste está assinada com `Apple Development: DOUGLAS DE ARAUJO SILVA`, `TeamIdentifier=R573HPN65Q`; nenhuma janela do app foi aberta.
 
+## Escrita, Drive e PDF
+
+- Um teste sintético percorre os comandos reais do editor, serialização RTF, reabertura no editor, conversão para o corpo da Google Docs API e exportação em PDF para tablet. Cobre versos e estrofes, citação inline, citação em bloco com atribuição, lista e nota de rodapé, conferindo texto, itálico, recuo, cor e sobrescrito.
+- Esse percurso encontrou um erro no cursor da nota: a digitação começava antes do espaço após o marcador. O cursor agora fica após o espaço, e o teste confirma que a referência digitada não se cola ao sobrescrito.
+- A suíte completa passou com 63 testes e nenhuma falha em macOS 26.6.2. É validação de formatos e payload local; login Google, sincronização real, conflito por edição externa e leitura no Android/iPad permanecem pendentes.
+
 ## Performance
 
 - Uma amostra de 8 segundos do processo aberto encontrou a thread principal aguardando eventos do AppKit, sem loop ativo durante o intervalo ocioso. O footprint era 68,2 MB naquele instante e o pico desde a abertura era 224,3 MB; é uma fotografia pontual, não um benchmark de rolagem ou troca de abas.
