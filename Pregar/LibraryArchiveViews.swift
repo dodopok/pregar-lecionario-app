@@ -42,6 +42,8 @@ struct PDFLibraryView: View {
     @State private var ocrTask: Task<PDFLibraryOCRResult?, Never>?
     @State private var metadataRecord: PDFLibraryRecord?
     @State private var openingPDFRecordID: String?
+    @State private var librarySidebarFraction: CGFloat = 0.38
+    @State private var libraryDividerDragStart: CGFloat?
 
     private var selectedRecord: PDFLibraryRecord? {
         records.first { $0.id == selectedID }
@@ -49,6 +51,13 @@ struct PDFLibraryView: View {
 
     private var totalPages: Int { records.reduce(0) { $0 + $1.pageCount } }
     private var totalSections: Int { records.reduce(0) { $0 + ($1.sections?.count ?? $1.bookmarkCount) } }
+
+    private func clampedSidebarFraction(_ fraction: CGFloat, availableWidth: CGFloat) -> CGFloat {
+        guard availableWidth > 0 else { return 0.38 }
+        let minimum = 320 / availableWidth
+        let maximum = max(minimum, min(768, availableWidth - 459) / availableWidth)
+        return min(maximum, max(minimum, fraction))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -82,28 +91,66 @@ struct PDFLibraryView: View {
 
             Divider()
 
-            HSplitView {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(records) { record in
-                            Button {
-                                selectedID = record.id
-                            } label: {
-                                recordRow(record, selected: record.id == selectedID)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(isIndexing)
-                        }
-                    }
-                    .padding(7)
-                }
-                .frame(width: 385)
-                .background(PrototypeStyle.canvas)
+            GeometryReader { geometry in
+                let maxSidebarWidth = max(320, min(768, geometry.size.width - 459))
+                let sidebarWidth = min(maxSidebarWidth, max(320, geometry.size.width * librarySidebarFraction))
 
-                detailView
-                    .frame(minWidth: 450, maxWidth: .infinity, maxHeight: .infinity)
+                HStack(spacing: 0) {
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(records) { record in
+                                Button {
+                                    selectedID = record.id
+                                } label: {
+                                    recordRow(record, selected: record.id == selectedID)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(isIndexing)
+                            }
+                        }
+                        .padding(7)
+                    }
+                    .frame(width: sidebarWidth, height: geometry.size.height, alignment: .topLeading)
+                    .background(PrototypeStyle.canvas)
+
+                    Rectangle()
+                        .fill(.clear)
+                        .frame(width: 9)
+                        .overlay {
+                            Rectangle().fill(PrototypeStyle.line).frame(width: 1)
+                        }
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 2)
+                                .onChanged { value in
+                                    let start = libraryDividerDragStart ?? librarySidebarFraction
+                                    if libraryDividerDragStart == nil { libraryDividerDragStart = start }
+                                    librarySidebarFraction = clampedSidebarFraction(
+                                        start + value.translation.width / geometry.size.width,
+                                        availableWidth: geometry.size.width
+                                    )
+                                }
+                                .onEnded { _ in libraryDividerDragStart = nil }
+                        )
+                        .accessibilityElement()
+                        .accessibilityLabel("Divisor entre obras e detalhes")
+                        .accessibilityValue("\(Int(sidebarWidth)) pontos")
+                        .accessibilityAdjustableAction { direction in
+                            let delta: CGFloat = direction == .increment ? 20 : -20
+                            librarySidebarFraction = clampedSidebarFraction(
+                                librarySidebarFraction + delta / geometry.size.width,
+                                availableWidth: geometry.size.width
+                            )
+                        }
+                        .onHover { hovering in
+                            if hovering { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                        }
+
+                    detailView
+                        .frame(minWidth: 450, maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .background(PrototypeStyle.paper)
             }
-            .background(PrototypeStyle.paper)
         }
         .frame(minWidth: 1040, minHeight: 640)
         .background(PrototypeStyle.paper)
