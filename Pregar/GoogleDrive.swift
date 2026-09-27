@@ -1138,10 +1138,23 @@ final class GoogleDrivePublicPDFImporter: ObservableObject {
     @Published private(set) var completedCount = 0
     @Published private(set) var totalCount = 0
 
+    private let session: URLSession
+    private let applicationSupportRoot: URL?
+    private let saveAPIKey: @Sendable (String) throws -> Void
     private var savedAPIKey: String?
 
-    init() {
-        let readTask = Task.detached(priority: .utility) { GoogleDrivePublicAPIKeychain.read() }
+    init(
+        session: URLSession = .shared,
+        applicationSupportRoot: URL? = nil,
+        readAPIKey: @escaping @Sendable () -> String? = { GoogleDrivePublicAPIKeychain.read() },
+        saveAPIKey: @escaping @Sendable (String) throws -> Void = { try GoogleDrivePublicAPIKeychain.save($0) }
+    ) {
+        self.session = session
+        self.applicationSupportRoot = applicationSupportRoot
+        self.saveAPIKey = saveAPIKey
+
+        let loadAPIKey = readAPIKey
+        let readTask = Task.detached(priority: .utility) { loadAPIKey() }
         Task { [weak self] in
             let key = await readTask.value
             self?.savedAPIKey = key
@@ -1169,17 +1182,18 @@ final class GoogleDrivePublicPDFImporter: ObservableObject {
         status = "Verificando pasta pública…"
         defer { isImporting = false }
 
-        let client = GoogleDrivePublicFolderClient(apiKey: key)
+        let client = GoogleDrivePublicFolderClient(apiKey: key, session: session)
         let folder = try await client.folder(for: link)
         if !submittedKey.isEmpty {
-            try await Task.detached(priority: .utility) { try GoogleDrivePublicAPIKeychain.save(submittedKey) }.value
+            let persistAPIKey = saveAPIKey
+            try await Task.detached(priority: .utility) { try persistAPIKey(submittedKey) }.value
             savedAPIKey = submittedKey
             savedAPIKeyExists = true
         }
         let files = try await client.pdfFiles(in: folder, rootResourceKey: link.resourceKey, includeSubfolders: includeSubfolders)
         guard !files.isEmpty else { throw GoogleDriveError.noPDFsInPublicDriveFolder }
         totalCount = files.count
-        let directory = try Self.importDirectory(folderID: folder.id)
+        let directory = try Self.importDirectory(folderID: folder.id, applicationSupportRoot: applicationSupportRoot)
         status = "Baixando até \(GoogleDrivePublicFolderClient.importConcurrency) PDFs simultaneamente…"
         var importedByIndex: [Int: URL] = [:]
         var failuresByIndex: [(Int, String)] = []
@@ -1211,13 +1225,18 @@ final class GoogleDrivePublicPDFImporter: ObservableObject {
         return GoogleDrivePublicPDFImportResult(folderName: folder.name, localURLs: imported, failures: failures)
     }
 
-    private static func importDirectory(folderID: String) throws -> URL {
-        let root = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
+    private static func importDirectory(folderID: String, applicationSupportRoot: URL?) throws -> URL {
+        let root: URL
+        if let applicationSupportRoot {
+            root = applicationSupportRoot
+        } else {
+            root = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+        }
         let safeID = String(folderID.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || "-_".unicodeScalars.contains($0) })
         let directory = root.appendingPathComponent("Pregar/Library/Google Drive/\(safeID)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

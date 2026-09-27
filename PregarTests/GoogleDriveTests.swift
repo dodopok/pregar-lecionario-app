@@ -410,6 +410,59 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(URLComponents(url: mediaRequest.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "key" })?.value, "test-key")
     }
 
+    @MainActor
+    func testPublicFolderImporterDownloadsPDFIntoIsolatedLibrary() async throws {
+        let applicationSupport = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Pregar.PublicFolderImportTests.\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: applicationSupport, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: applicationSupport) }
+
+        let pdfData = Data("%PDF-1.7\npublic folder fixture".utf8)
+        let checksum = Insecure.MD5.hash(data: pdfData).map { String(format: "%02x", $0) }.joined()
+        var requests: [URLRequest] = []
+        GoogleDriveStubURLProtocol.setHandler { request in
+            requests.append(request)
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!
+            let query = Dictionary(components.queryItems?.map { ($0.name, $0.value ?? "") } ?? [], uniquingKeysWith: { first, _ in first })
+
+            if components.path.hasSuffix("/folder-public") {
+                return (200, Data(#"{"id":"folder-public","name":"Comentários públicos","mimeType":"application/vnd.google-apps.folder","resourceKey":"folder-key"}"#.utf8))
+            }
+            if query["alt"] == "media" { return (200, pdfData) }
+            if query["q"]?.contains("'folder-public'") == true {
+                let file = #"{"id":"commentary-pdf","name":"Matthew Commentary.pdf","mimeType":"application/pdf","size":"\#(pdfData.count)","md5Checksum":"\#(checksum)","resourceKey":"pdf-key"}"#
+                return (200, Data(#"{"files":[\#(file)]}"#.utf8))
+            }
+            return (404, Data(#"{"error":{"message":"Unexpected test request"}}"#.utf8))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let importer = GoogleDrivePublicPDFImporter(
+            session: session,
+            applicationSupportRoot: applicationSupport,
+            readAPIKey: { nil },
+            saveAPIKey: { _ in }
+        )
+
+        let result = try await importer.importPDFs(
+            from: "https://drive.google.com/drive/folders/folder-public?resourcekey=folder-key",
+            apiKey: "test-api-key",
+            includeSubfolders: false
+        )
+
+        XCTAssertEqual(result.folderName, "Comentários públicos")
+        XCTAssertEqual(result.localURLs.count, 1)
+        XCTAssertTrue(result.failures.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(result.localURLs.first)), pdfData)
+        XCTAssertTrue(result.localURLs[0].path.hasPrefix(applicationSupport.path))
+        XCTAssertEqual(importer.status, "1 PDF(s) baixado(s)")
+        XCTAssertTrue(importer.savedAPIKeyExists)
+        XCTAssertEqual(requests.count, 3)
+        XCTAssertTrue(requests.allSatisfy {
+            URLComponents(url: $0.url!, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "key" && $0.value == "test-api-key" }) == true
+        })
+    }
+
     func testPublicDriveDownloadChecksFileSizeAndChecksum() async throws {
         let pdfData = Data("%PDF-1.7\nverified fixture".utf8)
         let checksum = Insecure.MD5.hash(data: pdfData).map { String(format: "%02x", $0) }.joined()
