@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */; };
+		0B931865BC2CBFCE6E3D9D9C /* AISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCCDA011317AD64332990C8 /* AISettings.swift */; };
 		11DF447737C4F2F6B3A484EE /* WorkspaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */; };
 		2236BE23F5A46EA6012ECFD1 /* PrototypeStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */; };
 		39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */; };
@@ -24,6 +25,7 @@
 		0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
 		2495567BA510561B3883455A /* LibraryArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryArchiveViews.swift; sourceTree = "<group>"; };
 		39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrototypeStyle.swift; sourceTree = "<group>"; };
+		3DCCDA011317AD64332990C8 /* AISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettings.swift; sourceTree = "<group>"; };
 		478AAAADD24805C4AAF1C997 /* PregarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PregarApp.swift; sourceTree = "<group>"; };
 		4D7CDAD35002F411DA0100B9 /* SermonDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SermonDraft.swift; sourceTree = "<group>"; };
 		547C3A36015E310F5E8EDD26 /* Pregar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pregar.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -55,6 +57,7 @@
 		D40AA52FAFDBBB3B027F142C /* Pregar */ = {
 			isa = PBXGroup;
 			children = (
+				3DCCDA011317AD64332990C8 /* AISettings.swift */,
 				74D8516E9667268B7075CEB2 /* APISettings.swift */,
 				62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */,
 				2495567BA510561B3883455A /* LibraryArchiveViews.swift */,
@@ -125,6 +128,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0B931865BC2CBFCE6E3D9D9C /* AISettings.swift in Sources */,
 				AEDF294BAB0F0E0394EED0CB /* APISettings.swift in Sources */,
 				39989B477912EC6CFD9B3579 /* APISettingsView.swift in Sources */,
 				3ABB3539AF017A6003537EC5 /* LibraryArchiveViews.swift in Sources */,

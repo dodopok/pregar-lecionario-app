@@ -28,9 +28,11 @@ O projeto é um app nativo para macOS, com armazenamento local e consumo da Est�
 - Biblioteca local permite importar PDFs, ler páginas com PDFKit, mostrar metadados básicos e bookmarks do sumário. Ainda não indexa referências bíblicas por texto/cabeçalho, corrige páginas nem faz OCR.
 - Arquivo local lista sermões e busca por título, passagem ou data. Ocasião litúrgica, relações de materiais, comparação/restauração de versões e estado do Drive ainda não estão implementados.
 - Folhas de revisão, perguntas e preparação para tablet representam os limites e opções do protótipo, mas enviar à IA e atualizar o Drive ficam desativados até as integrações BYOK e Google Drive existirem.
-- Chave da Estêvão API guardada no Acesso às Chaves do macOS. Livro, idioma, tradução principal e modalidade de leituras ficam localmente.
+- Preferências em quatro áreas conforme a tela 3d. A Estêvão API permanece fixa; livro, idioma, tradução principal e modalidade de leituras ficam localmente.
+- Chaves BYOK para OpenAI, Anthropic, Google e Perplexity podem ser guardadas/removidas no Acesso às Chaves. Provedor/modelo de revisão e pesquisa são preferências locais, sem chamadas aos provedores ainda.
+- Drive e tablet deixam configurar pasta/documento de ideias, dispositivos e apresentação (Arial 10). OAuth e sincronização ainda não estão ativos. A Biblioteca mostra a pasta de PDFs e os quatro sites favoritos; indexação por passagem e OCR continuam pendentes.
 
-Ainda faltam a navegação de materiais em abas como na tela 3b; as quatro áreas completas de Preferências; indexação de capítulos/passagens dos PDFs, correção manual e OCR; pesquisa e curadoria reais de sites; persistência de ideias; histórico recuperável; BYOK para OpenAI, Anthropic, Google e Perplexity; revisão segura com evidências; autenticação/sincronização Google Drive e saída de leitura para tablet.
+Ainda faltam a navegação de materiais em abas como na tela 3b; indexação de capítulos/passagens dos PDFs, correção manual e OCR; pesquisa e curadoria reais de sites; persistência de ideias; histórico recuperável; chamadas BYOK e revisão segura com evidências; autenticação/sincronização Google Drive e saída de leitura para tablet.
 
 ## Host da API
 
@@ -51,6 +53,6 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 1. Conferir a Mesa compilada em runtime e ajustar a hierarquia e as dimensões comparando com a tela 3a.
 2. Fazer Biblioteca e Arquivo janelas independentes e aproximar os estados das telas 3e e 3f.
 3. Implementar o leitor com abas simultâneas, abertura PDF na página física e navegação web persistida conforme 3b.
-4. Completar Preferências em quatro painéis, mantendo o host da Estêvão API fixo, e guardar chaves BYOK no Acesso às Chaves.
-5. Implementar Drive, documento de ideias, histórico e revisão apenas após definir os contratos de autenticação e validação que protegem o texto do usuário.
+4. Conferir visualmente as Preferências em runtime; a estrutura das quatro áreas já está implementada, com host fixo e credenciais BYOK no Acesso às Chaves.
+5. Implementar chamadas de revisão e Drive, documento de ideias e histórico após validar modelos/contratos e as proteções que impedem alteração do texto do usuário.
 6. Validar o fluxo completo numa preparação real e registrar as diferenças restantes contra o protótipo.

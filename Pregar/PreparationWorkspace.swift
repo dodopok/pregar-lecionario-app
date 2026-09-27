@@ -4,6 +4,7 @@ import SwiftUI
 
 struct PreparationWorkspace: View {
     @EnvironmentObject private var settingsStore: APISettingsStore
+    @EnvironmentObject private var aiSettingsStore: AISettingsStore
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SermonDraft.modifiedAt, order: .reverse) private var drafts: [SermonDraft]
 
@@ -148,7 +149,7 @@ struct PreparationWorkspace: View {
         .tint(accentColor)
         .toolbar(.hidden, for: .windowToolbar)
         .sheet(isPresented: $showingSettings) {
-            APISettingsView(store: settingsStore)
+            APISettingsView(store: settingsStore, aiStore: aiSettingsStore, accent: accentColor)
         }
         .sheet(isPresented: $showingBible) {
             BibleComparisonView(

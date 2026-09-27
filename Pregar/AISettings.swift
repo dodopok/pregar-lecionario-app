@@ -1,0 +1,119 @@
+import Combine
+import Foundation
+import Security
+
+enum AIProvider: String, CaseIterable, Identifiable {
+    case openAI = "openai"
+    case anthropic = "anthropic"
+    case google = "google"
+    case perplexity = "perplexity"
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .openAI: "OpenAI"
+        case .anthropic: "Claude"
+        case .google: "Gemini"
+        case .perplexity: "Perplexity"
+        }
+    }
+
+    var models: [String] {
+        switch self {
+        case .openAI: ["gpt-6-sol", "gpt-6-luna"]
+        case .anthropic: ["claude-sonnet-5", "claude-haiku-5"]
+        case .google: ["gemini-3.8-flash", "gemini-3.8-pro"]
+        case .perplexity: ["search-api"]
+        }
+    }
+
+    var suggestedModel: String { models[0] }
+}
+
+private enum AIKeychain {
+    private static let service = "br.caminhoanglicano.pregar.ai"
+
+    static func read(for provider: AIProvider) -> String? {
+        var query = baseQuery(for: provider)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func save(_ key: String, for provider: AIProvider) throws {
+        let data = Data(key.utf8)
+        let query = baseQuery(for: provider)
+        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var item = query
+            item[kSecValueData as String] = data
+            let addStatus = SecItemAdd(item as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw APIKeychain.KeychainError(status: addStatus) }
+        } else if status != errSecSuccess {
+            throw APIKeychain.KeychainError(status: status)
+        }
+    }
+
+    static func delete(for provider: AIProvider) throws {
+        let status = SecItemDelete(baseQuery(for: provider) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw APIKeychain.KeychainError(status: status)
+        }
+    }
+
+    private static func baseQuery(for provider: AIProvider) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: provider.rawValue
+        ]
+    }
+}
+
+@MainActor
+final class AISettingsStore: ObservableObject {
+    @Published private(set) var reviewProvider: AIProvider
+    @Published private(set) var researchProvider: AIProvider
+    @Published private(set) var reviewModel: String
+    @Published private(set) var researchModel: String
+    @Published private(set) var revision = 0
+
+    init() {
+        let defaults = UserDefaults.standard
+        reviewProvider = AIProvider(rawValue: defaults.string(forKey: "ai.reviewProvider") ?? "anthropic") ?? .anthropic
+        researchProvider = AIProvider(rawValue: defaults.string(forKey: "ai.researchProvider") ?? "perplexity") ?? .perplexity
+        reviewModel = defaults.string(forKey: "ai.reviewModel") ?? "claude-sonnet-5"
+        researchModel = defaults.string(forKey: "ai.researchModel") ?? "search-api"
+    }
+
+    func hasKey(for provider: AIProvider) -> Bool { AIKeychain.read(for: provider) != nil }
+
+    func saveKey(_ key: String, for provider: AIProvider) throws {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        try AIKeychain.save(trimmed, for: provider)
+        revision += 1
+    }
+
+    func removeKey(for provider: AIProvider) throws {
+        try AIKeychain.delete(for: provider)
+        revision += 1
+    }
+
+    func save(reviewProvider: AIProvider, reviewModel: String, researchProvider: AIProvider, researchModel: String) {
+        self.reviewProvider = reviewProvider
+        self.reviewModel = reviewModel
+        self.researchProvider = researchProvider
+        self.researchModel = researchModel
+        let defaults = UserDefaults.standard
+        defaults.set(reviewProvider.rawValue, forKey: "ai.reviewProvider")
+        defaults.set(reviewModel, forKey: "ai.reviewModel")
+        defaults.set(researchProvider.rawValue, forKey: "ai.researchProvider")
+        defaults.set(researchModel, forKey: "ai.researchModel")
+        revision += 1
+    }
+}
