@@ -220,6 +220,84 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(createCount, 1)
     }
 
+    @MainActor
+    func testAmbiguousIdeasDocumentCreateRetryRecoversByStablePrivateKey() async throws {
+        let suiteName = "Pregar.GoogleDriveIdeasTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.set("ideas-folder", forKey: "drive.sermonFolderID")
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var remoteDocumentExists = false
+        var searchCount = 0
+        var createCount = 0
+        var documentReadCount = 0
+        var recordedIdeasKey: String?
+        GoogleDriveStubURLProtocol.setHandler { request in
+            let host = request.url?.host
+            if host == "www.googleapis.com", request.httpMethod == "GET" {
+                searchCount += 1
+                let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "q" })?.value ?? ""
+                XCTAssertTrue(query.contains("'ideas-folder' in parents"))
+                XCTAssertTrue(query.contains("appProperties has { key='pregarIdeasKey' and value='"))
+                let key = query.components(separatedBy: "value='").last?.components(separatedBy: "'").first
+                XCTAssertNotNil(key)
+                XCTAssertEqual(defaults.string(forKey: "drive.ideasDocumentKey"), key)
+                if let recordedIdeasKey {
+                    XCTAssertEqual(key, recordedIdeasKey)
+                } else {
+                    recordedIdeasKey = key
+                }
+                let files = remoteDocumentExists
+                    ? #"[{"id":"ideas-doc","name":"Ideias de sermões","mimeType":"application/vnd.google-apps.document"}]"#
+                    : "[]"
+                return (200, Data("{\"files\":\(files)}".utf8))
+            }
+
+            if host == "www.googleapis.com", request.httpMethod == "POST" {
+                createCount += 1
+                let metadata = (try? JSONSerialization.jsonObject(with: Self.bodyData(of: request))) as? [String: Any]
+                let properties = metadata?["appProperties"] as? [String: String]
+                XCTAssertEqual(properties?["pregarIdeasKey"], recordedIdeasKey)
+                XCTAssertEqual(metadata?["parents"] as? [String], ["ideas-folder"])
+                XCTAssertEqual(metadata?["name"] as? String, GoogleDriveStore.ideasDocumentTitle)
+                remoteDocumentExists = true
+                return (503, Data(#"{"error":{"message":"Connection interrupted after creation."}}"#.utf8))
+            }
+
+            if host == "docs.googleapis.com", request.httpMethod == "GET" {
+                documentReadCount += 1
+                return (200, Data(#"{"revisionId":"ideas-rev-1","body":{"content":[{"startIndex":0,"endIndex":1},{"startIndex":1,"endIndex":17,"paragraph":{"elements":[{"textRun":{"content":"Ideia do iPhone\n"}}]}}]}}"#.utf8))
+            }
+
+            XCTFail("Unexpected Google request: \(request.url?.absoluteString ?? "")")
+            return (500, Data())
+        }
+
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let api = GoogleDriveAPI(session: session, accessToken: { "test-access-token" })
+        let store = GoogleDriveStore(defaults: defaults, apiOverride: api)
+
+        do {
+            try await store.ensureIdeasDocument()
+            XCTFail("Expected the ambiguous create response to fail")
+        } catch let error as GoogleDriveError {
+            if case .api(status: 503, message: _) = error {} else { XCTFail("Unexpected error: \(error)") }
+        }
+
+        XCTAssertNil(store.ideasDocumentID)
+        XCTAssertNotNil(defaults.string(forKey: "drive.ideasDocumentKey"))
+        try await store.ensureIdeasDocument()
+
+        XCTAssertEqual(store.ideasDocumentID, "ideas-doc")
+        XCTAssertEqual(defaults.string(forKey: "drive.ideasDocumentID"), "ideas-doc")
+        XCTAssertEqual(store.ideasText, "Ideia do iPhone\n")
+        XCTAssertEqual(searchCount, 2)
+        XCTAssertEqual(createCount, 1)
+        XCTAssertEqual(documentReadCount, 1)
+    }
+
     func testStaleGoogleDocsRevisionBecomesConflictWithoutSecondRequest() async throws {
         var requests = 0
         GoogleDriveStubURLProtocol.setHandler { _ in

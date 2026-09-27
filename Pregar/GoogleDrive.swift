@@ -599,6 +599,7 @@ struct GoogleDriveAPI {
     static let googleDocMimeType = "application/vnd.google-apps.document"
     static let folderMimeType = "application/vnd.google-apps.folder"
     private static let sermonDraftPropertyKey = "pregarDraftKey"
+    private static let ideasDocumentPropertyKey = "pregarIdeasKey"
 
     var session: URLSession = .shared
     var accessToken: () async throws -> String
@@ -632,6 +633,20 @@ struct GoogleDriveAPI {
             "mimeType": Self.googleDocMimeType,
             "parents": [folderID],
             "appProperties": [Self.sermonDraftPropertyKey: draftKey]
+        ])
+    }
+
+    func findOrCreateIdeasDocument(named name: String, inFolder folderID: String, ideasKey: String) async throws -> GoogleDriveFile {
+        let escapedFolderID = Self.escapeQueryLiteral(folderID)
+        let escapedIdeasKey = Self.escapeQueryLiteral(ideasKey)
+        let query = "'\(escapedFolderID)' in parents and mimeType = '\(Self.googleDocMimeType)' and appProperties has { key='\(Self.ideasDocumentPropertyKey)' and value='\(escapedIdeasKey)' } and trashed = false"
+        if let existing = try await listFiles(query: query).first { return existing }
+
+        return try await createFile(metadata: [
+            "name": name,
+            "mimeType": Self.googleDocMimeType,
+            "parents": [folderID],
+            "appProperties": [Self.ideasDocumentPropertyKey: ideasKey]
         ])
     }
 
@@ -1171,12 +1186,20 @@ final class GoogleDriveStore: ObservableObject {
     private var refreshToken: String?
     private var cachedAccessToken: String?
     private var accessTokenExpiresAt = Date.distantPast
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let apiOverride: GoogleDriveAPI?
 
-    init() {
+    init(defaults: UserDefaults = .standard, apiOverride: GoogleDriveAPI? = nil) {
+        self.defaults = defaults
+        self.apiOverride = apiOverride
         ideasDocumentID = defaults.string(forKey: "drive.ideasDocumentID")
         ideasText = defaults.string(forKey: "drive.ideasText") ?? ""
         ideasUpdatedAt = defaults.object(forKey: "drive.ideasUpdatedAt") as? Date
+        if apiOverride != nil {
+            isConnected = true
+            isLoading = false
+            return
+        }
         let tokenTask = Task.detached(priority: .utility) { GoogleRefreshTokenKeychain.read() }
         Task { [weak self] in
             let token = await tokenTask.value
@@ -1238,11 +1261,22 @@ final class GoogleDriveStore: ObservableObject {
             setIdeasText(document.text)
             return
         }
+        let ideasKey: String
+        if let savedKey = defaults.string(forKey: "drive.ideasDocumentKey") {
+            ideasKey = savedKey
+        } else {
+            ideasKey = UUID().uuidString
+            defaults.set(ideasKey, forKey: "drive.ideasDocumentKey")
+        }
         let folder = try await ensureFolder(named: Self.sermonFolderName, using: api)
-        let file = try await api.createDocument(named: Self.ideasDocumentTitle, inFolder: folder.id)
-        let document = try await api.getDocument(id: file.id)
+        let file = try await api.findOrCreateIdeasDocument(
+            named: Self.ideasDocumentTitle,
+            inFolder: folder.id,
+            ideasKey: ideasKey
+        )
         ideasDocumentID = file.id
         defaults.set(file.id, forKey: "drive.ideasDocumentID")
+        let document = try await api.getDocument(id: file.id)
         setIdeasText(document.text)
     }
 
@@ -1330,7 +1364,8 @@ final class GoogleDriveStore: ObservableObject {
     }
 
     private func driveAPI() -> GoogleDriveAPI {
-        GoogleDriveAPI(accessToken: { [weak self] in
+        if let apiOverride { return apiOverride }
+        return GoogleDriveAPI(accessToken: { [weak self] in
             guard let self else { throw GoogleDriveError.notConnected }
             return try await self.accessToken()
         })
