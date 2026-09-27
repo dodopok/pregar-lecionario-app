@@ -15,6 +15,14 @@ final class PDFLibraryIndexerTests: XCTestCase {
         XCTAssertNil(ScriptureReference.parseHeading("Romans 6.1—14, 8.12-17 or 12.1-2"))
     }
 
+    func testPortugueseLectionaryAbbreviationsNormalizeToCanonicalBooks() {
+        let references = ScriptureReference.parseAll("Zc 9.9-12 · Sl 145.8-15 · Rm 7.15-25a")
+
+        XCTAssertEqual(references.map(\.book), ["zechariah", "psalms", "romans"])
+        XCTAssertEqual(references.map(\.startVerse), [9, 8, 15])
+        XCTAssertEqual(references.map(\.endVerse), [12, 15, 25])
+    }
+
     func testFeastingSectionsPreserveSharedPageOffsetsAndAuthorBoundaries() throws {
         let pageTexts = [
             10: "Psalm 122 continues here.\nELIZABETH P. RANDALL\nRomans 13:8-14\n8 Owe no one anything.\nTheological Perspective\nTheological body begins.",
@@ -264,12 +272,18 @@ final class PDFLibraryIndexerTests: XCTestCase {
         })
 
         let result = try XCTUnwrap(PDFLibraryIndexer.recognizeScannedPages(path: url.path, previousRecord: nil))
+        let firstPageOCR = try XCTUnwrap(result.record.ocrTextByPage?[1])
+        let recognizedReadings = ScriptureReference.parseAll(firstPageOCR)
 
         XCTAssertEqual(result.candidatePageCount, 21)
         XCTAssertEqual(result.scannedPageCount, 21)
         XCTAssertGreaterThan(result.recognizedTextPageCount, 0)
         XCTAssertEqual(result.record.ocrPageNumbers?.count, 21)
         XCTAssertEqual(result.record.ocrTextByPage?.count, result.recognizedTextPageCount)
+        XCTAssertTrue(recognizedReadings.contains {
+            $0.book == "romans" && $0.chapter == 7 && $0.startVerse == 15
+                && ($0.endChapter ?? $0.chapter) == 7 && $0.endVerse == 25
+        }, "OCR should locate the LOC's Romans 7:15-25 reading on physical page 1")
         XCTAssertEqual(try Data(contentsOf: url), original, "OCR must not modify the downloaded source")
     }
 
