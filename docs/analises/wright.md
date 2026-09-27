@@ -54,6 +54,12 @@ A página física 102 foi renderizada e inspecionada. Ela começa com o final do
 - Separar a página bíblica inicial do comentário quando o layout indicar essa fronteira; não descartar a página bíblica, pois ela faz parte do bloco dedicado e orienta a navegação. Na amostra, ambas compartilham a referência/título corrente.
 - Não copiar texto integral dos PDFs para o repositório. Armazenar metadados/localizadores e extratos mínimos necessários para busca; abrir o PDF de origem na página física localizada.
 
+## Estado da implementação
+
+O fallback para PDFs sem bookmarks agora reconhece referências no início da linha, descarta páginas com densidade de referências típica de sumário e não trata citações em prosa como cabeçalhos. A ocorrência do corpo prevalece sobre a lista do sumário, e o cabeçalho da próxima perícope fecha o intervalo. A suíte automatizada usa o PDF local Romans Part 2 para confirmar Romanos 13:8–14 nas páginas físicas 102–107, correspondentes às impressas 88–93, antes do início de 14:1–6 na física 108.
+
+Essa validação cobre o caso amostrado, não todos os layouts da série. Detecção de OCR, página impressa automática, citações acidentais que imitem títulos e correção manual continuam pendentes.
+
 ## Método e limites
 
 Metadados de páginas obtidos com `pdfinfo`; bookmarks, texto e localização física com `pypdf` do runtime empacotado. John Part 2 páginas 15-16 e Romans Part 2 página 102 foram renderizadas com Poppler (`pdftoppm`) do sistema e inspecionadas. Dependências estavam disponíveis no runtime (`pypdf 6.10.0`, `pdfplumber 0.11.9`); nada instalado. A amostragem de estrutura/texto abrange os seis volumes da série listados; a inspeção visual cobre as páginas indicadas de John Part 2 e Romans Part 2. Não valida OCR/extratividade de cada página de todos os arquivos, nem estabelece direitos/licença para uso ou redistribuição do conteúdo.

@@ -21,12 +21,20 @@ struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
     let startPage: Int
     let endPage: Int
     let context: String?
+    let components: [PDFSectionComponent]?
 
-    init(title: String, startPage: Int, endPage: Int, context: String? = nil) {
+    init(
+        title: String,
+        startPage: Int,
+        endPage: Int,
+        context: String? = nil,
+        components: [PDFSectionComponent]? = nil
+    ) {
         self.title = title
         self.startPage = startPage
         self.endPage = endPage
         self.context = context
+        self.components = components
     }
 }
 
@@ -179,6 +187,7 @@ final class ReaderSessionStore: ObservableObject {
     func sections(for tab: ReaderTab) async -> [PDFSectionLocation] {
         guard tab.kind == .pdf else { return [] }
         let path = tab.location
+        let title = tab.title
         if let cached = pdfSections[path] { return cached }
 
         let task: Task<[PDFSectionLocation], Never>
@@ -194,7 +203,7 @@ final class ReaderSessionStore: ObservableObject {
                 }
                 guard !Task.isCancelled else { return [] }
                 guard let document = PDFDocument(url: URL(fileURLWithPath: path)) else { return [] }
-                return PDFLibraryIndexer.sections(for: document)
+                return PDFLibraryIndexer.sections(for: document, title: title)
             }
             sectionTasks[path] = task
         }

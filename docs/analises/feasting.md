@@ -27,13 +27,17 @@ Todos são letter. As contagens são páginas físicas do PDF, não páginas imp
 - Sumários e índices remissivos são texto utilizável. Os localizadores editoriais 8 (Psalm 122) e 38 (Romans 13:8–14) constam no índice desta conversão; não foram verificados como paginação da edição comercial impressa. Armazene esse localizador apenas quando verificável e sempre separado da página física, sem calcular por offset fixo.
 - A extração textual apresenta artefatos como caracteres perdidos em algumas palavras, por isso referências e títulos precisam de validação visual/estrutural.
 
-## Indexação proposta (não implementada)
+## Indexação implementada e validada na amostra
 
-1. Criar manifesto por PDF com ano, volume, caminho, hash, total de páginas físicas e estado de extração/OCR. Resolver referências no sumário e no índice remissivo; salvar localizador editorial quando verificável e não inferir a passagem só do domingo.
-2. Segmentar cada entrada de leitura com cabeçalho da referência bíblica e posições físicas de início/fim. Reconhecer aliases de livros, intervalos e pontuação bíblica com parser de referências, preservando também a forma literal exibida. Quando a unidade vier precedida pelo texto bíblico, separá-lo dos ensaios.
-3. Dentro da unidade, segmentar por um dos quatro títulos de perspectiva em ordem, até o próximo título ou próxima leitura. Capturar o autor em versais no final do ensaio e armazenar como atributo do segmento, junto das páginas físicas inicial/final e do localizador editorial quando verificável. Revisar casos em que OCR ou o fluxo de leitura misture cabeçalhos e texto.
-4. Para abrir comentário automaticamente: consultar referência bíblica normalizada, retornar todos os segmentos correspondentes (um por perspectiva e volume), ordenar por perspectiva e relevância configurada, e abrir o PDF na página física do segmento. Manter localizador editorial e página física separados; leitores de PDF navegam por posição física.
-5. Para contexto de IA, enviar texto por segmento, sempre com referência exata, título da perspectiva, autor, volume/ano e páginas. Nunca juntar perspectivas ou descartar a atribuição na extração. Guardar coordenadas de origem para auditoria e link de volta ao PDF.
+O índice versão 3 representa o texto bíblico e as quatro perspectivas como componentes separados. Cada componente guarda página física e offset UTF-16 de início/fim, além da autoria identificada no fechamento do ensaio. A seção bíblica e o conteúdo do ensaio não incluem o cabeçalho do próximo texto nem a linha do autor como prosa. Quando a leitura seguinte começa na mesma página, o intervalo termina no offset exato desse cabeçalho e a página compartilhada permanece no alcance da unidade.
+
+Testes automatizados contra os PDFs locais confirmam Romanos 13:8–14 no Volume 4, páginas físicas 96–108, com as quatro autorias documentadas, e Romanos 13:11–14 no Volume 1 como sobreposição parcial. Um caso sintético cobre os limites dentro da página e a decodificação de registros antigos sem componentes. A indexação não altera os arquivos PDF e não envia conteúdo à rede.
+
+## Próximos passos da indexação
+
+1. Criar manifesto por PDF com ano, volume, caminho, hash, total de páginas físicas e estado de extração/OCR. Resolver também referências pelo sumário e índice remissivo quando os cabeçalhos não bastarem; guardar localizador editorial só quando verificável.
+2. Ampliar a validação para outros volumes e avaliar layouts que não sigam a ordem observada. Ajustar limites quando a extração de PDF misturar cabeçalhos, autores ou páginas digitalizadas.
+3. Exibir as perspectivas como segmentos selecionáveis e, para contexto de IA futuro, preservar referência, título da perspectiva, autor, volume/ano e páginas. A integração ainda não envia conteúdo do PDF a provedores.
 
 ## Limites
 

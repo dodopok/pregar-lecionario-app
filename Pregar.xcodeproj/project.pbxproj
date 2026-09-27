@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00AA5F766A665C8FAD1B8122 /* LiturgicalAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4705F7EC17275637F5F6983 /* LiturgicalAPI.swift */; };
+		0AF15226A4B95D3A7B6A0B84 /* PDFLibraryIndexerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */; };
 		0B931865BC2CBFCE6E3D9D9C /* AISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCCDA011317AD64332990C8 /* AISettings.swift */; };
 		11DF447737C4F2F6B3A484EE /* WorkspaceChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */; };
 		2236BE23F5A46EA6012ECFD1 /* PrototypeStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AEC27956E2F79C51D94DF0 /* PrototypeStyle.swift */; };
@@ -25,6 +26,16 @@
 		FC407808D87B3717069381D4 /* PreparationWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		BFA7D60322D20F8A06512C8D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BAC51AF7D9491FFADF966DDC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B87ECA0DD05097023864D227;
+			remoteInfo = Pregar;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		0ED23E2371C9E84D21B29903 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
 		2495567BA510561B3883455A /* LibraryArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryArchiveViews.swift; sourceTree = "<group>"; };
@@ -36,6 +47,7 @@
 		62756E5392B3B4CABA6EAA9C /* APISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettingsView.swift; sourceTree = "<group>"; };
 		74D8516E9667268B7075CEB2 /* APISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APISettings.swift; sourceTree = "<group>"; };
 		8F11BDDA9C9D49AA66E60118 /* WindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChrome.swift; sourceTree = "<group>"; };
+		90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFLibraryIndexerTests.swift; sourceTree = "<group>"; };
 		9A62596B7AE19E516CFE1345 /* PreparationWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparationWorkspace.swift; sourceTree = "<group>"; };
 		9C7481111C7F8FA145071A2F /* WorkspaceSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSheets.swift; sourceTree = "<group>"; };
 		9FB73D3027C252959FB7E759 /* ReaderSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSession.swift; sourceTree = "<group>"; };
@@ -43,6 +55,7 @@
 		A61A574B8E32A8F962090BCD /* WorkspaceChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChrome.swift; sourceTree = "<group>"; };
 		CE26838E93FC50A6DF46D55E /* PDFLibraryIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFLibraryIndex.swift; sourceTree = "<group>"; };
 		D18EA65220A82B781901FC18 /* FavoriteSourceURLs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteSourceURLs.swift; sourceTree = "<group>"; };
+		D6ACD579D8F2E7611FB24671 /* PregarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PregarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -50,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				D40AA52FAFDBBB3B027F142C /* Pregar */,
+				CB1F61623805CB6E47071066 /* PregarTests */,
 				BE0FA0055539043501F7D832 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -58,8 +72,17 @@
 			isa = PBXGroup;
 			children = (
 				547C3A36015E310F5E8EDD26 /* Pregar.app */,
+				D6ACD579D8F2E7611FB24671 /* PregarTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		CB1F61623805CB6E47071066 /* PregarTests */ = {
+			isa = PBXGroup;
+			children = (
+				90C6B8AFA064252D14B18004 /* PDFLibraryIndexerTests.swift */,
+			);
+			path = PregarTests;
 			sourceTree = "<group>";
 		};
 		D40AA52FAFDBBB3B027F142C /* Pregar */ = {
@@ -105,6 +128,24 @@
 			productReference = 547C3A36015E310F5E8EDD26 /* Pregar.app */;
 			productType = "com.apple.product-type.application";
 		};
+		DCFCE861295B7469444DFC52 /* PregarTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0B530BCE570C67E68FEEAF24 /* Build configuration list for PBXNativeTarget "PregarTests" */;
+			buildPhases = (
+				74E733B2EABF6138EB941341 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				175F43226D83AE512A122E09 /* PBXTargetDependency */,
+			);
+			name = PregarTests;
+			packageProductDependencies = (
+			);
+			productName = PregarTests;
+			productReference = D6ACD579D8F2E7611FB24671 /* PregarTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -115,6 +156,10 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B87ECA0DD05097023864D227 = {
+						DevelopmentTeam = R573HPN65Q;
+						ProvisioningStyle = Manual;
+					};
+					DCFCE861295B7469444DFC52 = {
 						DevelopmentTeam = R573HPN65Q;
 						ProvisioningStyle = Manual;
 					};
@@ -135,11 +180,20 @@
 			projectRoot = "";
 			targets = (
 				B87ECA0DD05097023864D227 /* Pregar */,
+				DCFCE861295B7469444DFC52 /* PregarTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
+		74E733B2EABF6138EB941341 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0AF15226A4B95D3A7B6A0B84 /* PDFLibraryIndexerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F1173DCFD6D1976A12C76223 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -165,6 +219,14 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		175F43226D83AE512A122E09 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B87ECA0DD05097023864D227 /* Pregar */;
+			targetProxy = BFA7D60322D20F8A06512C8D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
 		114C3DEF18E524B756683018 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -187,6 +249,27 @@
 				PRODUCT_NAME = Pregar;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		64C239D2E9C80CD9EAA9267A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = R573HPN65Q;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = br.caminhoanglicano.pregar.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Pregar.app/Contents/MacOS/Pregar";
 			};
 			name = Release;
 		};
@@ -333,9 +416,39 @@
 			};
 			name = Debug;
 		};
+		D78A844E2ADED84575E58A24 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = R573HPN65Q;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = br.caminhoanglicano.pregar.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Pregar.app/Contents/MacOS/Pregar";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0B530BCE570C67E68FEEAF24 /* Build configuration list for PBXNativeTarget "PregarTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D78A844E2ADED84575E58A24 /* Debug */,
+				64C239D2E9C80CD9EAA9267A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		25A4289B444B987B7A697873 /* Build configuration list for PBXNativeTarget "Pregar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

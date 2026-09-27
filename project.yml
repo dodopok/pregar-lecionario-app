@@ -24,3 +24,20 @@ targets:
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: Apple Development
         DEVELOPMENT_TEAM: R573HPN65Q
+  PregarTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: PregarTests
+    dependencies:
+      - target: Pregar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: br.caminhoanglicano.pregar.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Pregar.app/Contents/MacOS/Pregar
+        BUNDLE_LOADER: $(TEST_HOST)
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: Apple Development
+        DEVELOPMENT_TEAM: R573HPN65Q

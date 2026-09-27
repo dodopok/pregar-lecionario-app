@@ -301,8 +301,17 @@ struct PDFLibraryView: View {
               let restored = try? JSONDecoder().decode([PDFLibraryRecord].self, from: savedRecords) else { return }
         records = restored.filter { FileManager.default.fileExists(atPath: $0.path) }
         selectedID = records.first?.id
-        if records.contains(where: { $0.indexVersion != PDFLibraryIndexer.currentVersion || $0.sections == nil }) {
-            index(paths: records.map(\.path), replacingAll: true)
+        let pathsToReindex = Set(records.filter(PDFLibraryIndexer.requiresReindex).map(\.path))
+        records = records.map { record in
+            guard !pathsToReindex.contains(record.path) else { return record }
+            var current = record
+            current.indexVersion = PDFLibraryIndexer.currentVersion
+            return current
+        }
+        if pathsToReindex.isEmpty {
+            persistRecords()
+        } else {
+            index(paths: records.filter { pathsToReindex.contains($0.path) }.map(\.path), replacingAll: true)
         }
     }
 

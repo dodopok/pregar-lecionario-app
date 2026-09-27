@@ -15,6 +15,34 @@ struct PDFLibraryRecord: Codable, Identifiable, Equatable, Sendable {
     var copyLabel: String? = nil
 }
 
+struct PDFTextPosition: Codable, Equatable, Sendable {
+    let page: Int
+    let utf16Offset: Int
+}
+
+struct PDFTextSpan: Codable, Equatable, Sendable {
+    let start: PDFTextPosition
+    let end: PDFTextPosition
+}
+
+enum PDFSectionComponentKind: String, Codable, Sendable {
+    case biblicalText
+    case theological
+    case pastoral
+    case exegetical
+    case homiletical
+}
+
+struct PDFSectionComponent: Codable, Equatable, Identifiable, Sendable {
+    var id: String { "\(kind.rawValue)|\(location.start.page)|\(location.start.utf16Offset)" }
+
+    let kind: PDFSectionComponentKind
+    let title: String
+    let author: String?
+    let location: PDFTextSpan
+    let content: PDFTextSpan
+}
+
 struct ScriptureReference: Equatable, Sendable {
     let book: String
     let chapter: Int
@@ -28,6 +56,18 @@ struct ScriptureReference: Equatable, Sendable {
 
     static func parse(_ value: String) -> ScriptureReference? {
         parseAll(value).first
+    }
+
+    static func parseHeading(_ value: String) -> ScriptureReference? {
+        let normalized = value.folding(options: [.diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        guard let match = matches(in: normalized).first,
+              match.range.location == 0,
+              match.reference.startVerse != nil,
+              parseAll(value).count == 1,
+              let tailRange = Range(NSRange(location: NSMaxRange(match.range), length: (normalized as NSString).length - NSMaxRange(match.range)), in: normalized) else { return nil }
+        let title = normalized[tailRange].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard title.first?.isUppercase ?? true else { return nil }
+        return match.reference
     }
 
     static func parseAll(_ value: String) -> [ScriptureReference] {
@@ -203,18 +243,19 @@ enum PDFSectionMatchKind: Int, Sendable {
 }
 
 enum PDFLibraryIndexer {
-    static let currentVersion = 2
+    static let currentVersion = 3
 
     static func index(path: String) -> PDFLibraryRecord? {
         let url = URL(fileURLWithPath: path)
         guard let document = PDFDocument(url: url), document.pageCount > 0 else { return nil }
-        let bookmarks = flatten(document.outlineRoot, document: document)
-        let sections = bookmarks.isEmpty ? scanHeadings(document) : bookmarks
         let attributes = document.documentAttributes ?? [:]
         let filename = url.deletingPathExtension().lastPathComponent
         let metadataTitle = stringAttribute(PDFDocumentAttribute.titleAttribute, in: attributes)
         let title = displayTitle(metadataTitle: metadataTitle, filename: filename)
         let author = displayAuthors(stringAttribute(PDFDocumentAttribute.authorAttribute, in: attributes), title: title)
+        let bookmarks = flatten(document.outlineRoot, document: document)
+        let rawSections = bookmarks.isEmpty ? scanHeadings(document) : bookmarks
+        let sections = enrichFeastingSections(rawSections, document: document, title: title)
         let copyLabel: String? = {
             guard let regex = try? NSRegularExpression(pattern: #"\s\((\d+)\)$"#),
                   let match = regex.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)),
@@ -237,9 +278,21 @@ enum PDFLibraryIndexer {
         )
     }
 
-    static func sections(for document: PDFDocument) -> [PDFSectionLocation] {
+    static func sections(for document: PDFDocument, title: String? = nil) -> [PDFSectionLocation] {
         let bookmarks = flatten(document.outlineRoot, document: document)
-        return bookmarks.isEmpty ? scanHeadings(document) : bookmarks
+        let rawSections = bookmarks.isEmpty ? scanHeadings(document) : bookmarks
+        let documentTitle = title ?? displayTitle(
+            metadataTitle: stringAttribute(PDFDocumentAttribute.titleAttribute, in: document.documentAttributes ?? [:]),
+            filename: document.documentURL?.deletingPathExtension().lastPathComponent ?? ""
+        )
+        return enrichFeastingSections(rawSections, document: document, title: documentTitle)
+    }
+
+    static func requiresReindex(_ record: PDFLibraryRecord) -> Bool {
+        guard record.sections != nil else { return true }
+        let version = record.indexVersion ?? 0
+        if version < 2 { return true }
+        return version < currentVersion && (isFeastingTitle(record.title) || record.bookmarkCount == 0)
     }
 
     static func match(_ section: PDFSectionLocation, reference: String) -> PDFSectionMatchKind? {
@@ -317,6 +370,188 @@ enum PDFLibraryIndexer {
         }
     }
 
+    private struct IndexedPDFLine {
+        let page: Int
+        let range: NSRange
+        let text: String
+
+        var start: PDFTextPosition { PDFTextPosition(page: page, utf16Offset: range.location) }
+        var end: PDFTextPosition { PDFTextPosition(page: page, utf16Offset: NSMaxRange(range)) }
+    }
+
+    private static let feastingPerspectives: [(kind: PDFSectionComponentKind, title: String)] = [
+        (.theological, "Theological Perspective"),
+        (.pastoral, "Pastoral Perspective"),
+        (.exegetical, "Exegetical Perspective"),
+        (.homiletical, "Homiletical Perspective")
+    ]
+
+    private static func isFeastingTitle(_ title: String) -> Bool {
+        title.localizedCaseInsensitiveContains("Feasting on the Word")
+    }
+
+    private static func enrichFeastingSections(
+        _ sections: [PDFSectionLocation],
+        document: PDFDocument,
+        title: String
+    ) -> [PDFSectionLocation] {
+        guard isFeastingTitle(title) else { return sections }
+        var pageTextCache: [Int: String] = [:]
+
+        return sections.map { section in
+            let lastPage = min(section.endPage + 1, document.pageCount)
+            guard section.startPage <= lastPage,
+                  let target = ScriptureReference.parse(section.title),
+                  target.startVerse != nil else { return section }
+
+            var pageTexts: [Int: String] = [:]
+            for pageNumber in section.startPage...lastPage {
+                if let cached = pageTextCache[pageNumber] {
+                    pageTexts[pageNumber] = cached
+                } else if let text = document.page(at: pageNumber - 1)?.string {
+                    pageTextCache[pageNumber] = text
+                    pageTexts[pageNumber] = text
+                }
+            }
+            guard let components = feastingComponents(for: section, target: target, pageTexts: pageTexts),
+                  let end = components.last?.location.end else { return section }
+            let lastIncludedPage = end.utf16Offset == 0 ? max(section.startPage, end.page - 1) : end.page
+            return PDFSectionLocation(
+                title: section.title,
+                startPage: section.startPage,
+                endPage: max(section.endPage, lastIncludedPage),
+                context: section.context,
+                components: components
+            )
+        }
+    }
+
+    static func feastingComponents(
+        for section: PDFSectionLocation,
+        target: ScriptureReference,
+        pageTexts: [Int: String]
+    ) -> [PDFSectionComponent]? {
+        let lines = pageTexts.keys.sorted().flatMap { page in
+            indexedLines(in: pageTexts[page] ?? "", page: page)
+        }
+        guard let scriptureIndex = lines.firstIndex(where: {
+            $0.page >= section.startPage && isReferenceHeading($0.text, matching: target)
+        }) else { return nil }
+
+        var perspectiveIndexes: [(kind: PDFSectionComponentKind, title: String, index: Int)] = []
+        var searchFrom = scriptureIndex + 1
+        for perspective in feastingPerspectives {
+            guard let index = lines.indices.first(where: {
+                $0 >= searchFrom && isPerspectiveHeading(lines[$0].text, expected: perspective.title)
+            }) else { return nil }
+            perspectiveIndexes.append((perspective.kind, perspective.title, index))
+            searchFrom = index + 1
+        }
+
+        let followingReferenceIndex = lines.indices.first(where: { index in
+            index > perspectiveIndexes[perspectiveIndexes.count - 1].index
+                && isReferenceHeading(lines[index].text)
+                && !isReferenceHeading(lines[index].text, matching: target)
+        })
+        let sectionBoundaryIndex = followingReferenceIndex ?? lines.count
+        guard let firstPerspective = perspectiveIndexes.first else { return nil }
+        var components = [PDFSectionComponent(
+            kind: .biblicalText,
+            title: "Texto bíblico",
+            author: nil,
+            location: PDFTextSpan(start: lines[scriptureIndex].start, end: lines[firstPerspective.index].start),
+            content: PDFTextSpan(start: lines[scriptureIndex].end, end: lines[firstPerspective.index].start)
+        )]
+
+        for index in perspectiveIndexes.indices {
+            let heading = perspectiveIndexes[index]
+            let boundaryIndex = index + 1 < perspectiveIndexes.count
+                ? perspectiveIndexes[index + 1].index
+                : sectionBoundaryIndex
+            let boundary = boundaryIndex < lines.count ? lines[boundaryIndex] : lines.last
+            guard let boundary else { return nil }
+            let authorLine = lines[(heading.index + 1)..<boundaryIndex]
+                .last { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            let author = authorLine.flatMap { normalizedAuthor(from: $0.text) }
+            let contentEnd = author == nil ? boundary.start : authorLine!.start
+            components.append(PDFSectionComponent(
+                kind: heading.kind,
+                title: heading.title,
+                author: author,
+                location: PDFTextSpan(start: lines[heading.index].start, end: boundary.start),
+                content: PDFTextSpan(start: lines[heading.index].end, end: contentEnd)
+            ))
+        }
+        return components
+    }
+
+    static func extractedText(in span: PDFTextSpan, from document: PDFDocument) -> String {
+        guard span.start.page > 0,
+              span.start.page <= span.end.page,
+              span.end.page <= document.pageCount else { return "" }
+        var fragments: [String] = []
+        for pageNumber in span.start.page...span.end.page {
+            guard let text = document.page(at: pageNumber - 1)?.string else { continue }
+            let pageText = text as NSString
+            let start = pageNumber == span.start.page ? min(span.start.utf16Offset, pageText.length) : 0
+            let end = pageNumber == span.end.page ? min(span.end.utf16Offset, pageText.length) : pageText.length
+            guard end >= start else { return "" }
+            fragments.append(pageText.substring(with: NSRange(location: start, length: end - start)))
+        }
+        return fragments.joined(separator: "\n")
+    }
+
+    private static func indexedLines(in text: String, page: Int) -> [IndexedPDFLine] {
+        let pageText = text as NSString
+        var lines: [IndexedPDFLine] = []
+        var offset = 0
+        while offset < pageText.length {
+            let range = pageText.lineRange(for: NSRange(location: offset, length: 0))
+            guard range.length > 0 else { break }
+            lines.append(IndexedPDFLine(page: page, range: range, text: pageText.substring(with: range)))
+            offset = NSMaxRange(range)
+        }
+        return lines
+    }
+
+    private static func isPerspectiveHeading(_ line: String, expected: String) -> Bool {
+        line.trimmingCharacters(in: .whitespacesAndNewlines)
+            .localizedCaseInsensitiveCompare(expected) == .orderedSame
+    }
+
+    private static func isReferenceHeading(_ line: String, matching target: ScriptureReference? = nil) -> Bool {
+        let value = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.count <= 80,
+              let regex = try? NSRegularExpression(pattern: #"^(?:(?:1|2|3|I|II|III)\s+)?[\p{L}][\p{L}.]*(?:\s+[\p{L}][\p{L}.]*){0,3}\s+\d+\s*[:.]\s*\d+(?:\s*[-–—]\s*(?:\d+\s*[:.]\s*)?\d+)?\s*$"#),
+              regex.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) != nil,
+              let reference = ScriptureReference.parse(value),
+              reference.startVerse != nil else { return false }
+        guard let target else { return true }
+        return sameReference(reference, target)
+    }
+
+    private static func sameReference(_ lhs: ScriptureReference, _ rhs: ScriptureReference) -> Bool {
+        lhs.book == rhs.book
+            && lhs.chapter == rhs.chapter
+            && lhs.startVerse == rhs.startVerse
+            && (lhs.endChapter ?? lhs.chapter) == (rhs.endChapter ?? rhs.chapter)
+            && lhs.endVerse == rhs.endVerse
+    }
+
+    private static func normalizedAuthor(from line: String) -> String? {
+        let name = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        let letters = name.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+        guard letters.count >= 4,
+              name.split(whereSeparator: \.isWhitespace).count >= 2,
+              name == name.uppercased(),
+              name.unicodeScalars.allSatisfy({
+                  CharacterSet.letters.contains($0)
+                      || CharacterSet.whitespacesAndNewlines.contains($0)
+                      || ".-'’".unicodeScalars.contains($0)
+              }) else { return nil }
+        return name
+    }
+
     private static func scanHeadings(_ document: PDFDocument) -> [PDFSectionLocation] {
         var entries: [(title: String, page: Int, context: String?, order: Int)] = []
         var seen: Set<String> = []
@@ -324,14 +559,22 @@ enum PDFLibraryIndexer {
             if pageNumber.isMultiple(of: 32), Task.isCancelled { return [] }
             guard let text = document.page(at: pageNumber - 1)?.string else { continue }
             let lines = text.components(separatedBy: .newlines).prefix(12)
+            var pageEntries: [(title: String, reference: ScriptureReference)] = []
             for line in lines {
                 let candidate = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard candidate.count <= 100,
-                      let parsed = ScriptureReference.parse(candidate),
-                      parsed.startVerse != nil else { continue }
-                let key = ScriptureReference.normalized(candidate)
+                      let parsed = ScriptureReference.parseHeading(candidate) else { continue }
+                pageEntries.append((candidate, parsed))
+            }
+            let uniquePageReferences = Set(pageEntries.map { entry in
+                "\(entry.reference.book)|\(entry.reference.chapter)|\(entry.reference.startVerse ?? 0)|\(entry.reference.endChapter ?? entry.reference.chapter)|\(entry.reference.endVerse ?? entry.reference.startVerse ?? 0)"
+            })
+            guard uniquePageReferences.count < 3 else { continue }
+            for entry in pageEntries {
+                let parsed = entry.reference
+                let key = "\(parsed.book)|\(parsed.chapter)|\(parsed.startVerse ?? 0)|\(parsed.endChapter ?? parsed.chapter)|\(parsed.endVerse ?? parsed.startVerse ?? 0)"
                 guard seen.insert(key).inserted else { continue }
-                entries.append((candidate, pageNumber, nil, entries.count))
+                entries.append((entry.title, pageNumber, nil, entries.count))
             }
         }
         return addPageRanges(entries, pageCount: document.pageCount)
