@@ -39,6 +39,7 @@ struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
         switch findingMethod {
         case .bookmark: "bookmark do PDF"
         case .textHeading: "cabeçalho textual"
+        case .ocrHeading: "cabeçalho reconhecido por OCR"
         case .unknown, nil: "não identificado"
         }
     }
@@ -47,6 +48,7 @@ struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
         switch findingMethod {
         case .bookmark: "alta"
         case .textHeading: "média"
+        case .ocrHeading: "baixa · conferir"
         case .unknown, nil: "não verificada"
         }
     }

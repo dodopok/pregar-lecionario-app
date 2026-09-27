@@ -33,6 +33,12 @@ struct PDFLibraryView: View {
     @State private var didRestore = false
     @State private var sectionQuery = ""
     @State private var errorMessage: String?
+    @State private var ocrNotice: String?
+    @State private var ocrNoticeRecordID: String?
+    @State private var ocrProgress: (completed: Int, total: Int)?
+    @State private var ocrTargetID: String?
+    @State private var ocrOperationID: UUID?
+    @State private var ocrTask: Task<PDFLibraryOCRResult?, Never>?
     @State private var metadataRecord: PDFLibraryRecord?
 
     private var selectedRecord: PDFLibraryRecord? {
@@ -79,6 +85,7 @@ struct PDFLibraryView: View {
                                 recordRow(record, selected: record.id == selectedID)
                             }
                             .buttonStyle(.plain)
+                            .disabled(isIndexing)
                         }
                     }
                     .padding(7)
@@ -125,6 +132,10 @@ struct PDFLibraryView: View {
                                 .font(.system(size: 13)).foregroundStyle(PrototypeStyle.muted)
                             Text("\((selectedRecord.sections?.count ?? selectedRecord.bookmarkCount).formatted()) seções encontradas")
                                 .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                            if let ocrPageNumbers = selectedRecord.ocrPageNumbers, !ocrPageNumbers.isEmpty {
+                                Text("OCR · \(ocrPageNumbers.count) páginas examinadas")
+                                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.green)
+                            }
                         }
                     }
                     Text(selectedRecord.path)
@@ -148,6 +159,32 @@ struct PDFLibraryView: View {
                             openInReader(selectedRecord, page: 1)
                         }
                             .buttonStyle(.bordered)
+                        if let ocrProgress, ocrTargetID == selectedRecord.id {
+                            HStack(spacing: 7) {
+                                ProgressView().controlSize(.small)
+                                Text(ocrProgress.total == 0
+                                     ? "Preparando OCR…"
+                                     : "OCR \(ocrProgress.completed)/\(ocrProgress.total)")
+                                    .font(.system(size: 12))
+                            }
+                            Button("Cancelar OCR", systemImage: "xmark") {
+                                ocrTask?.cancel()
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Interrompe o reconhecimento depois da página atual")
+                        } else {
+                            Button("OCR…", systemImage: "text.viewfinder") {
+                                recognizeScannedPages(selectedRecord)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isIndexing)
+                            .help("Procura referências em páginas sem texto selecionável; o PDF original não é alterado.")
+                        }
+                    }
+                    if let ocrNotice, ocrNoticeRecordID == selectedRecord.id {
+                        Text(ocrNotice)
+                            .font(.system(size: 12))
+                            .foregroundStyle(PrototypeStyle.muted)
                     }
 
                     HStack(spacing: 10) {
@@ -358,11 +395,13 @@ struct PDFLibraryView: View {
     private func index(paths: [String], replacingAll: Bool) {
         guard !isIndexing, !paths.isEmpty else { return }
         isIndexing = true
+        let previousByPath = Dictionary(uniqueKeysWithValues: records.map { ($0.path, $0) })
         Task {
             let indexed = await Task.detached(priority: .utility) {
-                paths.compactMap { PDFLibraryIndexer.index(path: $0) }
+                paths.compactMap { path in
+                    PDFLibraryIndexer.index(path: path, previousRecord: previousByPath[path])
+                }
             }.value
-            let previousByPath = Dictionary(uniqueKeysWithValues: records.map { ($0.path, $0) })
             let indexedByPath = Dictionary(uniqueKeysWithValues: indexed.map { record in
                 let refreshed = record.preservingMetadata(from: previousByPath[record.path])
                 return (refreshed.path, refreshed)
@@ -376,6 +415,64 @@ struct PDFLibraryView: View {
             selectedID = selectedID ?? records.first?.id
             persistRecords()
             isIndexing = false
+        }
+    }
+
+    private func recognizeScannedPages(_ record: PDFLibraryRecord) {
+        guard !isIndexing else { return }
+        isIndexing = true
+        ocrNotice = nil
+        ocrNoticeRecordID = nil
+        ocrProgress = (0, 0)
+        let operationID = UUID()
+        ocrOperationID = operationID
+        ocrTargetID = record.id
+        let previousRecord = records.first(where: { $0.path == record.path }) ?? record
+        let reportProgress: @Sendable (Int, Int) -> Void = { completed, total in
+            Task { @MainActor in
+                guard self.ocrOperationID == operationID else { return }
+                self.ocrProgress = (completed, total)
+            }
+        }
+
+        Task {
+            let task = Task.detached(priority: .utility) {
+                PDFLibraryIndexer.recognizeScannedPages(
+                    path: record.path,
+                    previousRecord: previousRecord,
+                    progress: reportProgress
+                )
+            }
+            ocrTask = task
+            let result = await task.value
+            let wasCancelled = task.isCancelled
+            ocrTask = nil
+            isIndexing = false
+            ocrOperationID = nil
+            ocrProgress = nil
+
+            if wasCancelled {
+                ocrNoticeRecordID = record.id
+                ocrNotice = "OCR interrompido; o índice anterior foi preservado."
+                return
+            }
+
+            guard let result,
+                  let index = records.firstIndex(where: { $0.id == record.id }) else {
+                errorMessage = "Não foi possível abrir o PDF para reconhecer o texto."
+                return
+            }
+            records[index] = result.record.preservingMetadata(from: previousRecord)
+            persistRecords()
+            ocrNoticeRecordID = record.id
+
+            if result.candidatePageCount == 0 {
+                ocrNotice = "Nenhuma página sem texto selecionável foi encontrada."
+            } else if result.scannedPageCount == 0 {
+                ocrNotice = "As páginas digitalizadas deste arquivo já foram examinadas."
+            } else {
+                ocrNotice = "OCR examinou \(result.scannedPageCount) de \(result.candidatePageCount) páginas digitalizadas e identificou \(result.sectionsFound) novas referências."
+            }
         }
     }
 

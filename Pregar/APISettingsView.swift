@@ -222,7 +222,7 @@ struct APISettingsView: View {
                     }.labelsHidden().frame(width: 220, alignment: .leading)
                 }
             }
-            Text("Modelos e chamadas ainda não são executados. A tela apenas guarda suas preferências e credenciais; a integração BYOK virá depois.")
+            Text("Revisão e perguntas de emergência usam o provedor escolhido. A pesquisa de materiais ainda não está conectada.")
                 .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
         }
         .onChange(of: reviewProvider) { _, provider in reviewModel = provider.suggestedModel }

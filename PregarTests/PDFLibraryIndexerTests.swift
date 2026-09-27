@@ -1,3 +1,4 @@
+import AppKit
 import PDFKit
 import XCTest
 @testable import Pregar
@@ -173,6 +174,45 @@ final class PDFLibraryIndexerTests: XCTestCase {
 
         let unbookmarked = PDFLibraryIndexer.backfillingBookmarkMethod(in: [legacy], bookmarkCount: 0)
         XCTAssertNil(unbookmarked.first?.findingMethod)
+    }
+
+    func testOnDemandOCRFindsHeadingsInScannedPDFWithoutChangingOriginal() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PregarOCR-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("scanned-commentary.pdf")
+
+        let image = NSImage(size: CGSize(width: 1500, height: 2000))
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(origin: .zero, size: image.size).fill()
+        ("Romans 13:8-14" as NSString).draw(
+            at: NSPoint(x: 130, y: 1500),
+            withAttributes: [.font: NSFont.boldSystemFont(ofSize: 92), .foregroundColor: NSColor.black]
+        )
+        image.unlockFocus()
+
+        let document = PDFDocument()
+        document.insert(try XCTUnwrap(PDFPage(image: image)), at: 0)
+        XCTAssertTrue(document.write(to: url))
+        let original = try Data(contentsOf: url)
+
+        let result = try XCTUnwrap(PDFLibraryIndexer.recognizeScannedPages(path: url.path, previousRecord: nil))
+        let section = try XCTUnwrap(result.record.sections?.first { $0.findingMethod == .ocrHeading })
+
+        XCTAssertEqual(result.candidatePageCount, 1)
+        XCTAssertEqual(result.scannedPageCount, 1)
+        XCTAssertEqual(section.startPage, 1)
+        XCTAssertEqual(section.confidenceLabel, "baixa · conferir")
+        XCTAssertFalse(section.hasHighConfidence)
+        XCTAssertEqual(PDFLibraryIndexer.match(section, reference: "Romans 13:8-14"), .exact)
+        XCTAssertEqual(result.record.ocrPageNumbers, [1])
+        XCTAssertEqual(try Data(contentsOf: url), original, "OCR must not modify the imported PDF")
+
+        let reindexed = try XCTUnwrap(PDFLibraryIndexer.index(path: url.path, previousRecord: result.record))
+        XCTAssertEqual(reindexed.ocrPageNumbers, [1])
+        XCTAssertTrue(reindexed.sections?.contains { $0.findingMethod == .ocrHeading } == true)
     }
 
     func testRealFeastingVolumeFourRomansUnitWhenAvailable() throws {
