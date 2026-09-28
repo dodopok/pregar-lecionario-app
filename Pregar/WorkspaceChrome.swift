@@ -372,13 +372,13 @@ struct ScripturePanelView: View {
                                 if let text = collect.text {
                                     Text(text)
                                         .font(PrototypeStyle.serif(14))
-                                        .foregroundStyle(PrototypeStyle.ink.opacity(0.9))
-                                        .lineSpacing(2)
+                                        .foregroundStyle(PrototypeStyle.ink.opacity(0.85))
+                                        .lineSpacing(4)
                                         .fixedSize(horizontal: false, vertical: true)
                                         .textSelection(.enabled)
                                 }
                             }
-                            .padding(.top, 5)
+                            .padding(.top, 8)
                         }
                     }
 
@@ -457,16 +457,17 @@ struct ScripturePanelView: View {
 
             if expanded {
                 if let verses = text?.verses, !verses.isEmpty {
-                    VStack(alignment: .leading, spacing: 9) {
+                    VStack(alignment: .leading, spacing: 8) {
                         ForEach(verses) { verse in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("\(verse.number)")
-                                    .font(.system(size: 10, weight: .medium, design: .rounded).monospacedDigit())
-                                    .foregroundStyle(accent.opacity(0.88))
-                                    .frame(width: 17, alignment: .trailing)
+                                    .font(.system(size: 9, weight: .bold).monospacedDigit())
+                                    .foregroundStyle(accent.opacity(0.8))
+                                    .frame(width: 16, alignment: .trailing)
                                 Text(verse.text)
-                                    .font(PrototypeStyle.serif(15.5))
+                                    .font(PrototypeStyle.serif(14))
                                     .foregroundStyle(PrototypeStyle.ink.opacity(0.90))
+                                    .lineSpacing(4)
                                     .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -475,8 +476,9 @@ struct ScripturePanelView: View {
                     .padding(.top, 2)
                 } else if let content = text?.content {
                     Text(content)
-                        .font(PrototypeStyle.serif(15.5))
+                        .font(PrototypeStyle.serif(14))
                         .foregroundStyle(PrototypeStyle.ink.opacity(0.9))
+                        .lineSpacing(4)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if selectedBible != primaryBible && isLoadingTranslation {
