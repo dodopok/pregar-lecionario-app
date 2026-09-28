@@ -25,6 +25,29 @@ final class FavoriteSiteSearchTests: XCTestCase {
         ))
     }
 
+    func testLiturgicalDateContextMatchesProperAndYearCycleAtAdventBoundary() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let proper22 = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 4)))
+        let dayBeforeAdvent = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 28)))
+        let firstAdvent = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 29)))
+
+        let context = LiturgicalDateContext.properDay(
+            occasion: "19º Domingo depois de Pentecostes",
+            date: proper22,
+            isSunday: true
+        )
+        XCTAssertEqual(context?.designation, "Próprio 22")
+        XCTAssertEqual(context?.shortDesignation, "Próprio 22 A")
+        XCTAssertEqual(LiturgicalDateContext.yearLetter(for: dayBeforeAdvent), "A")
+        XCTAssertEqual(LiturgicalDateContext.yearLetter(for: firstAdvent), "B")
+        XCTAssertNil(LiturgicalDateContext.properDay(
+            occasion: "19º Domingo depois de Pentecostes",
+            date: proper22,
+            isSunday: false
+        ))
+    }
+
     func testCacheKeyIncludesEditableSourcesAndAuthors() {
         let date = ISO8601DateFormatter().date(from: "2026-09-27T12:00:00Z")!
         let baseline = FavoriteSiteSearchReport.cacheKey(reference: "Matthew 21:23-32", occasion: nil, date: date, isSunday: true)

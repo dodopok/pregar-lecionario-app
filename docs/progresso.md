@@ -1,6 +1,6 @@
 # Progresso de implementação
 
-Atualizado em 27 de setembro de 2026.
+Atualizado em 28 de setembro de 2026.
 
 ## Referência visual
 
@@ -22,6 +22,7 @@ O projeto é um app nativo para macOS, com armazenamento local e consumo da Est�
 - Mesa em três painéis: calendário e navegação, leituras, manuscrito e painel contextual.
 - Navegação por data no LOC 2027; Evangelho selecionado por padrão quando há rascunho novo, sem impedir a escolha de outra leitura.
 - Leituras, coletas, comemorações e cor vêm da API. O acento litúrgico é aplicado dinamicamente.
+- Refinamento da Mesa contra as capturas: cabeçalho agora escreve o ano como “de 2026” e mostra domingo, Próprio, ciclo A/B/C e cor em campos separados; o rodapé usa `LOC 2027 · tempo litúrgico · Ano A/B/C`. O cálculo do ciclo respeita a virada do Advento e a numeração do Próprio foi centralizada com a regra já usada nas buscas do Anglican Compass. A coleta aparece sob `COLETA DO DIA` com tipografia serifada; PDFs e artigos de sites compartilham os grupos de correspondência, e as linhas distinguem abrir, voltar à aba e inclusão na revisão. A suíte completa passou com 95 testes.
 - Editor local em RTF, com negrito, itálico, título, citação, lista e inserção de marcador/área de nota de rodapé. O botão `vN · histórico` abre o histórico do sermão atual, separado do Arquivo; snapshots locais são capturados após 12 segundos sem edição, comparados lado a lado e restaurados sem descartar a edição atual. Restaurar sempre cria outra versão. Os snapshots guardam RTF, título, leitura principal e contagem de palavras em arquivos JSON locais por data, com retenção das 100 versões mais recentes.
 - Comparação de uma passagem em duas traduções pela Estêvão API v2, com alternância entre perícope e capítulo.
 - Bíblia comparativa atualizada para buscar o catálogo autenticado de `bible_versions`, selecionar várias traduções e alinhar os textos por posição capítulo/versículo numa única rolagem compartilhada, sem reduzir a opacidade das versões de comparação. Respostas antigas sem capítulo continuam servindo para referências de um só capítulo; numa referência entre capítulos, o app explica que a API precisa informar cada capítulo em vez de fundir versículos repetidos.

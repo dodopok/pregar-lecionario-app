@@ -136,7 +136,11 @@ struct CalendarSidebarView: View {
                 sidebarLink("Biblioteca de PDFs", symbol: "book.closed", action: openLibrary)
             }
 
-            Text(["LOC 2027", liturgicalDay?.season?.name, "Ano litúrgico"].compactMap { $0 }.joined(separator: " · "))
+            Text([
+                "LOC 2027",
+                liturgicalDay?.season?.name,
+                LiturgicalDateContext.yearLetter(for: selectedDate).map { "Ano \($0)" }
+            ].compactMap { $0 }.joined(separator: " · "))
                 .font(.system(size: 11))
                 .foregroundStyle(PrototypeStyle.muted.opacity(0.8))
                 .lineLimit(1)
@@ -356,16 +360,25 @@ struct ScripturePanelView: View {
 
                     if let collects = day.collect, !collects.isEmpty {
                         Divider().padding(.vertical, 11)
-                        sectionLabel("COLETAS")
+                        sectionLabel(collects.count == 1 ? "COLETA DO DIA" : "COLETAS DO DIA")
                         ForEach(collects) { collect in
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(collect.title ?? collect.subtitle ?? "Do dia")
-                                    .font(.system(size: 14, weight: .semibold, design: .serif))
+                            VStack(alignment: .leading, spacing: 4) {
+                                if collects.count > 1, let title = collect.title ?? collect.subtitle,
+                                   !title.localizedCaseInsensitiveContains("do dia") {
+                                    Text(title)
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(PrototypeStyle.muted)
+                                }
                                 if let text = collect.text {
-                                    Text(text).font(.system(size: 12)).textSelection(.enabled)
+                                    Text(text)
+                                        .font(PrototypeStyle.serif(14))
+                                        .foregroundStyle(PrototypeStyle.ink.opacity(0.9))
+                                        .lineSpacing(2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .textSelection(.enabled)
                                 }
                             }
-                            .padding(.vertical, 5)
+                            .padding(.top, 5)
                         }
                     }
 
@@ -490,7 +503,10 @@ struct ScripturePanelView: View {
     }
 
     private func sectionLabel(_ title: String) -> some View {
-        Text(title).font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+        Text(title)
+            .font(.system(size: 10, weight: .bold))
+            .tracking(1)
+            .foregroundStyle(PrototypeStyle.muted)
     }
 }
 
@@ -561,6 +577,9 @@ struct ResourceContextPanel: View {
 
     private var favoriteSites: [FavoriteSite] { FavoriteReferenceLibrary.sites(from: savedFavoriteSites) }
     private var favoriteAuthors: [FavoriteAuthor] { FavoriteReferenceLibrary.authors(from: savedFavoriteAuthors) }
+    private var favoriteSiteArticles: [FavoriteSiteArticle] {
+        favoriteSiteReports[favoriteSiteSearchKey]?.groups.flatMap(\.articles) ?? []
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -576,7 +595,7 @@ struct ResourceContextPanel: View {
                             if tab == .review { badge("\(reviewReports.last?.findings.count ?? 0)", color: accent) }
                         }
                         .foregroundStyle(selectedTab == tab ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.75))
-                        .frame(maxWidth: .infinity, minHeight: 31, maxHeight: 31, alignment: .center)
+                        .frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30, alignment: .center)
                         .contentShape(Rectangle())
                         .background(selectedTab == tab ? .white : .clear, in: RoundedRectangle(cornerRadius: 7))
                         .shadow(color: selectedTab == tab ? .black.opacity(0.10) : .clear, radius: 2, y: 1)
@@ -597,7 +616,7 @@ struct ResourceContextPanel: View {
                 .accessibilityLabel("Ocultar painel de materiais")
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 3)
+            .padding(.vertical, 2)
             .background(PrototypeStyle.ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
 
             Divider().overlay(PrototypeStyle.line)
@@ -673,12 +692,35 @@ struct ResourceContextPanel: View {
     }
 
     private var materialsContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let exactPDFs = matchedPDFs[.exact] ?? []
+        let partialPDFs = matchedPDFs[.partial] ?? []
+        let contextPDFs = matchedPDFs[.context] ?? []
+        let exactSites = favoriteSiteArticles.filter { $0.match == .same || $0.match == .contains }
+        let partialSites = favoriteSiteArticles.filter { $0.match == .partial }
+        let contextSites = favoriteSiteArticles.filter { $0.match == .context }
+        let hasPDFMatches = !exactPDFs.isEmpty || !partialPDFs.isEmpty || !contextPDFs.isEmpty
+        let hasSiteMatches = !favoriteSiteArticles.isEmpty
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Sobre \(reference.isEmpty ? "esta passagem" : reference)")
                     .font(PrototypeStyle.serif(15, weight: .semibold))
                     .foregroundStyle(PrototypeStyle.ink)
                 Spacer(minLength: 4)
+                if filter != .library {
+                    Button {
+                        Task { await refreshFavoriteSites(reference: reference, cacheKey: favoriteSiteSearchKey) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .help("Atualizar resultados das fontes favoritas")
+                    .disabled(reference.isEmpty || favoriteSiteSearchInProgressReference != nil)
+                }
             }
 
             HStack(spacing: 5) {
@@ -693,61 +735,57 @@ struct ResourceContextPanel: View {
                 }
             }
 
-            if filter != .library {
-                favoriteSourcesContent
-                researchContent
+            if (!exactPDFs.isEmpty && filter != .sites) || (!exactSites.isEmpty && filter != .library) {
+                sectionHeading("SOBRE ESTA PASSAGEM", color: accent)
+                if filter != .sites {
+                    ForEach(exactPDFs) { pdfMatchRow($0) }
+                }
+                if filter != .library {
+                    ForEach(exactSites) { favoriteArticleRow($0) }
+                }
             }
-
+            if (!partialPDFs.isEmpty && filter != .sites) || (!partialSites.isEmpty && filter != .library) {
+                sectionHeading("SOBREPOSIÇÃO PARCIAL", color: Color(red: 0.62, green: 0.43, blue: 0.04))
+                if filter != .sites {
+                    ForEach(partialPDFs) { pdfMatchRow($0) }
+                }
+                if filter != .library {
+                    ForEach(partialSites) { favoriteArticleRow($0) }
+                }
+            }
+            if (!contextPDFs.isEmpty && filter != .sites) || (!contextSites.isEmpty && filter != .library) {
+                sectionHeading("A CONFIRMAR", color: PrototypeStyle.muted)
+                if filter != .sites {
+                    ForEach(contextPDFs) { pdfMatchRow($0) }
+                }
+                if filter != .library {
+                    ForEach(contextSites) { favoriteArticleRow($0) }
+                }
+            }
+            if filter != .sites && !hasPDFMatches && (filter == .library || !hasSiteMatches) {
+                sectionHeading("BIBLIOTECA", color: accent)
+                Text(isMatchingPDFs
+                     ? "Comparando referências nos PDFs…"
+                     : (pdfRecords.isEmpty ? "Importe PDFs para encontrar comentários desta passagem." : "Nenhum PDF indexado corresponde a esta passagem."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(PrototypeStyle.muted)
+            }
             if filter != .sites {
-                let exact = matchedPDFs[.exact] ?? []
-                let partial = matchedPDFs[.partial] ?? []
-                let context = matchedPDFs[.context] ?? []
-                if !exact.isEmpty {
-                    sectionHeading("SOBRE ESTA PASSAGEM", color: accent)
-                    ForEach(exact) { pdfMatchRow($0) }
-                }
-                if !partial.isEmpty {
-                    sectionHeading("SOBREPOSIÇÃO PARCIAL", color: Color(red: 0.62, green: 0.43, blue: 0.04))
-                    ForEach(partial) { pdfMatchRow($0) }
-                }
-                if !context.isEmpty {
-                    sectionHeading("A CONFIRMAR", color: PrototypeStyle.muted)
-                    ForEach(context) { pdfMatchRow($0) }
-                }
-                if matchedPDFs.values.allSatisfy(\.isEmpty) {
-                    sectionHeading("BIBLIOTECA", color: accent)
-                    Text(isMatchingPDFs
-                         ? "Comparando referências nos PDFs…"
-                         : (pdfRecords.isEmpty ? "Importe PDFs para encontrar comentários desta passagem." : "Nenhum PDF indexado corresponde a esta passagem."))
-                        .font(.system(size: 11))
-                        .foregroundStyle(PrototypeStyle.muted)
-                }
                 Button("Abrir biblioteca de PDFs", systemImage: "book.closed", action: openLibrary)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(accent)
                     .buttonStyle(.plain)
+            }
+
+            if filter != .library {
+                favoriteSourcesContent
+                researchContent
             }
         }
     }
 
     private var favoriteSourcesContent: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                sectionHeading("FONTES FAVORITAS", color: accent)
-                Spacer(minLength: 4)
-                Button {
-                    Task { await refreshFavoriteSites(reference: reference, cacheKey: favoriteSiteSearchKey) }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11, weight: .medium))
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(PrototypeStyle.muted)
-                .help("Atualizar resultados das fontes favoritas")
-                .disabled(reference.isEmpty || favoriteSiteSearchInProgressReference != nil)
-            }
-
             if favoriteSiteSearchInProgressReference == favoriteSiteSearchKey {
                 HStack(spacing: 7) {
                     ProgressView().controlSize(.small)
@@ -757,11 +795,22 @@ struct ResourceContextPanel: View {
                 }
             }
 
-            ForEach(favoriteSites) { site in
-                favoriteSourceRow(site)
+            let groups = favoriteSiteReports[favoriteSiteSearchKey]?.groups ?? []
+            let unmatchedGroups = groups.filter { $0.articles.isEmpty }
+            if !unmatchedGroups.isEmpty {
+                sectionHeading("FONTES PARA CONSULTAR", color: PrototypeStyle.muted)
+                ForEach(unmatchedGroups) { group in
+                    favoriteSourceRow(group.site, group: group)
+                }
             }
-            if favoriteSites.isEmpty {
+            if favoriteSites.isEmpty && favoriteSiteSearchInProgressReference != favoriteSiteSearchKey {
                 Text("Adicione fontes favoritas em Preferências · Biblioteca.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(PrototypeStyle.muted)
+            } else if groups.isEmpty && favoriteSiteSearchInProgressReference != favoriteSiteSearchKey {
+                Text(reference.isEmpty
+                    ? "Escolha o texto principal para buscar nas fontes favoritas."
+                    : "Nenhuma correspondência explícita nesta busca.")
                     .font(.system(size: 10))
                     .foregroundStyle(PrototypeStyle.muted)
             }
@@ -769,8 +818,7 @@ struct ResourceContextPanel: View {
     }
 
     @ViewBuilder
-    private func favoriteSourceRow(_ site: FavoriteSite) -> some View {
-        let group = favoriteSiteReports[favoriteSiteSearchKey]?.groups.first(where: { $0.site.id == site.id })
+    private func favoriteSourceRow(_ site: FavoriteSite, group: FavoriteSiteSearchGroup?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "globe")
@@ -841,38 +889,116 @@ struct ResourceContextPanel: View {
     }
 
     private func favoriteArticleRow(_ article: FavoriteSiteArticle) -> some View {
-        Button {
-            openFavoriteSite(article.site, url: article.url, title: article.title)
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(article.title)
-                    .font(PrototypeStyle.serif(12, weight: .medium))
-                    .foregroundStyle(PrototypeStyle.ink)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                let metadata = [article.author, article.publishedAt?.formatted(date: .numeric, time: .omitted)]
-                    .compactMap { $0 }
-                if !metadata.isEmpty {
-                    Text(metadata.joined(separator: " · "))
-                        .font(.system(size: 10))
-                        .foregroundStyle(PrototypeStyle.muted)
+        let existingTab = readerTab(kind: .web, location: article.url.absoluteString)
+        let reviewTab = currentContextTab(existingTab)
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(size: 12))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .frame(width: 15)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(article.title)
+                        .font(PrototypeStyle.serif(14, weight: .semibold))
+                        .foregroundStyle(PrototypeStyle.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    let source = [article.author, article.site.title]
+                        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    if !source.isEmpty {
+                        Text(source.joined(separator: " · "))
+                            .font(.system(size: 11))
+                            .foregroundStyle(PrototypeStyle.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    let details = [
+                        article.site.editorialContext,
+                        article.publishedAt?.formatted(date: .numeric, time: .omitted),
+                        article.passageReference.map { passage in
+                            guard article.match == .partial,
+                                  let overlap = article.overlapReference else { return passage }
+                            return "Trecho comum: \(overlap) · material: \(passage)"
+                        }
+                    ].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    if !details.isEmpty {
+                        Text(details.joined(separator: " · "))
+                            .font(.system(size: 10))
+                            .foregroundStyle(PrototypeStyle.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(article.match.label)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(article.match == .same || article.match == .contains ? accent : Color(red: 0.62, green: 0.43, blue: 0.04))
                 }
-                if let passageReference = article.passageReference {
-                    let overlap = article.match == .partial ? article.overlapReference : nil
-                    Text(overlap.map { "Trecho comum: \($0) · material: \(passageReference)" } ?? passageReference)
-                        .font(.system(size: 10))
-                        .foregroundStyle(PrototypeStyle.muted)
-                }
-                Text(article.match.label)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(article.match == .same || article.match == .contains ? accent : Color(red: 0.62, green: 0.43, blue: 0.04))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 8) {
+                materialActionButton(title: readerActionTitle(for: existingTab, unopened: "Abrir"), isOpen: existingTab != nil) {
+                    openFavoriteSite(article.site, url: article.url, title: article.title)
+                }
+                if let reviewTab { reviewInclusionToggle(for: reviewTab) }
+                Spacer(minLength: 0)
+            }
             .padding(.leading, 23)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
+        }
+        .padding(9)
+        .background(PrototypeStyle.manuscript.opacity(0.68), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PrototypeStyle.line, lineWidth: 1))
+    }
+
+    private func readerTab(kind: ReaderTab.Kind, location: String) -> ReaderTab? {
+        let normalizedLocation = kind == .pdf
+            ? URL(fileURLWithPath: location).standardizedFileURL.path
+            : location
+        return readerSession.tabs.first { tab in
+            guard tab.kind == kind else { return false }
+            let candidate = kind == .pdf
+                ? URL(fileURLWithPath: tab.location).standardizedFileURL.path
+                : tab.location
+            return candidate == normalizedLocation
+        }
+    }
+
+    private func currentContextTab(_ tab: ReaderTab?) -> ReaderTab? {
+        guard let tab,
+              tab.reference == reference,
+              tab.sermonDateKey == SermonDateKey.string(from: liturgicalDate) else { return nil }
+        return tab
+    }
+
+    private func readerActionTitle(for tab: ReaderTab?, unopened: String) -> String {
+        guard let tab else { return unopened }
+        return readerSession.selectedTab?.id == tab.id ? "Aberto no leitor" : "Ir para a aba"
+    }
+
+    private func materialActionButton(title: String, isOpen: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .lineLimit(1)
+                .padding(.horizontal, 9)
+                .frame(height: 22)
+                .background(isOpen ? accent.opacity(0.12) : .white, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(isOpen ? .clear : PrototypeStyle.line, lineWidth: 1))
+                .foregroundStyle(isOpen ? accent : PrototypeStyle.ink)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func reviewInclusionToggle(for tab: ReaderTab) -> some View {
+        Toggle(isOn: Binding(
+            get: { readerSession.tabs.first(where: { $0.id == tab.id })?.isIncludedForReview ?? false },
+            set: { readerSession.setReviewInclusion($0, for: tab.id) }
+        )) {
+            Text("na revisão")
+                .font(.system(size: 10))
+                .foregroundStyle(PrototypeStyle.muted)
+        }
+        .toggleStyle(.checkbox)
+        .controlSize(.small)
+        .fixedSize()
     }
 
     private func openFavoriteSite(_ site: FavoriteSite, url: URL, title: String? = nil) {
@@ -1080,7 +1206,16 @@ struct ResourceContextPanel: View {
     }
 
     private func pdfMatchRow(_ match: MatchedPDF) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        let tab = readerTab(kind: .pdf, location: match.record.path)
+        let reviewTab = currentContextTab(tab)
+        let pageRange = match.section.startPage == match.section.endPage
+            ? "física \(match.section.startPage)"
+            : "físicas \(match.section.startPage)–\(match.section.endPage)"
+        let metadata = ["PDF", pageRange, match.record.displayLanguage]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "doc.text")
                     .font(.system(size: 12))
@@ -1092,39 +1227,31 @@ struct ResourceContextPanel: View {
                         .font(PrototypeStyle.serif(14, weight: .semibold))
                         .foregroundStyle(PrototypeStyle.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text([match.record.displayTitle, match.record.displayAuthor].compactMap { $0 }.joined(separator: " · "))
+                    Text([match.record.displayAuthor, match.record.displayTitle].compactMap { $0 }.joined(separator: " · "))
                         .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("PDF · físicas \(match.section.startPage)–\(match.section.endPage) · \(match.section.context ?? "sumário")")
+                    Text(metadata.joined(separator: " · "))
                         .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
                 }
             }
             HStack(spacing: 8) {
-                Button {
+                materialActionButton(
+                    title: openingPDFPath == match.record.path
+                        ? "Abrindo PDF…"
+                        : readerActionTitle(for: tab, unopened: "Abrir"),
+                    isOpen: tab != nil
+                ) {
                     openPDFMatch(match)
-                } label: {
-                    if openingPDFPath == match.record.path {
-                        HStack(spacing: 6) {
-                            ProgressView().controlSize(.small)
-                            Text("Abrindo PDF…")
-                        }
-                    } else {
-                        Text("Ir para a aba")
-                    }
                 }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(accent)
-                .buttonStyle(.plain)
                 .disabled(openingPDFPath != nil)
+                if let reviewTab { reviewInclusionToggle(for: reviewTab) }
                 Spacer(minLength: 0)
-                Text(match.kind == .exact ? "alta" : match.kind == .partial ? "média" : "confirmar")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(match.kind == .exact ? accent : PrototypeStyle.muted)
             }
             .padding(.leading, 23)
         }
-        .padding(.vertical, 9)
-        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+        .padding(9)
+        .background(PrototypeStyle.manuscript.opacity(0.68), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PrototypeStyle.line, lineWidth: 1))
     }
 
     private func openPDFMatch(_ match: MatchedPDF) {

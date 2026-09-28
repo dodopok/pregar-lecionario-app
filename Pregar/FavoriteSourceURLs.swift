@@ -22,7 +22,7 @@ enum FavoriteSourceURLs {
         date: Date? = nil,
         isSunday: Bool = false
     ) -> URL {
-        if let proper = properDay(occasion: occasion, date: date, isSunday: isSunday), !proper.year.isEmpty,
+        if let proper = LiturgicalDateContext.properDay(occasion: occasion, date: date, isSunday: isSunday), !proper.year.isEmpty,
            let url = URL(string: "https://anglicancompass.com/today-in-the-spirit-proper-\(proper.number)\(proper.year.lowercased())/") {
             return url
         }
@@ -31,7 +31,7 @@ enum FavoriteSourceURLs {
     }
 
     static func anglicanCompassDetail(occasion: String?, date: Date?, isSunday: Bool) -> String {
-        guard let proper = properDay(occasion: occasion, date: date, isSunday: isSunday), !proper.year.isEmpty else {
+        guard let proper = LiturgicalDateContext.properDay(occasion: occasion, date: date, isSunday: isSunday), !proper.year.isEmpty else {
             return "Today in the Spirit · \(occasion ?? "lecionário")"
         }
         return "Today in the Spirit · Proper \(proper.number)\(proper.year)"
@@ -49,16 +49,30 @@ enum FavoriteSourceURLs {
         ScriptureReference.parse(reference)?.englishReference ?? reference
     }
 
-    private struct ProperDay {
-        let number: Int
-        let year: String
+    private static func searchURL(host: String, query: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host
+        components.path = "/"
+        components.queryItems = [URLQueryItem(name: "s", value: query)]
+        return components.url ?? URL(string: "https://\(host)/")!
     }
+}
 
-    private static func properDay(occasion: String?, date: Date?, isSunday: Bool) -> ProperDay? {
+struct LiturgicalProperDay: Equatable {
+    let number: Int
+    let year: String
+
+    var designation: String { "Próprio \(number)" }
+    var shortDesignation: String { year.isEmpty ? designation : "\(designation) \(year)" }
+}
+
+enum LiturgicalDateContext {
+    static func properDay(occasion: String?, date: Date?, isSunday: Bool) -> LiturgicalProperDay? {
         if let explicit = explicitProper(occasion) {
             if !explicit.year.isEmpty { return explicit }
-            if let date, let year = lectionaryYear(for: date) {
-                return ProperDay(number: explicit.number, year: year)
+            if let date, let year = yearLetter(for: date) {
+                return LiturgicalProperDay(number: explicit.number, year: year)
             }
         }
         guard let occasion, let date, isSunday else { return nil }
@@ -67,11 +81,27 @@ enum FavoriteSourceURLs {
                 || normalized.contains("ordinary time")
                 || normalized.contains("pentecost"),
               let number = properNumber(for: date),
-              let year = lectionaryYear(for: date) else { return nil }
-        return ProperDay(number: number, year: year)
+              let year = yearLetter(for: date) else { return nil }
+        return LiturgicalProperDay(number: number, year: year)
     }
 
-    private static func explicitProper(_ occasion: String?) -> ProperDay? {
+    static func yearLetter(for date: Date) -> String? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        guard let year = calendar.dateComponents([.year], from: date).year,
+              let adventBase = calendar.date(from: DateComponents(year: year, month: 11, day: 27)) else { return nil }
+        let weekday = calendar.component(.weekday, from: adventBase)
+        let daysToSunday = (8 - weekday) % 7
+        guard let advent = calendar.date(byAdding: .day, value: daysToSunday, to: adventBase) else { return nil }
+        let liturgicalYear = calendar.startOfDay(for: date) >= calendar.startOfDay(for: advent) ? year : year - 1
+        switch (liturgicalYear % 3 + 3) % 3 {
+        case 0: return "A"
+        case 1: return "B"
+        default: return "C"
+        }
+    }
+
+    private static func explicitProper(_ occasion: String?) -> LiturgicalProperDay? {
         guard let occasion, !occasion.isEmpty else { return nil }
         let normalized = ScriptureReference.normalized(occasion)
         let pattern = #"(?:proprio|proper)\s+(\d+)\s*([abc])?"#
@@ -92,7 +122,7 @@ enum FavoriteSourceURLs {
                 }
             }
         }
-        return ProperDay(number: number, year: year ?? "")
+        return LiturgicalProperDay(number: number, year: year ?? "")
     }
 
     private static func properNumber(for date: Date) -> Int? {
@@ -106,30 +136,5 @@ enum FavoriteSourceURLs {
               let days = calendar.dateComponents([.day], from: first, to: date).day else { return nil }
         let proper = 3 + days / 7
         return (3...29).contains(proper) ? proper : nil
-    }
-
-    private static func lectionaryYear(for date: Date) -> String? {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .current
-        guard let year = calendar.dateComponents([.year], from: date).year,
-              let adventBase = calendar.date(from: DateComponents(year: year, month: 11, day: 27)) else { return nil }
-        let weekday = calendar.component(.weekday, from: adventBase)
-        let daysToSunday = (8 - weekday) % 7
-        guard let advent = calendar.date(byAdding: .day, value: daysToSunday, to: adventBase) else { return nil }
-        let liturgicalYear = calendar.startOfDay(for: date) >= calendar.startOfDay(for: advent) ? year : year - 1
-        switch (liturgicalYear % 3 + 3) % 3 {
-        case 0: return "A"
-        case 1: return "B"
-        default: return "C"
-        }
-    }
-
-    private static func searchURL(host: String, query: String) -> URL {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = host
-        components.path = "/"
-        components.queryItems = [URLQueryItem(name: "s", value: query)]
-        return components.url ?? URL(string: "https://\(host)/")!
     }
 }

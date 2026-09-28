@@ -346,7 +346,13 @@ struct PreparationWorkspace: View {
 
     private var toolbarSubtitle: String {
         let date = selectedDate.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "pt_BR")))
-        return [date, selectedDay?.sundayName].compactMap { $0 }.joined(separator: " · ")
+        let occasion = selectedDay?.sundayName ?? selectedDay?.season?.name
+        let proper = LiturgicalDateContext.properDay(
+            occasion: occasion,
+            date: selectedDate,
+            isSunday: selectedDay?.isSunday == true
+        )?.shortDesignation
+        return [date, proper ?? selectedDay?.sundayName].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -491,22 +497,27 @@ struct PreparationWorkspace: View {
                 .fill(accentColor)
                 .frame(width: 14, height: 14)
                 .overlay(Circle().strokeBorder(PrototypeStyle.ink.opacity(0.14), lineWidth: 1))
-            Text(selectedDate.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "pt_BR"))).lowercased())
-                .font(PrototypeStyle.serif(24, weight: .semibold))
-                .foregroundStyle(PrototypeStyle.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Text(selectedDate.formatted(.dateTime.year().locale(Locale(identifier: "pt_BR"))))
-                .font(PrototypeStyle.serif(24))
-                .foregroundStyle(PrototypeStyle.muted.opacity(0.64))
-                .lineLimit(1)
-            Text([selectedDay?.season?.name, selectedDay?.sundayName].compactMap { $0 }.joined(separator: " · "))
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text(selectedDate.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "pt_BR"))).lowercased())
+                    .font(PrototypeStyle.serif(24, weight: .semibold))
+                    .foregroundStyle(PrototypeStyle.ink)
+                Text("de \(selectedDate.formatted(.dateTime.year().locale(Locale(identifier: "pt_BR"))))")
+                    .font(PrototypeStyle.serif(24))
+                    .foregroundStyle(PrototypeStyle.muted.opacity(0.64))
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .layoutPriority(2)
+            Text(dayHeaderContext)
                 .font(.system(size: 13))
                 .foregroundStyle(PrototypeStyle.muted)
                 .lineLimit(1)
-            Text(selectedDay?.color ?? "")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(accentColor)
+                .layoutPriority(1)
+            if let color = LiturgicalColor.displayName(selectedDay?.color) {
+                Text(color)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(accentColor)
+            }
             Spacer(minLength: 8)
             if isLoading { ProgressView().controlSize(.small).tint(accentColor) }
             if let celebration = selectedDay?.celebration {
@@ -526,6 +537,33 @@ struct PreparationWorkspace: View {
         .padding(.vertical, 14)
         .frame(height: 56)
         .background(PrototypeStyle.canvas)
+    }
+
+    private var dayHeaderContext: String {
+        guard let selectedDay else { return "" }
+        let occasion = selectedDay.sundayName ?? selectedDay.season?.name
+        let normalizedName = ScriptureReference.normalized(selectedDay.sundayName ?? "")
+        let hasProperNumber = normalizedName.range(
+            of: #"(?:proprio|proper)\s+\d+"#,
+            options: .regularExpression
+        ) != nil
+        let hasYearLetter = normalizedName.range(
+            of: #"(?:ano|year)\s+[abc]|(?:proprio|proper)\s+\d+\s*[abc]"#,
+            options: .regularExpression
+        ) != nil
+        var parts = [selectedDay.sundayName ?? selectedDay.season?.name]
+        if !hasProperNumber,
+           let proper = LiturgicalDateContext.properDay(
+               occasion: occasion,
+               date: selectedDate,
+               isSunday: selectedDay.isSunday == true
+            ) {
+            parts.append(proper.designation)
+        }
+        if !hasYearLetter, let year = LiturgicalDateContext.yearLetter(for: selectedDate) {
+            parts.append("Ano \(year)")
+        }
+        return parts.compactMap { $0 }.joined(separator: " · ")
     }
 
     private func sermonEditor(draft: SermonDraft) -> some View {
@@ -932,6 +970,18 @@ struct PreparationWorkspace: View {
 }
 
 private enum LiturgicalColor {
+    static func displayName(_ value: String?) -> String? {
+        switch value?.lowercased().folding(options: [.diacriticInsensitive], locale: .current) {
+        case "verde", "green": return "Verde"
+        case "roxo", "violeta", "purple", "violet": return "Roxo"
+        case "vermelho", "red": return "Vermelho"
+        case "rosa", "rose", "pink": return "Rosa"
+        case "preto", "negro", "black": return "Preto"
+        case "branco", "white": return "Branco"
+        default: return value?.capitalized
+        }
+    }
+
     static func resolve(_ value: String?) -> Color {
         switch value?.lowercased().folding(options: [.diacriticInsensitive], locale: .current) {
         case "verde", "green": return PrototypeStyle.green
