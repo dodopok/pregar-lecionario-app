@@ -94,6 +94,16 @@ struct PreparationWorkspace: View {
                         readingsColumn(for: activeDraft)
                             .frame(width: 300)
                         Rectangle().fill(PrototypeStyle.line).frame(width: 1)
+                    } else if !focusMode {
+                        collapsedPanelRail(
+                            title: "Leituras",
+                            symbol: "sidebar.left",
+                            topPadding: 14,
+                            trailingPadding: 16,
+                            dividerOnLeadingEdge: false
+                        ) {
+                            isReadingsVisible = true
+                        }
                     }
 
                     if let draft = activeDraft {
@@ -124,6 +134,16 @@ struct PreparationWorkspace: View {
                             collapse: { isContextVisible = false }
                         )
                         .frame(width: 320)
+                    } else if !focusMode {
+                        collapsedPanelRail(
+                            title: "Materiais",
+                            symbol: "sidebar.right",
+                            topPadding: 3,
+                            trailingPadding: 12,
+                            dividerOnLeadingEdge: true
+                        ) {
+                            isContextVisible = true
+                        }
                     }
                 }
                 .background(PrototypeStyle.canvas)
@@ -254,18 +274,6 @@ struct PreparationWorkspace: View {
             }
             .buttonStyle(.plain)
             .help("Mostrar ou ocultar calendário")
-
-            if !isReadingsVisible && !focusMode {
-                panelRestoreButton("Leituras", symbol: "sidebar.left") {
-                    isReadingsVisible = true
-                }
-            }
-
-            if !isContextVisible && !focusMode {
-                panelRestoreButton("Materiais", symbol: "sidebar.right") {
-                    isContextVisible = true
-                }
-            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(activeDraft?.mainReadingReference ?? "Preparação do sermão")
@@ -443,18 +451,38 @@ struct PreparationWorkspace: View {
         .buttonStyle(.plain)
     }
 
-    private func panelRestoreButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(accentColor)
-                .padding(.horizontal, 8)
-                .frame(height: 31)
-                .background(PrototypeStyle.softGreen.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(RoundedRectangle(cornerRadius: 6))
+    private func collapsedPanelRail(
+        title: String,
+        symbol: String,
+        topPadding: CGFloat,
+        trailingPadding: CGFloat,
+        dividerOnLeadingEdge: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Button(action: action) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(PrototypeStyle.muted)
+                        .frame(width: 32, height: 30)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Mostrar painel de \(title.lowercased())")
+                .accessibilityLabel("Mostrar painel de \(title.lowercased())")
+            }
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .help("Reabrir painel de \(title.lowercased())")
+        .padding(.top, topPadding)
+        .padding(.trailing, trailingPadding)
+        .frame(width: 56)
+        .frame(maxHeight: .infinity)
+        .background(PrototypeStyle.paper)
+        .overlay(alignment: dividerOnLeadingEdge ? .leading : .trailing) {
+            Rectangle().fill(PrototypeStyle.line).frame(width: 1)
+        }
     }
 
     private var dayHeader: some View {
