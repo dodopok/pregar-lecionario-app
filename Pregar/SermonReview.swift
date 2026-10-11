@@ -20,11 +20,196 @@ enum SermonReviewCriterion: String, CaseIterable, Codable, Identifiable, Sendabl
         case .tone: "Tom"
         }
     }
+
+    /// O que cada critério examina, no vocabulário do workshop de pregação.
+    var guidance: String {
+        switch self {
+        case .spelling:
+            "Erros objetivos de grafia. Mostra a palavra e a forma correta, sem reescrever a frase."
+        case .fidelity:
+            "Afirmações em tensão com a passagem e seu contexto, com evidência literal. Leitura que ninguém nunca fez é sinal de alerta."
+        case .structure:
+            "Um texto, um foco, um ponto. Introdução com gancho, desenvolvimento a serviço da ideia dominante, conclusão com convite em crescente."
+        case .clarity:
+            "Conexões que parecem óbvias mas não estão explicadas, termos teológicos sem explicação, erudição acima do texto, ilustrações difíceis para um público misto."
+        case .tone:
+            "Moralismo, abstração, informalidade excessiva e cuidado pastoral; citações longas ou em excesso que deslocam a voz de quem prega."
+        }
+    }
 }
 
 enum SermonReviewSeverity: String, CaseIterable, Codable, Sendable {
     case note
     case attention
+}
+
+/// Marcação manual do autor sobre um apontamento. Uma nova revisão nunca muda este estado.
+enum SermonReviewFindingStatus: String, CaseIterable, Codable, Sendable {
+    case open
+    case resolved
+    case dismissed
+}
+
+/// Mapa estrutural do sermão, devolvido em toda revisão e validado localmente.
+/// Descreve o que existe no manuscrito segundo o referencial do workshop de pregação
+/// (Stott, Rutledge, Wilson): um foco, partes com função, movimentos e o lugar da Boa Nova.
+struct SermonStructureAssessment: Codable, Equatable, Sendable {
+    enum Verdict: String, Codable, Sendable {
+        case solid
+        case attention
+        case fragile
+
+        var title: String {
+            switch self {
+            case .solid: "Estrutura sólida"
+            case .attention: "Estrutura pede atenção"
+            case .fragile: "Estrutura frágil"
+            }
+        }
+    }
+
+    enum SectionKind: String, CaseIterable, Codable, Sendable {
+        case introduction
+        case development
+        case conclusion
+
+        var title: String {
+            switch self {
+            case .introduction: "Introdução"
+            case .development: "Desenvolvimento"
+            case .conclusion: "Conclusão"
+            }
+        }
+
+        /// A função que o workshop atribui a cada parte.
+        var expectation: String {
+            switch self {
+            case .introduction: "prende a atenção e apresenta o tópico"
+            case .development: "organiza o material a serviço da ideia dominante"
+            case .conclusion: "aplicação pessoal e convite ao compromisso, em crescente"
+            }
+        }
+    }
+
+    enum Presence: String, Codable, Sendable {
+        case fulfills
+        case partial
+        case missing
+
+        var title: String {
+            switch self {
+            case .fulfills: "cumpre a função"
+            case .partial: "cumpre em parte"
+            case .missing: "não localizada"
+            }
+        }
+    }
+
+    enum IdeaStatus: String, Codable, Sendable {
+        case clear
+        case diffuse
+        case notFound = "not_found"
+
+        var title: String {
+            switch self {
+            case .clear: "uma ideia dominante clara"
+            case .diffuse: "ideia dominante difusa"
+            case .notFound: "ideia dominante não localizada"
+            }
+        }
+    }
+
+    enum AnchorStatus: String, Codable, Sendable {
+        case explicit
+        case implicit
+        case notFound = "not_found"
+
+        var title: String {
+            switch self {
+            case .explicit: "anunciada explicitamente"
+            case .implicit: "apenas implícita"
+            case .notFound: "não localizada"
+            }
+        }
+    }
+
+    enum PageKind: String, CaseIterable, Codable, Sendable {
+        case problemBible = "problem_bible"
+        case problemToday = "problem_today"
+        case graceBible = "grace_bible"
+        case graceToday = "grace_today"
+
+        var title: String {
+            switch self {
+            case .problemBible: "Problema no mundo bíblico"
+            case .problemToday: "Problema no mundo de hoje"
+            case .graceBible: "Graça de Deus no mundo bíblico"
+            case .graceToday: "Graça de Deus no mundo de hoje"
+            }
+        }
+
+        var shortTitle: String {
+            switch self {
+            case .problemBible: "Problema · Bíblia"
+            case .problemToday: "Problema · hoje"
+            case .graceBible: "Graça · Bíblia"
+            case .graceToday: "Graça · hoje"
+            }
+        }
+    }
+
+    enum PageStatus: String, Codable, Sendable {
+        case present
+        case brief
+        case notFound = "not_found"
+    }
+
+    struct Section: Codable, Equatable, Identifiable, Sendable {
+        let kind: SectionKind
+        let assessment: Presence
+        let startQuote: String
+        let note: String
+
+        var id: String { kind.rawValue }
+    }
+
+    struct CentralIdea: Codable, Equatable, Sendable {
+        let status: IdeaStatus
+        let statement: String
+        let quote: String
+        let note: String
+    }
+
+    struct Movement: Codable, Equatable, Sendable {
+        let label: String
+        let startQuote: String
+    }
+
+    struct Gospel: Codable, Equatable, Sendable {
+        let status: AnchorStatus
+        let quote: String
+        let note: String
+    }
+
+    struct Page: Codable, Equatable, Identifiable, Sendable {
+        let page: PageKind
+        let status: PageStatus
+        let quote: String
+
+        var id: String { page.rawValue }
+    }
+
+    let verdict: Verdict
+    let summary: String
+    let centralIdea: CentralIdea
+    let sections: [Section]
+    let movements: [Movement]
+    let gospel: Gospel
+    let fourPages: [Page]
+
+    func section(_ kind: SectionKind) -> Section? {
+        sections.first { $0.kind == kind }
+    }
 }
 
 struct SermonReviewSource: Codable, Equatable, Identifiable, Sendable {
@@ -59,6 +244,7 @@ struct SermonReviewFinding: Codable, Equatable, Identifiable, Sendable {
     let evidenceQuote: String
     let evidenceSourceTitle: String?
     let evidenceCitation: String?
+    var status: SermonReviewFindingStatus
 
     init(
         id: UUID = UUID(),
@@ -70,7 +256,8 @@ struct SermonReviewFinding: Codable, Equatable, Identifiable, Sendable {
         classification: String,
         evidenceQuote: String,
         evidenceSourceTitle: String? = nil,
-        evidenceCitation: String? = nil
+        evidenceCitation: String? = nil,
+        status: SermonReviewFindingStatus = .open
     ) {
         self.id = id
         self.criterion = criterion
@@ -82,6 +269,28 @@ struct SermonReviewFinding: Codable, Equatable, Identifiable, Sendable {
         self.evidenceQuote = evidenceQuote
         self.evidenceSourceTitle = evidenceSourceTitle
         self.evidenceCitation = evidenceCitation
+        self.status = status
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, criterion, severity, manuscriptQuote, observation, correction, classification
+        case evidenceQuote, evidenceSourceTitle, evidenceCitation, status
+    }
+
+    /// Relatórios gravados antes da marcação manual não têm `status`; são lidos como abertos.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        criterion = try container.decode(SermonReviewCriterion.self, forKey: .criterion)
+        severity = try container.decode(SermonReviewSeverity.self, forKey: .severity)
+        manuscriptQuote = try container.decode(String.self, forKey: .manuscriptQuote)
+        observation = try container.decode(String.self, forKey: .observation)
+        correction = try container.decode(String.self, forKey: .correction)
+        classification = try container.decode(String.self, forKey: .classification)
+        evidenceQuote = try container.decode(String.self, forKey: .evidenceQuote)
+        evidenceSourceTitle = try container.decodeIfPresent(String.self, forKey: .evidenceSourceTitle)
+        evidenceCitation = try container.decodeIfPresent(String.self, forKey: .evidenceCitation)
+        status = try container.decodeIfPresent(SermonReviewFindingStatus.self, forKey: .status) ?? .open
     }
 }
 
@@ -91,6 +300,7 @@ enum SermonReviewValidationFailure: Error, Hashable, Sendable {
     case manuscriptAnchor
     case sourceEvidence
     case orthography
+    case structureScope
 
     var displayName: String {
         switch self {
@@ -99,6 +309,7 @@ enum SermonReviewValidationFailure: Error, Hashable, Sendable {
         case .manuscriptAnchor: "citação do manuscrito"
         case .sourceEvidence: "evidência da fonte"
         case .orthography: "correção ortográfica"
+        case .structureScope: "mapa do sermão"
         }
     }
 }
@@ -107,14 +318,26 @@ struct SermonAIReviewResult: Sendable {
     let findings: [SermonReviewFinding]
     let rejectedFindingCount: Int
     let rejectionReasons: [SermonReviewValidationFailure]
+    var structure: SermonStructureAssessment? = nil
+    /// Trechos ou notas do mapa do sermão ocultados por não corresponderem ao manuscrito ou por sugerirem redação.
+    var structureAdjustmentCount: Int = 0
 
     var validationNotice: String? {
-        guard rejectedFindingCount > 0 else { return nil }
-        let count = rejectedFindingCount
-        let subject = count == 1 ? "1 apontamento foi ocultado" : "\(count) apontamentos foram ocultados"
-        let reasons = Set(rejectionReasons.map(\.displayName)).sorted().joined(separator: ", ")
-        let reason = reasons.isEmpty ? "" : " (\(reasons))"
-        return "\(subject) após a validação local\(reason). Nenhum texto rejeitado foi exibido."
+        var parts: [String] = []
+        if rejectedFindingCount > 0 {
+            let count = rejectedFindingCount
+            let subject = count == 1 ? "1 apontamento foi ocultado" : "\(count) apontamentos foram ocultados"
+            let reasons = Set(rejectionReasons.map(\.displayName)).sorted().joined(separator: ", ")
+            let reason = reasons.isEmpty ? "" : " (\(reasons))"
+            parts.append("\(subject) após a validação local\(reason). Nenhum texto rejeitado foi exibido.")
+        }
+        if structureAdjustmentCount > 0 {
+            let count = structureAdjustmentCount
+            parts.append(count == 1
+                ? "No mapa do sermão, 1 trecho ou nota foi ocultado por não corresponder ao manuscrito."
+                : "No mapa do sermão, \(count) trechos ou notas foram ocultados por não corresponderem ao manuscrito.")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 }
 
@@ -130,8 +353,11 @@ struct SermonReviewReport: Codable, Equatable, Identifiable, Sendable {
     let criteria: [SermonReviewCriterion]
     var findings: [SermonReviewFinding]
     var validationNotice: String? = nil
+    var structure: SermonStructureAssessment? = nil
 
     var isEmpty: Bool { findings.isEmpty }
+    var openFindings: [SermonReviewFinding] { findings.filter { $0.status == .open } }
+    var closedFindings: [SermonReviewFinding] { findings.filter { $0.status != .open } }
 
     func isStale(manuscript: String, mainReference: String?) -> Bool {
         (mainReference.map { !$0.isEmpty && self.mainReference != $0 } ?? false)
@@ -183,6 +409,17 @@ actor SermonReviewReportStore {
         var reports = try reports(for: report.dateKey)
         reports.append(report)
         if reports.count > 30 { reports.removeFirst(reports.count - 30) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try JSONEncoder().encode(reports).write(to: fileURL(for: report.dateKey), options: .atomic)
+        return reports
+    }
+
+    /// Regrava um relatório existente (por exemplo, após marcar apontamentos como resolvidos).
+    @discardableResult
+    func update(_ report: SermonReviewReport) throws -> [SermonReviewReport] {
+        var reports = try reports(for: report.dateKey)
+        guard let index = reports.firstIndex(where: { $0.id == report.id }) else { return try save(report) }
+        reports[index] = report
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try JSONEncoder().encode(reports).write(to: fileURL(for: report.dateKey), options: .atomic)
         return reports
@@ -298,10 +535,19 @@ struct SermonAIReviewClient {
                 rejected[failure, default: 0] += 1
             }
         }
+        var structure: SermonStructureAssessment?
+        var structureAdjustments = 0
+        if let rawStructure = payload.structure {
+            let validated = Self.validateStructure(rawStructure, context: context)
+            structure = validated.assessment
+            structureAdjustments = validated.adjustments
+        }
         return SermonAIReviewResult(
             findings: findings,
             rejectedFindingCount: rejected.values.reduce(0, +),
-            rejectionReasons: rejected.keys.sorted { $0.displayName < $1.displayName }
+            rejectionReasons: rejected.keys.sorted { $0.displayName < $1.displayName },
+            structure: structure,
+            structureAdjustmentCount: structureAdjustments
         )
     }
 
@@ -534,9 +780,190 @@ struct SermonAIReviewClient {
         return [
             "type": "object",
             "additionalProperties": false,
-            "properties": ["findings": findings],
-            "required": ["findings"]
+            "properties": ["findings": findings, "structure": structureSchema],
+            "required": ["findings", "structure"]
         ]
+    }
+
+    /// Esquema do mapa do sermão. Todos os trechos são literais do manuscrito e são conferidos localmente.
+    private static var structureSchema: [String: Any] {
+        let quote: [String: Any] = ["type": "string", "maxLength": 420]
+        let note: [String: Any] = ["type": "string", "maxLength": 300]
+        let section: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "kind": ["type": "string", "enum": SermonStructureAssessment.SectionKind.allCases.map(\.rawValue)],
+                "assessment": ["type": "string", "enum": ["fulfills", "partial", "missing"]],
+                "start_quote": quote,
+                "note": note
+            ],
+            "required": ["kind", "assessment", "start_quote", "note"]
+        ]
+        let centralIdea: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "status": ["type": "string", "enum": ["clear", "diffuse", "not_found"]],
+                "statement": ["type": "string", "maxLength": 200],
+                "quote": quote,
+                "note": note
+            ],
+            "required": ["status", "statement", "quote", "note"]
+        ]
+        let movement: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "label": ["type": "string", "maxLength": 90],
+                "start_quote": quote
+            ],
+            "required": ["label", "start_quote"]
+        ]
+        let gospel: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "status": ["type": "string", "enum": ["explicit", "implicit", "not_found"]],
+                "quote": quote,
+                "note": note
+            ],
+            "required": ["status", "quote", "note"]
+        ]
+        let page: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "page": ["type": "string", "enum": SermonStructureAssessment.PageKind.allCases.map(\.rawValue)],
+                "status": ["type": "string", "enum": ["present", "brief", "not_found"]],
+                "quote": quote
+            ],
+            "required": ["page", "status", "quote"]
+        ]
+        return [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "verdict": ["type": "string", "enum": ["solid", "attention", "fragile"]],
+                "summary": ["type": "string", "maxLength": 600],
+                "central_idea": centralIdea,
+                "sections": ["type": "array", "items": section, "minItems": 3, "maxItems": 3],
+                "movements": ["type": "array", "items": movement, "maxItems": 8],
+                "gospel": gospel,
+                "four_pages": ["type": "array", "items": page, "minItems": 4, "maxItems": 4]
+            ],
+            "required": ["verdict", "summary", "central_idea", "sections", "movements", "gospel", "four_pages"]
+        ]
+    }
+
+    /// Confere o mapa do sermão: trechos precisam existir literalmente no manuscrito e notas não podem
+    /// sugerir redação. Um status que exige trecho é rebaixado quando o trecho não confere.
+    static func validateStructure(
+        _ raw: AIReviewRawStructure,
+        context: SermonReviewContext
+    ) -> (assessment: SermonStructureAssessment, adjustments: Int) {
+        let manuscript = context.manuscript
+        var adjustments = 0
+
+        func cleanQuote(_ value: String) -> String {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "" }
+            guard trimmed.count <= 420, containsExact(trimmed, in: manuscript) else {
+                adjustments += 1
+                return ""
+            }
+            return trimmed
+        }
+
+        func cleanText(_ value: String, limit: Int) -> String {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "" }
+            guard trimmed.count <= limit,
+                  !AIReviewPrompt.containsForbiddenSuggestion(trimmed, manuscript: manuscript) else {
+                adjustments += 1
+                return ""
+            }
+            return trimmed
+        }
+
+        var sections: [SermonStructureAssessment.Section] = []
+        for kind in SermonStructureAssessment.SectionKind.allCases {
+            guard let rawSection = raw.sections.first(where: { $0.kind == kind.rawValue }) else {
+                adjustments += 1
+                sections.append(SermonStructureAssessment.Section(kind: kind, assessment: .missing, startQuote: "", note: ""))
+                continue
+            }
+            let startQuote = cleanQuote(rawSection.startQuote)
+            var assessment = SermonStructureAssessment.Presence(rawValue: rawSection.assessment) ?? .missing
+            if assessment == .fulfills && startQuote.isEmpty {
+                assessment = .partial
+                adjustments += 1
+            }
+            sections.append(SermonStructureAssessment.Section(
+                kind: kind,
+                assessment: assessment,
+                startQuote: startQuote,
+                note: cleanText(rawSection.note, limit: 300)
+            ))
+        }
+
+        let ideaQuote = cleanQuote(raw.centralIdea.quote)
+        var ideaStatus = SermonStructureAssessment.IdeaStatus(rawValue: raw.centralIdea.status) ?? .notFound
+        if ideaStatus == .clear && ideaQuote.isEmpty {
+            ideaStatus = .diffuse
+            adjustments += 1
+        }
+        let statement = ideaStatus == .notFound ? "" : cleanText(raw.centralIdea.statement, limit: 200)
+        let centralIdea = SermonStructureAssessment.CentralIdea(
+            status: ideaStatus,
+            statement: statement,
+            quote: ideaQuote,
+            note: cleanText(raw.centralIdea.note, limit: 300)
+        )
+
+        let movements: [SermonStructureAssessment.Movement] = raw.movements.prefix(8).compactMap { rawMovement -> SermonStructureAssessment.Movement? in
+            let label = cleanText(rawMovement.label, limit: 90)
+            guard !label.isEmpty else { return nil }
+            return SermonStructureAssessment.Movement(label: label, startQuote: cleanQuote(rawMovement.startQuote))
+        }
+
+        let gospelQuote = cleanQuote(raw.gospel.quote)
+        var gospelStatus = SermonStructureAssessment.AnchorStatus(rawValue: raw.gospel.status) ?? .notFound
+        if gospelStatus == .explicit && gospelQuote.isEmpty {
+            gospelStatus = .implicit
+            adjustments += 1
+        }
+        let gospel = SermonStructureAssessment.Gospel(
+            status: gospelStatus,
+            quote: gospelQuote,
+            note: cleanText(raw.gospel.note, limit: 300)
+        )
+
+        var pages: [SermonStructureAssessment.Page] = []
+        for kind in SermonStructureAssessment.PageKind.allCases {
+            guard let rawPage = raw.fourPages.first(where: { $0.page == kind.rawValue }) else {
+                pages.append(SermonStructureAssessment.Page(page: kind, status: .notFound, quote: ""))
+                continue
+            }
+            let pageQuote = cleanQuote(rawPage.quote)
+            var status = SermonStructureAssessment.PageStatus(rawValue: rawPage.status) ?? .notFound
+            if status == .present && pageQuote.isEmpty {
+                status = .brief
+                adjustments += 1
+            }
+            pages.append(SermonStructureAssessment.Page(page: kind, status: status, quote: pageQuote))
+        }
+
+        let assessment = SermonStructureAssessment(
+            verdict: SermonStructureAssessment.Verdict(rawValue: raw.verdict) ?? .attention,
+            summary: cleanText(raw.summary, limit: 600),
+            centralIdea: centralIdea,
+            sections: sections,
+            movements: movements,
+            gospel: gospel,
+            fourPages: pages
+        )
+        return (assessment, adjustments)
     }
 
     private static func findingSchema(
@@ -595,6 +1022,65 @@ private struct AIReviewInput: Encodable {
 
 private struct AIReviewPayload: Decodable {
     let findings: [AIReviewRawFinding]
+    /// Ausente em respostas antigas ou de provedores que ignoram o campo; nunca é obrigatório na leitura.
+    let structure: AIReviewRawStructure?
+}
+
+struct AIReviewRawStructure: Decodable, Sendable {
+    struct Section: Decodable, Sendable {
+        let kind: String
+        let assessment: String
+        let startQuote: String
+        let note: String
+
+        enum CodingKeys: String, CodingKey {
+            case kind, assessment, note
+            case startQuote = "start_quote"
+        }
+    }
+
+    struct CentralIdea: Decodable, Sendable {
+        let status: String
+        let statement: String
+        let quote: String
+        let note: String
+    }
+
+    struct Movement: Decodable, Sendable {
+        let label: String
+        let startQuote: String
+
+        enum CodingKeys: String, CodingKey {
+            case label
+            case startQuote = "start_quote"
+        }
+    }
+
+    struct Gospel: Decodable, Sendable {
+        let status: String
+        let quote: String
+        let note: String
+    }
+
+    struct Page: Decodable, Sendable {
+        let page: String
+        let status: String
+        let quote: String
+    }
+
+    let verdict: String
+    let summary: String
+    let centralIdea: CentralIdea
+    let sections: [Section]
+    let movements: [Movement]
+    let gospel: Gospel
+    let fourPages: [Page]
+
+    enum CodingKeys: String, CodingKey {
+        case verdict, summary, sections, movements, gospel
+        case centralIdea = "central_idea"
+        case fourPages = "four_pages"
+    }
 }
 
 private struct AIReviewRawFinding: Decodable {
@@ -625,6 +1111,27 @@ enum AIReviewPrompt {
     Fidelidade: compare afirmações do sermão primeiro com a passagem bíblica fornecida. Diferencie contradição direta, tensão, falta de apoio textual e questão interpretativa. Comentários podem informar que existe uma leitura interpretativa, mas não são a própria Bíblia. Toda observação de fidelidade deve citar um trecho literal do manuscrito e uma evidência literal de uma fonte fornecida, identificada pelo source id.
     Estrutura, clareza e tom: descreva somente uma característica localizável do texto existente. Não instrua o autor a mudar, incluir, remover ou dizer nada.
     Tom: examine moralismo, abstração, informalidade e cuidado pastoral sem impor estilo uniforme.
+
+    Referencial homilético. Use-o apenas para reconhecer e descrever o que já está no texto, nunca para propor conteúdo:
+    - Um texto, um foco, um ponto. Um bom sermão diz bem uma coisa: tem uma premissa dominante que deseja esclarecer, lembrar ou enfatizar. Falar de muitas coisas, ou tentar citar e conectar todas as leituras do domingo, dispersa o foco e as pessoas saem sem saber sobre o que o sermão falou.
+    - Partes e funções. A introdução desperta interesse (um gancho que dá ao ouvinte motivo para ouvir) e apresenta o tópico. O desenvolvimento organiza o material a serviço do pensamento dominante, com palavras simples e vívidas e ilustrações que sirvam ao tema. A conclusão foca a aplicação pessoal: é um convite ao compromisso, em crescente, a parte mais importante.
+    - Movimentos: prender a atenção; ir para o texto (o que se diz é o que o texto diz); desestabilizar os preconceitos (o problema profundo além do óbvio); dar tudo de si ao fim.
+    - Quatro páginas, como lente opcional: o problema no mundo bíblico, o problema no mundo contemporâneo, a graça de Deus no mundo bíblico, a graça de Deus no mundo contemporâneo.
+    - O centro da mensagem é Cristo; o sermão anuncia a Boa Nova de Jesus. Registre onde isso aparece explicitamente; se não localizar, informe apenas que não localizou.
+    - Clareza: conexões que parecem óbvias para quem escreve nem sempre estão explicadas. O objetivo é mostrar o texto, não erudição: palavras complexas, termos teológicos sem explicação, histórias cheias de complexidade e línguas originais pesam contra a compreensão. Ilustrações precisam ser fáceis de entender por um público misto e não expor pessoas.
+    - Tom: citações longas ou em excesso deslocam a voz de quem prega; as pessoas estão lá para ouvir o pregador. Moralismo não é exortação bíblica; abstração não é profundidade; informalidade excessiva não é linguagem oral natural; cuidado pastoral não é sentimentalismo.
+    - Fidelidade: se o manuscrito entende o texto de um modo que ninguém nunca entendeu, isso é uma questão interpretativa a registrar com evidência, não um erro a corrigir.
+    Em findings, cada apontamento de estrutura, clareza ou tom nomeia uma característica localizável: por exemplo, um trecho que introduz um segundo foco, uma introdução sem gancho, uma conclusão sem convite, uma transição ausente, um termo sem explicação, uma citação longa.
+
+    Mapa do sermão (campo structure, sempre preenchido, qualquer que seja a lista de critérios): descreva a estrutura existente.
+    - sections: exatamente três entradas, nesta ordem: introduction, development, conclusion. Em start_quote copie as primeiras palavras literais do trecho onde a parte começa; se a parte não existir, use assessment missing e start_quote vazio. assessment fulfills significa que a parte cumpre a função descrita acima; partial, que cumpre em parte.
+    - central_idea: status clear quando há uma premissa dominante reconhecível, com quote na frase literal em que ela aparece com mais nitidez e statement resumindo em até 200 caracteres a ideia tal como o texto a apresenta; diffuse quando o texto se divide entre focos; not_found quando não é possível reconhecer uma.
+    - movements: até oito movimentos ou pontos do desenvolvimento, na ordem do texto, cada um com um rótulo descritivo curto e o início literal do trecho.
+    - gospel: onde o manuscrito anuncia explicitamente a Boa Nova de Cristo (explicit, com quote), apenas de forma implícita (implicit) ou em lugar nenhum (not_found).
+    - four_pages: para cada uma das quatro páginas, present com quote, brief ou not_found.
+    - verdict: solid quando as três partes cumprem a função e há uma ideia dominante clara; fragile quando falta parte ou foco; attention nos demais casos. summary: um parágrafo descritivo de até 600 caracteres sobre como o sermão está organizado.
+    Nas notas e no summary, descreva o que existe e o que não localizou. Nunca indique o que o autor deveria fazer, incluir, mudar ou dizer.
+
     Não fabrique erros nem preencha uma categoria por obrigação. Se não houver observação fundamentada, retorne findings vazio.
     Responda em português, com observações concisas. Todos os trechos citados devem ser contínuos e copiados exatamente do texto fornecido. O esquema estruturado da requisição é um contrato obrigatório: retorne um único objeto JSON que corresponda a ele, incluindo todos os campos e usando strings vazias nos campos definidos como vazios. Se um apontamento não satisfizer todas as condições, omita-o; se nenhum satisfizer, retorne findings vazio.
     """

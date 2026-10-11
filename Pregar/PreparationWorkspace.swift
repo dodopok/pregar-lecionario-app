@@ -29,6 +29,7 @@ struct PreparationWorkspace: View {
     @State private var driveSyncTask: Task<Void, Never>?
     @State private var historyErrorMessage: String?
     @State private var reviewReports: [SermonReviewReport] = []
+    @State private var reviewCriteriaPreset: Set<SermonReviewCriterion> = Set(SermonReviewCriterion.allCases)
     @State private var isSidebarVisible = true
     @State private var isReadingsVisible = true
     @State private var isContextVisible = true
@@ -124,13 +125,14 @@ struct PreparationWorkspace: View {
                             occasion: selectedDay?.sundayName ?? selectedDay?.celebration?.name,
                             liturgicalDate: selectedDate,
                             isSunday: selectedDay?.isSunday == true,
-                            reviewReports: reviewReports,
+                            reviewReports: $reviewReports,
                             manuscript: activeDraft.map { SermonReviewText.plainText(from: $0.rtfData) } ?? "",
                             accent: accentColor,
                             openSettings: openPreferences,
                             openDriveConnection: { showingDriveConnection = true },
                             openLibrary: { openWindow(id: "library") },
-                            newReview: { showingReview = true },
+                            newReview: { requestReview(criteria: Set(SermonReviewCriterion.allCases)) },
+                            checkStructure: { requestReview(criteria: [.structure]) },
                             selectQuote: { editorCommands.selectQuote($0) },
                             insertText: { editorCommands.insertText($0) },
                             emergencyQuestions: { showingQuestions = true },
@@ -170,6 +172,7 @@ struct PreparationWorkspace: View {
                     accent: accentColor,
                     context: reviewContext(for: draft),
                     bibleSources: reviewBibleSources(for: draft),
+                    initialCriteria: reviewCriteriaPreset,
                     onReport: { report in
                         reviewReports.append(report)
                         contextTab = .review
@@ -330,9 +333,7 @@ struct PreparationWorkspace: View {
             toolbarDivider
 
             Button {
-                contextTab = .review
-                isContextVisible = true
-                showingReview = true
+                requestReview(criteria: Set(SermonReviewCriterion.allCases))
             } label: {
                 Label("Revisar", systemImage: "checkmark")
             }
@@ -465,6 +466,15 @@ struct PreparationWorkspace: View {
 
     private func openPreferences() {
         openWindow(id: "preferences")
+    }
+
+    /// Abre a folha de revisão com os critérios pré-marcados e deixa o painel Revisão visível
+    /// para receber o relatório. "Checar estrutura" passa só o critério de estrutura.
+    private func requestReview(criteria: Set<SermonReviewCriterion>) {
+        reviewCriteriaPreset = criteria
+        contextTab = .review
+        isContextVisible = true
+        showingReview = true
     }
 
     private func toolbarAction(_ symbol: String, title: String, help: String, action: @escaping () -> Void) -> some View {

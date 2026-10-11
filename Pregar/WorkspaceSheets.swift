@@ -476,6 +476,8 @@ struct ReviewRequestSheet: View {
     let accent: Color
     let context: SermonReviewContext
     let bibleSources: [SermonReviewSource]
+    /// Critérios pré-marcados ao abrir; "Checar estrutura" abre só com Estrutura.
+    var initialCriteria: Set<SermonReviewCriterion> = Set(SermonReviewCriterion.allCases)
     let onReport: (SermonReviewReport) -> Void
     let selectQuote: (String) -> Void
     let configureAI: () -> Void
@@ -514,18 +516,38 @@ struct ReviewRequestSheet: View {
                     accent: accent
                 )
 
-                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     ForEach(SermonReviewCriterion.allCases) { criterion in
-                        Toggle(criterion.title, isOn: Binding(
+                        Toggle(isOn: Binding(
                             get: { selected.contains(criterion) },
-                        set: { isSelected in
+                            set: { isSelected in
                                 if isSelected { selected.insert(criterion) }
                                 else { selected.remove(criterion) }
                             }
-                        ))
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(criterion.title)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(PrototypeStyle.ink)
+                                Text(criterion.guidance)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(PrototypeStyle.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                         .toggleStyle(.checkbox)
-                        .font(.system(size: 12))
                     }
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "list.bullet.below.rectangle")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(accent)
+                            .padding(.top, 1)
+                        Text("O mapa do sermão acompanha toda revisão: onde começam introdução, desenvolvimento e conclusão, a ideia dominante, os movimentos e onde a Boa Nova aparece.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(PrototypeStyle.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 2)
                 }
                 .panelCard()
 
@@ -593,6 +615,7 @@ struct ReviewRequestSheet: View {
         .frame(width: 560)
         .frame(minHeight: 300)
         .background(PrototypeStyle.canvas)
+        .onAppear { selected = initialCriteria }
     }
 
     private var payloadDescription: String {
@@ -616,7 +639,7 @@ struct ReviewRequestSheet: View {
                 Text("\(report.provider.name) · \(report.model)")
                     .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
             }
-            if report.isEmpty {
+            if report.isEmpty && report.structure == nil {
                 if let validationNotice = report.validationNotice {
                     ContentUnavailableView(
                         "Nenhuma observação verificável",
@@ -640,6 +663,24 @@ struct ReviewRequestSheet: View {
                                 .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        if let structure = report.structure {
+                            SermonStructureMapView(
+                                structure: structure,
+                                accent: accent,
+                                isStale: false,
+                                compact: false
+                            ) { quote in
+                                selectQuote(quote)
+                                dismiss()
+                            }
+                        }
+                        if report.isEmpty {
+                            Label("Nenhum apontamento além do mapa nos critérios escolhidos.", systemImage: "checkmark.circle")
+                                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                        } else {
+                            SectionLabel("Apontamentos")
+                                .padding(.top, 4)
+                        }
                         ForEach(report.findings) { finding in
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
@@ -647,7 +688,7 @@ struct ReviewRequestSheet: View {
                                         .font(.system(size: 10, weight: .bold)).foregroundStyle(accent)
                                     Spacer()
                                     Text(finding.severity == .attention ? "verificar" : "nota")
-                                        .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                                        .font(.system(size: 10)).foregroundStyle(finding.severity == .attention ? PrototypeStyle.warning : PrototypeStyle.muted)
                                 }
                                 if !finding.manuscriptQuote.isEmpty {
                                     Text("“\(finding.manuscriptQuote)”")
@@ -679,7 +720,7 @@ struct ReviewRequestSheet: View {
                         }
                     }
                 }
-                .frame(maxHeight: 430)
+                .frame(maxHeight: 480)
             }
             HStack {
                 Text("Relatório salvo neste Mac · \(report.createdAt.formatted(date: .omitted, time: .shortened))")
@@ -731,7 +772,8 @@ struct ReviewRequestSheet: View {
                 manuscriptFingerprint: SermonReviewReport.fingerprint(context.manuscript),
                 criteria: criteria,
                 findings: result.findings,
-                validationNotice: result.validationNotice
+                validationNotice: result.validationNotice,
+                structure: result.structure
             )
             do {
                 _ = try await SermonReviewReportStore.shared.save(completed)

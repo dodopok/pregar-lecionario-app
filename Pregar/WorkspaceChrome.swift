@@ -538,13 +538,14 @@ struct ResourceContextPanel: View {
     let occasion: String?
     let liturgicalDate: Date
     let isSunday: Bool
-    let reviewReports: [SermonReviewReport]
+    @Binding var reviewReports: [SermonReviewReport]
     let manuscript: String
     let accent: Color
     let openSettings: () -> Void
     let openDriveConnection: () -> Void
     let openLibrary: () -> Void
     let newReview: () -> Void
+    let checkStructure: () -> Void
     let selectQuote: (String) -> Void
     let insertText: (String) -> Void
     let emergencyQuestions: () -> Void
@@ -565,6 +566,7 @@ struct ResourceContextPanel: View {
     @State private var isPreparingIdeas = false
     @State private var ideasError: String?
     @State private var openingPDFPath: String?
+    @State private var showingClosedFindings = false
 
     private enum MaterialFilter: String, CaseIterable {
         case all = "Tudo"
@@ -607,7 +609,7 @@ struct ResourceContextPanel: View {
                             Text(tab.rawValue)
                                 .font(.system(size: 12, weight: selectedTab == tab ? .semibold : .medium))
                             if tab == .ideas { badge("\(ideaNotes.count)", color: Color(red: 0.78, green: 0.65, blue: 0.29)) }
-                            if tab == .review { badge("\(reviewReports.last?.findings.count ?? 0)", color: accent) }
+                            if tab == .review { badge("\(reviewReports.last?.openFindings.count ?? 0)", color: accent) }
                         }
                         .foregroundStyle(selectedTab == tab ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.75))
                         .frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30, alignment: .center)
@@ -1473,13 +1475,15 @@ struct ResourceContextPanel: View {
     }
 
     private var reviewContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Revisões do manuscrito").font(PrototypeStyle.serif(17, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+        VStack(alignment: .leading, spacing: PrototypeStyle.Spacing.md) {
+            Text("Revisões do manuscrito")
+                .font(PrototypeStyle.serif(17, weight: .semibold))
+                .foregroundStyle(PrototypeStyle.ink)
             if let report = reviewReports.last {
                 let stale = report.isStale(manuscript: manuscript, mainReference: reference)
                 HStack(spacing: 6) {
                     Text("\(report.provider.name) · \(report.createdAt.formatted(date: .numeric, time: .shortened))")
-                    if stale { Text("· texto alterado").foregroundStyle(.orange) }
+                    if stale { Text("· texto alterado desde então").foregroundStyle(PrototypeStyle.warning) }
                 }
                 .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
                 if let validationNotice = report.validationNotice {
@@ -1487,78 +1491,189 @@ struct ResourceContextPanel: View {
                         .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                ForEach(SermonReviewCriterion.allCases) { criterion in
-                    HStack {
-                        Text(criterion.title).font(.system(size: 12))
-                        Spacer()
-                        Text("\(report.findings.filter { $0.criterion == criterion }.count)")
-                            .font(.system(size: 11, design: .rounded).monospacedDigit()).foregroundStyle(PrototypeStyle.muted)
-                    }
-                    .padding(.vertical, 5)
-                    .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                if let structure = report.structure {
+                    SermonStructureMapView(
+                        structure: structure,
+                        accent: accent,
+                        isStale: stale,
+                        compact: true,
+                        selectQuote: selectQuote
+                    )
+                } else {
+                    structurePlaceholder
                 }
+                criteriaSummary(report)
                 if report.isEmpty {
                     Text("Nenhuma observação fundamentada nos critérios escolhidos.")
                         .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                 } else {
-                    ForEach(report.findings) { finding in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(finding.criterion.title.uppercased())
-                                .font(.system(size: 10, weight: .bold)).foregroundStyle(accent)
-                            if !finding.manuscriptQuote.isEmpty {
-                                Text("“\(finding.manuscriptQuote)”")
-                                    .font(.system(size: 11, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
-                                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
-                            }
-                            Text(finding.observation)
-                                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.ink)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if !finding.correction.isEmpty {
-                                Text("Grafia: \(finding.correction)")
-                                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
-                            }
-                            if !finding.evidenceQuote.isEmpty {
-                                Text("“\(finding.evidenceQuote)”")
-                                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
-                                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
-                                Text([finding.evidenceSourceTitle, finding.evidenceCitation].compactMap { $0 }.joined(separator: " · "))
-                                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
-                            }
-                            if !finding.manuscriptQuote.isEmpty {
-                                Button("Ir ao trecho", systemImage: "text.viewfinder") { selectQuote(finding.manuscriptQuote) }
-                                    .buttonStyle(.linkAction(accent, compact: true))
-                                    .help("Selecionar este trecho no manuscrito")
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                    if report.openFindings.isEmpty {
+                        Label("Todos os apontamentos foram resolvidos ou descartados.", systemImage: "checkmark.circle")
+                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                    }
+                    ForEach(report.openFindings) { finding in
+                        findingRow(finding, in: report)
+                    }
+                    if !report.closedFindings.isEmpty {
+                        closedFindingsSection(report)
                     }
                 }
             } else {
                 Text("Ainda não há observações para esta versão.")
                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-                ForEach(SermonReviewCriterion.allCases) { criterion in
-                    HStack {
-                        Text(criterion.title).font(.system(size: 12))
-                        Spacer()
-                        Text("0").font(.system(size: 11, design: .rounded).monospacedDigit()).foregroundStyle(PrototypeStyle.muted)
-                    }
-                    .padding(.vertical, 5)
-                    .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
-                }
+                structurePlaceholder
+                criteriaSummary(nil)
             }
             HStack(spacing: PrototypeStyle.Spacing.sm) {
                 Button("Nova revisão", systemImage: "checkmark", action: newReview)
                     .buttonStyle(.primaryAction(accent, compact: true))
-                    .help("Solicitar uma revisão do manuscrito (⇧⌘R)")
-                Button("Perguntas", systemImage: "questionmark.circle", action: emergencyQuestions)
+                    .help("Revisão completa com os critérios que você escolher (⇧⌘R)")
+                Button("Checar estrutura", systemImage: "list.bullet.below.rectangle", action: checkStructure)
                     .buttonStyle(.secondaryAction(compact: true))
-                    .help("Perguntas de emergência sobre o que já está escrito")
+                    .help("Revisão rápida só de estrutura: partes, ideia dominante, movimentos e Boa Nova")
             }
             .padding(.top, PrototypeStyle.Spacing.xs)
-            Text("Perguntas de emergência são uma ação separada e nunca são solicitadas automaticamente.")
+            Button("Perguntas de emergência", systemImage: "questionmark.circle", action: emergencyQuestions)
+                .buttonStyle(.linkAction(accent, compact: true))
+                .help("Perguntas sobre o que já está escrito; nunca são pedidas automaticamente")
+            Text("A revisão aponta e fundamenta. Não escreve, não completa, não sugere frases.")
                 .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private var structurePlaceholder: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "list.bullet.below.rectangle")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(accent)
+                Text("Mapa do sermão")
+                    .font(PrototypeStyle.serif(14, weight: .semibold))
+                    .foregroundStyle(PrototypeStyle.ink)
+            }
+            Text("Toda revisão devolve onde começam introdução, desenvolvimento e conclusão, qual é a ideia dominante, os movimentos do texto e onde a Boa Nova aparece. “Checar estrutura” faz só essa leitura.")
+                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .panelCard(padding: PrototypeStyle.Spacing.md)
+    }
+
+    private func criteriaSummary(_ report: SermonReviewReport?) -> some View {
+        VStack(spacing: 0) {
+            ForEach(SermonReviewCriterion.allCases) { criterion in
+                let count = report?.openFindings.filter { $0.criterion == criterion }.count ?? 0
+                HStack {
+                    Text(criterion.title).font(.system(size: 12))
+                    Spacer()
+                    Text("\(count)")
+                        .font(.system(size: 11, design: .rounded).monospacedDigit())
+                        .foregroundStyle(count == 0 ? PrototypeStyle.muted : accent)
+                }
+                .padding(.vertical, 5)
+                .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                .help(criterion.guidance)
+            }
+        }
+    }
+
+    private func findingRow(_ finding: SermonReviewFinding, in report: SermonReviewReport) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(finding.criterion.title.uppercased())
+                    .font(.system(size: 10, weight: .bold)).foregroundStyle(accent)
+                if finding.severity == .attention {
+                    Text("verificar").font(.system(size: 10)).foregroundStyle(PrototypeStyle.warning)
+                }
+                Spacer(minLength: 4)
+                findingStatusButton("checkmark", help: "Marcar como resolvido") {
+                    setStatus(.resolved, for: finding, in: report)
+                }
+                findingStatusButton("xmark", help: "Descartar este apontamento") {
+                    setStatus(.dismissed, for: finding, in: report)
+                }
+            }
+            if !finding.manuscriptQuote.isEmpty {
+                Text("“\(finding.manuscriptQuote)”")
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+            }
+            Text(finding.observation)
+                .font(.system(size: 11)).foregroundStyle(PrototypeStyle.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if !finding.correction.isEmpty {
+                Text("Grafia: \(finding.correction)")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
+            }
+            if !finding.evidenceQuote.isEmpty {
+                Text("“\(finding.evidenceQuote)”")
+                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                Text([finding.evidenceSourceTitle, finding.evidenceCitation].compactMap { $0 }.joined(separator: " · "))
+                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+            }
+            if !finding.manuscriptQuote.isEmpty {
+                Button("Ir ao trecho", systemImage: "text.viewfinder") { selectQuote(finding.manuscriptQuote) }
+                    .buttonStyle(.linkAction(accent, compact: true))
+                    .help("Selecionar este trecho no manuscrito")
+            }
+        }
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+    }
+
+    private func findingStatusButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(PrototypeStyle.muted)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverHighlight(cornerRadius: 5))
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
+    private func closedFindingsSection(_ report: SermonReviewReport) -> some View {
+        let resolved = report.closedFindings.filter { $0.status == .resolved }.count
+        let dismissed = report.closedFindings.count - resolved
+        let summary = [
+            resolved > 0 ? "\(resolved) resolvido\(resolved == 1 ? "" : "s")" : nil,
+            dismissed > 0 ? "\(dismissed) descartado\(dismissed == 1 ? "" : "s")" : nil
+        ].compactMap { $0 }.joined(separator: " · ")
+        return DisclosureGroup(isExpanded: $showingClosedFindings) {
+            ForEach(report.closedFindings) { finding in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: finding.status == .resolved ? "checkmark.circle.fill" : "xmark.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(finding.status == .resolved ? accent : PrototypeStyle.muted)
+                        .padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(finding.observation)
+                            .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("Reabrir") { setStatus(.open, for: finding, in: report) }
+                            .buttonStyle(.linkAction(accent, compact: true))
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        } label: {
+            Text(summary)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(PrototypeStyle.muted)
+        }
+    }
+
+    /// Marca um apontamento e regrava o relatório; uma nova revisão não altera estas marcações.
+    private func setStatus(_ status: SermonReviewFindingStatus, for finding: SermonReviewFinding, in report: SermonReviewReport) {
+        guard let reportIndex = reviewReports.firstIndex(where: { $0.id == report.id }),
+              let findingIndex = reviewReports[reportIndex].findings.firstIndex(where: { $0.id == finding.id }) else { return }
+        withAnimation(.easeInOut(duration: 0.16)) {
+            reviewReports[reportIndex].findings[findingIndex].status = status
+        }
+        let updated = reviewReports[reportIndex]
+        Task { try? await SermonReviewReportStore.shared.update(updated) }
     }
 
     private func badge(_ value: String, color: Color) -> some View {
@@ -1576,5 +1691,247 @@ struct ResourceContextPanel: View {
             Rectangle().fill(PrototypeStyle.line).frame(height: 1)
         }
         .padding(.top, 4)
+    }
+}
+
+/// Mapa estrutural devolvido pela revisão: as três partes com sua função, a ideia dominante,
+/// os movimentos do desenvolvimento, o lugar da Boa Nova e as quatro páginas de Wilson.
+/// Cada trecho é um botão que seleciona a passagem correspondente no manuscrito.
+struct SermonStructureMapView: View {
+    let structure: SermonStructureAssessment
+    let accent: Color
+    let isStale: Bool
+    let compact: Bool
+    let selectQuote: (String) -> Void
+
+    private static let fragileColor = Color(red: 0.72, green: 0.22, blue: 0.20)
+
+    private var verdictColor: Color {
+        switch structure.verdict {
+        case .solid: accent
+        case .attention: PrototypeStyle.warning
+        case .fragile: Self.fragileColor
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PrototypeStyle.Spacing.sm) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Mapa do sermão")
+                    .font(PrototypeStyle.serif(compact ? 14 : 16, weight: .semibold))
+                    .foregroundStyle(PrototypeStyle.ink)
+                Spacer(minLength: 4)
+                Text(structure.verdict.title)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .frame(height: 20)
+                    .background(verdictColor, in: Capsule())
+                    .accessibilityLabel("Veredito: \(structure.verdict.title)")
+            }
+            if isStale {
+                Label("O texto mudou depois deste mapa.", systemImage: "clock.arrow.circlepath")
+                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.warning)
+            }
+            if !structure.summary.isEmpty {
+                Text(structure.summary)
+                    .font(.system(size: compact ? 11 : 12))
+                    .foregroundStyle(PrototypeStyle.ink.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(structure.sections) { section in
+                    sectionRow(section)
+                }
+            }
+
+            anchorBlock(
+                title: "Ideia dominante",
+                status: structure.centralIdea.status.title,
+                isPositive: structure.centralIdea.status == .clear,
+                statement: structure.centralIdea.statement,
+                quote: structure.centralIdea.quote,
+                note: structure.centralIdea.note
+            )
+
+            if !structure.movements.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    SectionLabel("Movimentos")
+                    ForEach(Array(structure.movements.enumerated()), id: \.offset) { index, movement in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("\(index + 1).")
+                                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                                .foregroundStyle(accent)
+                                .frame(width: 18, alignment: .trailing)
+                            Text(movement.label)
+                                .font(.system(size: 11))
+                                .foregroundStyle(PrototypeStyle.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 2)
+                            if !movement.startQuote.isEmpty { goToButton(movement.startQuote) }
+                        }
+                    }
+                }
+            }
+
+            anchorBlock(
+                title: "Boa Nova de Cristo",
+                status: structure.gospel.status.title,
+                isPositive: structure.gospel.status == .explicit,
+                statement: "",
+                quote: structure.gospel.quote,
+                note: structure.gospel.note
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                SectionLabel("Quatro páginas")
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
+                    ForEach(structure.fourPages) { page in
+                        pageChip(page)
+                    }
+                }
+            }
+        }
+        .panelCard(padding: PrototypeStyle.Spacing.md)
+    }
+
+    private func sectionRow(_ section: SermonStructureAssessment.Section) -> some View {
+        let symbol: String
+        let color: Color
+        switch section.assessment {
+        case .fulfills:
+            symbol = "checkmark.circle.fill"
+            color = accent
+        case .partial:
+            symbol = "exclamationmark.circle.fill"
+            color = PrototypeStyle.warning
+        case .missing:
+            symbol = "xmark.circle"
+            color = Self.fragileColor
+        }
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 13))
+                .foregroundStyle(color)
+                .frame(width: 16)
+                .padding(.top, 1)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(section.kind.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(PrototypeStyle.ink)
+                    Text(section.assessment.title)
+                        .font(.system(size: 10))
+                        .foregroundStyle(color)
+                    Spacer(minLength: 2)
+                    if !section.startQuote.isEmpty { goToButton(section.startQuote) }
+                }
+                Text(section.kind.expectation)
+                    .font(.system(size: 10))
+                    .foregroundStyle(PrototypeStyle.muted.opacity(0.85))
+                if !section.note.isEmpty {
+                    Text(section.note)
+                        .font(.system(size: 11))
+                        .foregroundStyle(PrototypeStyle.ink.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(.vertical, 7)
+        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+    }
+
+    private func anchorBlock(
+        title: String,
+        status: String,
+        isPositive: Bool,
+        statement: String,
+        quote: String,
+        note: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                SectionLabel(title)
+                Text(status)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isPositive ? accent : PrototypeStyle.warning)
+                Spacer(minLength: 2)
+                if !quote.isEmpty { goToButton(quote) }
+            }
+            if !statement.isEmpty {
+                Text(statement)
+                    .font(PrototypeStyle.serif(13, weight: .semibold))
+                    .foregroundStyle(PrototypeStyle.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !quote.isEmpty {
+                Text("“\(quote)”")
+                    .font(.system(size: 11))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !note.isEmpty {
+                Text(note)
+                    .font(.system(size: 11))
+                    .foregroundStyle(PrototypeStyle.ink.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private func pageChip(_ page: SermonStructureAssessment.Page) -> some View {
+        let symbol: String
+        let color: Color
+        switch page.status {
+        case .present:
+            symbol = "checkmark.circle.fill"
+            color = accent
+        case .brief:
+            symbol = "circle.lefthalf.filled"
+            color = PrototypeStyle.warning
+        case .notFound:
+            symbol = "circle.dotted"
+            color = PrototypeStyle.muted
+        }
+        return Button {
+            if !page.quote.isEmpty { selectQuote(page.quote) }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: symbol)
+                    .font(.system(size: 10))
+                    .foregroundStyle(color)
+                Text(page.page.shortTitle)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(PrototypeStyle.ink.opacity(0.85))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 7)
+            .frame(height: 22)
+            .background(PrototypeStyle.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverHighlight(cornerRadius: PrototypeStyle.Radius.control))
+        .disabled(page.quote.isEmpty)
+        .help(page.quote.isEmpty ? "\(page.page.title): não localizada" : "\(page.page.title): ir ao trecho")
+    }
+
+    private func goToButton(_ quote: String) -> some View {
+        Button {
+            selectQuote(quote)
+        } label: {
+            Image(systemName: "text.viewfinder")
+                .font(.system(size: 11, weight: .medium))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverHighlight(cornerRadius: 5))
+        .foregroundStyle(accent)
+        .help("Ir ao trecho no manuscrito")
+        .accessibilityLabel("Ir ao trecho")
     }
 }

@@ -329,6 +329,86 @@ final class SermonReviewTests: XCTestCase {
         session.invalidateAndCancel()
     }
 
+    func testStructureMapIsValidatedAgainstTheManuscriptAndSuggestionLanguage() async throws {
+        let manuscript = "Começo com uma pergunta. O texto diz que Jesus chorou. Termino com um convite."
+        let json = #"{"findings":[],"structure":{"verdict":"solid","summary":"O sermão abre com uma pergunta, passa pelo texto e termina com um convite.","central_idea":{"status":"clear","statement":"Jesus chora com quem chora.","quote":"Jesus chorou","note":""},"sections":[{"kind":"introduction","assessment":"fulfills","start_quote":"Começo com uma pergunta.","note":"A introdução abre com uma pergunta."},{"kind":"development","assessment":"fulfills","start_quote":"O texto diz","note":""},{"kind":"conclusion","assessment":"fulfills","start_quote":"frase inexistente","note":"Sugiro reescrever o final."}],"movements":[{"label":"Pergunta inicial","start_quote":"Começo"},{"label":"Acrescente uma aplicação","start_quote":""}],"gospel":{"status":"explicit","quote":"Termino com um convite.","note":""},"four_pages":[{"page":"problem_bible","status":"not_found","quote":""},{"page":"problem_today","status":"not_found","quote":""},{"page":"grace_bible","status":"present","quote":"Jesus chorou"},{"page":"grace_today","status":"present","quote":"trecho que não existe"}]}}"#
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .openAI)) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIReviewClient(session: session).review(
+            context: reviewContext(criteria: [.structure], manuscript: manuscript),
+            sources: [],
+            configuration: configuration(for: .openAI)
+        )
+
+        let structure = try XCTUnwrap(result.structure)
+        XCTAssertEqual(result.rejectedFindingCount, 0)
+        XCTAssertEqual(structure.verdict, .solid)
+        XCTAssertEqual(structure.sections.map(\.kind), [.introduction, .development, .conclusion])
+        XCTAssertEqual(structure.section(.introduction)?.assessment, .fulfills)
+        XCTAssertEqual(structure.section(.introduction)?.startQuote, "Começo com uma pergunta.")
+        XCTAssertEqual(structure.section(.conclusion)?.assessment, .partial, "Trecho inexistente rebaixa a parte para cumprida em parte.")
+        XCTAssertEqual(structure.section(.conclusion)?.startQuote, "")
+        XCTAssertEqual(structure.section(.conclusion)?.note, "", "Nota com sugestão de redação é ocultada.")
+        XCTAssertEqual(structure.centralIdea.status, .clear)
+        XCTAssertEqual(structure.centralIdea.statement, "Jesus chora com quem chora.")
+        XCTAssertEqual(structure.movements.map(\.label), ["Pergunta inicial"], "Movimento com imperativo de redação é descartado.")
+        XCTAssertEqual(structure.gospel.status, .explicit)
+        XCTAssertEqual(structure.fourPages.first { $0.page == .graceBible }?.status, .present)
+        XCTAssertEqual(structure.fourPages.first { $0.page == .graceToday }?.status, .brief, "Página presente sem trecho válido vira breve.")
+        XCTAssertEqual(result.structureAdjustmentCount, 6)
+        XCTAssertTrue(result.validationNotice?.contains("mapa do sermão") == true)
+        XCTAssertFalse(result.validationNotice?.contains("Sugiro") == true)
+    }
+
+    func testReviewSchemaAlwaysRequestsTheSermonStructureMap() throws {
+        let request = try SermonAIReviewClient.makeRequest(
+            context: reviewContext(criteria: [.spelling]),
+            sources: [],
+            configuration: configuration(for: .openAI)
+        )
+        let body = try XCTUnwrap(request.httpBody)
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let text = try XCTUnwrap(root["text"] as? [String: Any])
+        let format = try XCTUnwrap(text["format"] as? [String: Any])
+        let schema = try XCTUnwrap(format["schema"] as? [String: Any])
+        let required = try XCTUnwrap(schema["required"] as? [String])
+        XCTAssertEqual(Set(required), ["findings", "structure"])
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let structure = try XCTUnwrap(properties["structure"] as? [String: Any])
+        XCTAssertEqual(structure["additionalProperties"] as? Bool, false)
+        let structureProperties = try XCTUnwrap(structure["properties"] as? [String: Any])
+        let sections = try XCTUnwrap(structureProperties["sections"] as? [String: Any])
+        XCTAssertEqual(sections["minItems"] as? Int, 3)
+        XCTAssertNotNil(structureProperties["central_idea"])
+        XCTAssertNotNil(structureProperties["gospel"])
+        XCTAssertNotNil(structureProperties["four_pages"])
+        XCTAssertTrue(AIReviewPrompt.system.contains("Mapa do sermão"))
+        XCTAssertTrue(AIReviewPrompt.system.contains("Um texto, um foco, um ponto"))
+    }
+
+    func testFindingStatusRoundTripsAndDefaultsToOpenForLegacyReports() throws {
+        var finding = SermonReviewFinding(
+            criterion: .clarity,
+            severity: .note,
+            manuscriptQuote: "",
+            observation: "O termo aparece sem explicação.",
+            correction: "",
+            classification: "clarity",
+            evidenceQuote: ""
+        )
+        finding.status = .resolved
+        let data = try JSONEncoder().encode([finding])
+        XCTAssertEqual(try JSONDecoder().decode([SermonReviewFinding].self, from: data), [finding])
+
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+        legacy[0].removeValue(forKey: "status")
+        let legacyData = try JSONSerialization.data(withJSONObject: legacy)
+        let decoded = try JSONDecoder().decode([SermonReviewFinding].self, from: legacyData)
+        XCTAssertEqual(decoded[0].status, .open)
+        XCTAssertEqual(decoded[0].observation, finding.observation)
+    }
+
     func testOrthographyMayReturnOnlyOneCorrectedWord() async throws {
         let json = #"{"findings":[{"criterion":"spelling","severity":"attention","manuscript_quote":"excessão","observation":"A grafia desta palavra não corresponde à forma padrão.","correction":"exceção","classification":"spelling","evidence_source_id":"","evidence_quote":""}]}"#
         ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .anthropic)) }
