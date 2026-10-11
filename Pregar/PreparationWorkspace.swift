@@ -632,10 +632,10 @@ struct PreparationWorkspace: View {
                 .menuStyle(.borderlessButton)
                 .help("Tamanho da fonte")
                 Divider().frame(height: 22).padding(.horizontal, 4)
-                editorTextButton("Título", help: "Transformar o parágrafo em título", isActive: editorCommands.isHeadingActive, action: editorCommands.heading)
-                editorTextButton("Citação", help: "Destacar o parágrafo como citação em bloco", isActive: editorCommands.isQuoteActive, action: editorCommands.quotation)
-                editorTextButton("Lista", help: "Alternar marcadores de lista no parágrafo", isActive: editorCommands.isListActive, action: editorCommands.bulletedList)
-                editorTextButton("Nota", help: "Inserir nota de rodapé no ponto do cursor", action: editorCommands.footnote)
+                editorTextButton("Título", help: "Título do parágrafo (⇧⌘1) · ou digite # e espaço no início da linha", shortcut: "1", isActive: editorCommands.isHeadingActive, action: editorCommands.heading)
+                editorTextButton("Citação", help: "Citação em bloco (⇧⌘.) · ou digite > e espaço no início da linha", shortcut: ".", isActive: editorCommands.isQuoteActive, action: editorCommands.quotation)
+                editorTextButton("Lista", help: "Lista com marcadores (⇧⌘8) · ou digite - e espaço · Return continua a lista", shortcut: "8", isActive: editorCommands.isListActive, action: editorCommands.bulletedList)
+                editorTextButton("Nota", help: "Nota de rodapé no ponto do cursor (⌥⌘N)", shortcut: "n", modifiers: [.command, .option], action: editorCommands.footnote)
             }
             .padding(.horizontal, 5)
             .padding(.vertical, 3)
@@ -695,7 +695,7 @@ struct PreparationWorkspace: View {
                             Text("Comece a escrever seu sermão…")
                                 .font(.custom("Arial", size: 10))
                                 .foregroundStyle(PrototypeStyle.muted.opacity(0.85))
-                            Text("Negrito ⌘B · Itálico ⌘I · Título, citação, lista e nota na barra acima")
+                            Text("Negrito ⌘B · Itálico ⌘I · No início da linha: # título, > citação, - lista")
                                 .font(.system(size: 10))
                                 .foregroundStyle(PrototypeStyle.muted.opacity(0.6))
                         }
@@ -735,7 +735,14 @@ struct PreparationWorkspace: View {
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
-    private func editorTextButton(_ title: String, help: String, isActive: Bool = false, action: @escaping () -> Void) -> some View {
+    private func editorTextButton(
+        _ title: String,
+        help: String,
+        shortcut: KeyEquivalent,
+        modifiers: EventModifiers = [.command, .shift],
+        isActive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12, weight: isActive ? .semibold : .regular))
@@ -746,6 +753,7 @@ struct PreparationWorkspace: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.hoverHighlight(cornerRadius: 5))
+        .keyboardShortcut(shortcut, modifiers: modifiers)
         .help(help)
         .accessibilityLabel(title)
         .accessibilityAddTraits(isActive ? .isSelected : [])

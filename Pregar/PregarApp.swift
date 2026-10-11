@@ -36,6 +36,7 @@ struct PregarApp: App {
         .modelContainer(sermonModelContainer)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            TextEditingCommands()
             CommandGroup(replacing: .appSettings) {
                 Button("Preferências…") { openWindow(id: "preferences") }
                     .keyboardShortcut(",", modifiers: .command)

@@ -235,6 +235,20 @@ Rodada sobre a integração com IA, orientada pelo workshop de pregação conduz
 
 Limites: nenhum manuscrito real foi enviado a um provedor nesta rodada; a qualidade do mapa em sermões reais e a aderência dos modelos ao bloco `structure` precisam de avaliação ao vivo, como os demais critérios. Build e testes continuam pendentes de uma máquina com Xcode.
 
+## Editor de manuscrito no espírito do Substack (11/10/2026)
+
+O editor continua um `NSTextView` com RTF como formato de gravação, Arial 10 como corpo e as mesmas representações que as exportações e os testes já leem (título = negrito ≥ 13 pt, citação = recuo de 34 pt com cores, lista = marcador literal "• ", nota = sobrescrito). O que mudou é a experiência de escrever.
+
+- **Atalhos no início da linha**, como no Substack: `# ` ou `## ` viram título, `> ` vira citação, `- ` ou `* ` viram lista. Implementados na própria subclasse do `NSTextView` ao interceptar o espaço digitado, com trocas desfazíveis.
+- **Listas que se comportam**: Return num item continua a lista com novo marcador; Return num item vazio encerra a lista; Backspace logo após o marcador remove o marcador. Return no fim de um título começa um parágrafo de corpo; Return numa linha vazia de citação sai da citação.
+- **Título como alternância de parágrafo**: aplica negrito 14 pt com respiro acima e abaixo; aplicar de novo devolve o parágrafo ao corpo. Num parágrafo vazio, título, citação e lista preparam a formatação do que for digitado em vez de agir sobre o parágrafo anterior (o cálculo do parágrafo atual passou a respeitar a posição depois da última quebra de linha).
+- **Ritmo de leitura**: entrelinha de 1,15 no corpo, aplicada como estilo padrão do editor e aos parágrafos gravados sem estilo explícito ao reabrir. O exportador do Drive só cria estilo de parágrafo quando há recuo, título ou espaçamento, então essa entrelinha não altera o Google Doc; o PDF do tablet a herda, o que favorece a leitura.
+- **Barra de formatação** com atalhos e dicas: Título ⇧⌘1, Citação ⇧⌘., Lista ⇧⌘8, Nota ⌥⌘N, além de ⌘B e ⌘I. O placeholder do manuscrito ensina os atalhos de início de linha.
+- **Localizar e ortografia nativos**: o menu Editar ganhou os comandos de edição de texto do sistema, e o manuscrito usa a barra de busca (⌘F) e a verificação ortográfica contínua do macOS, sem substituições automáticas de aspas ou texto.
+- Testes existentes do editor permanecem válidos por construção: as asserções de recuo 34 pt, espaçamentos 11/12, marcador "• " e sobrescrito da nota não mudaram; a alternância de citação em seleção não mexe nos atributos de digitação.
+
+Limites: a barra flutuante sobre a seleção, estilo Substack, não foi implementada por não ser possível validar sem compilador. Build e testes seguem pendentes de uma máquina com Xcode; conferir especialmente Return em listas, os atalhos de início de linha e o ⌘F com o editor em foco.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.

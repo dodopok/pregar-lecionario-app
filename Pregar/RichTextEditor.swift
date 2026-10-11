@@ -1,6 +1,9 @@
 import AppKit
 import SwiftUI
 
+/// Comandos do manuscrito. O NSTextView continua sendo a fonte da verdade do texto; esta classe
+/// aplica formatação, publica o estado da seleção e trata as conveniências de escrita
+/// (listas que continuam no Return, atalhos "# ", "> ", "- " no início do parágrafo).
 @MainActor
 final class EditorCommands: ObservableObject {
     @Published private(set) var wordCount = 0
@@ -14,7 +17,51 @@ final class EditorCommands: ObservableObject {
     @Published private(set) var isListActive = false
     static let fontFamilies = ["Arial", "Georgia", "Times New Roman", "Helvetica", "Avenir"]
     static let fontSizes = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36]
+    /// Corpo do texto em Arial 10, preferência registrada no plano de produto.
+    static let bodyPointSize: CGFloat = 10
+    /// Títulos: negrito com 14 pt. O exportador do Drive reconhece título por "≥ 13 pt e negrito".
+    static let headingPointSize: CGFloat = 14
+    /// Marcador literal das listas; exportações e testes dependem desta representação.
+    static let listMarker = "• "
     weak var textView: NSTextView?
+
+    // MARK: - Estilos
+
+    /// Ritmo de leitura do manuscrito: entrelinha um pouco mais aberta que o padrão do AppKit.
+    static func bodyParagraphStyle() -> NSMutableParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.lineHeightMultiple = 1.15
+        return style
+    }
+
+    static func quoteParagraphStyle(basedOn base: NSParagraphStyle?) -> NSMutableParagraphStyle {
+        let style = (base?.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+        style.headIndent = 34
+        style.firstLineHeadIndent = 34
+        style.tailIndent = -12
+        style.paragraphSpacingBefore = 11
+        style.paragraphSpacing = 12
+        return style
+    }
+
+    static let quoteForegroundColor = NSColor(calibratedRed: 0.17, green: 0.32, blue: 0.24, alpha: 1)
+    static let quoteBackgroundColor = NSColor(calibratedRed: 0.91, green: 0.94, blue: 0.91, alpha: 1)
+
+    static func isHeadingFont(_ font: NSFont) -> Bool {
+        font.pointSize >= 13 && NSFontManager.shared.traits(of: font).contains(.boldFontMask)
+    }
+
+    static func bodyFont(family: String) -> NSFont {
+        let base = NSFont(name: family, size: bodyPointSize) ?? NSFont.systemFont(ofSize: bodyPointSize)
+        return NSFontManager.shared.convert(base, toNotHaveTrait: .boldFontMask)
+    }
+
+    static func headingFont(family: String) -> NSFont {
+        let base = NSFont(name: family, size: headingPointSize) ?? NSFont.boldSystemFont(ofSize: headingPointSize)
+        return NSFontManager.shared.convert(base, toHaveTrait: .boldFontMask)
+    }
+
+    // MARK: - Estado
 
     func updateWordCount(from text: String) {
         let updatedWordCount = text.split(whereSeparator: \.isWhitespace).count
@@ -41,48 +88,10 @@ final class EditorCommands: ObservableObject {
         textView.didChangeText()
     }
 
+    // MARK: - Caracteres
+
     func bold() { toggleFontTrait(.boldFontMask) }
     func italic() { toggleFontTrait(.italicFontMask) }
-
-    func heading() {
-        focusTextView()
-        styleSelection { _ in
-            NSFont(name: "Arial-BoldMT", size: 14) ?? NSFont.boldSystemFont(ofSize: 14)
-        }
-    }
-
-    func quotation() {
-        guard let textView, let storage = textView.textStorage else { return }
-        let ranges = paragraphRanges(in: textView)
-        guard !ranges.isEmpty, storage.length > 0 else { return }
-        textView.window?.makeFirstResponder(textView)
-        let shouldRemove = ranges.allSatisfy { isQuoted($0, in: storage) }
-        storage.beginEditing()
-        for range in ranges {
-            let style = (storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
-            if shouldRemove {
-                style.headIndent = 0
-                style.firstLineHeadIndent = 0
-                style.tailIndent = 0
-                style.paragraphSpacingBefore = 0
-                style.paragraphSpacing = 0
-                storage.removeAttribute(.foregroundColor, range: range)
-                storage.removeAttribute(.backgroundColor, range: range)
-            } else {
-                style.headIndent = 34
-                style.firstLineHeadIndent = 34
-                style.tailIndent = -12
-                style.paragraphSpacingBefore = 11
-                style.paragraphSpacing = 12
-                storage.addAttribute(.foregroundColor, value: NSColor(calibratedRed: 0.17, green: 0.32, blue: 0.24, alpha: 1), range: range)
-                storage.addAttribute(.backgroundColor, value: NSColor(calibratedRed: 0.91, green: 0.94, blue: 0.91, alpha: 1), range: range)
-            }
-            storage.addAttribute(.paragraphStyle, value: style, range: range)
-        }
-        storage.endEditing()
-        textView.didChangeText()
-        updateSelectionFormatting()
-    }
 
     func setFontFamily(_ family: String) {
         applyFontChange { font in
@@ -99,21 +108,105 @@ final class EditorCommands: ObservableObject {
         applyFontChange { $0.withSize(CGFloat(size)) }
     }
 
+    // MARK: - Blocos
+
+    /// Alterna o parágrafo atual entre título (negrito 14 pt, com respiro acima) e corpo.
+    /// Num parágrafo vazio prepara a formatação do que for digitado em seguida.
+    func heading() {
+        guard let textView, let storage = textView.textStorage else { return }
+        focusTextView()
+        let range = currentParagraphRange(in: textView)
+        let hasText = range.length > 0 && range.location < storage.length
+        let referenceFont = (hasText ? storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont : nil)
+            ?? textView.typingAttributes[.font] as? NSFont
+            ?? textView.font
+            ?? NSFont(name: "Arial", size: Self.bodyPointSize)
+            ?? NSFont.systemFont(ofSize: Self.bodyPointSize)
+        let makeHeading = !Self.isHeadingFont(referenceFont)
+        let family = referenceFont.familyName ?? "Arial"
+        let targetFont = makeHeading ? Self.headingFont(family: family) : Self.bodyFont(family: family)
+
+        let existingStyle = hasText
+            ? storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
+            : textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle
+        let style = (existingStyle?.mutableCopy() as? NSMutableParagraphStyle)
+            ?? (textView.defaultParagraphStyle?.mutableCopy() as? NSMutableParagraphStyle)
+            ?? NSMutableParagraphStyle()
+        style.paragraphSpacingBefore = makeHeading ? 14 : 0
+        style.paragraphSpacing = makeHeading ? 4 : 0
+
+        if hasText {
+            storage.beginEditing()
+            storage.addAttribute(.font, value: targetFont, range: range)
+            storage.addAttribute(.paragraphStyle, value: style, range: range)
+            storage.endEditing()
+        }
+        var typing = textView.typingAttributes
+        typing[.font] = targetFont
+        typing[.paragraphStyle] = style
+        textView.typingAttributes = typing
+        if hasText { textView.didChangeText() }
+        updateSelectionFormatting()
+    }
+
+    /// Alterna a citação em bloco em todos os parágrafos da seleção, sem mexer no texto.
+    /// Com o cursor num parágrafo vazio, prepara a formatação do que for digitado.
+    func quotation() {
+        guard let textView, let storage = textView.textStorage else { return }
+        focusTextView()
+        let ranges = paragraphRanges(in: textView)
+        let selection = textView.selectedRange()
+        guard !ranges.isEmpty, storage.length > 0 else {
+            setQuoteTypingAttributes(enabled: !typingAttributesAreQuoted(in: textView), in: textView)
+            updateSelectionFormatting()
+            return
+        }
+        let shouldRemove = ranges.allSatisfy { isQuoted($0, in: storage) }
+        storage.beginEditing()
+        for range in ranges {
+            let existing = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle
+            if shouldRemove {
+                let style = (existing?.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+                Self.clearQuoteIndentation(in: style)
+                storage.removeAttribute(.foregroundColor, range: range)
+                storage.removeAttribute(.backgroundColor, range: range)
+                storage.addAttribute(.paragraphStyle, value: style, range: range)
+            } else {
+                let style = Self.quoteParagraphStyle(basedOn: existing ?? textView.defaultParagraphStyle)
+                storage.addAttribute(.foregroundColor, value: Self.quoteForegroundColor, range: range)
+                storage.addAttribute(.backgroundColor, value: Self.quoteBackgroundColor, range: range)
+                storage.addAttribute(.paragraphStyle, value: style, range: range)
+            }
+        }
+        storage.endEditing()
+        if selection.length == 0 {
+            setQuoteTypingAttributes(enabled: !shouldRemove, in: textView)
+        }
+        textView.didChangeText()
+        updateSelectionFormatting()
+    }
+
+    /// Alterna o marcador "• " nos parágrafos da seleção. Num parágrafo vazio, insere o marcador.
     func bulletedList() {
         guard let textView, let storage = textView.textStorage else { return }
         focusTextView()
-        let range = paragraphRange(in: textView)
+        let range = currentParagraphRange(in: textView)
+        guard range.length > 0 else {
+            textView.insertText(Self.listMarker, replacementRange: NSRange(location: range.location, length: 0))
+            updateSelectionFormatting()
+            return
+        }
         let source = textView.string as NSString
         var lineStart = range.location
         let end = NSMaxRange(range)
         storage.beginEditing()
         while lineStart < end {
             let lineRange = source.paragraphRange(for: NSRange(location: lineStart, length: 0))
-            let hasMarker = source.substring(with: NSRange(location: lineRange.location, length: min(2, lineRange.length))) == "• "
+            let hasMarker = source.substring(with: NSRange(location: lineRange.location, length: min(2, lineRange.length))) == Self.listMarker
             if hasMarker {
                 storage.deleteCharacters(in: NSRange(location: lineRange.location, length: 2))
             } else {
-                storage.insert(NSAttributedString(string: "• "), at: lineRange.location)
+                storage.insert(NSAttributedString(string: Self.listMarker), at: lineRange.location)
             }
             lineStart = NSMaxRange(lineRange)
         }
@@ -142,6 +235,112 @@ final class EditorCommands: ObservableObject {
         textView.didChangeText()
     }
 
+    // MARK: - Conveniências de digitação (chamadas pelo QuotationTextView)
+
+    /// Return dentro de uma lista continua a lista; num item vazio, encerra a lista.
+    /// Return no fim de um título começa um parágrafo de corpo. Return numa linha vazia
+    /// de citação sai da citação. Devolve true quando consumiu a tecla.
+    func handleNewline() -> Bool {
+        guard let textView, let storage = textView.textStorage else { return false }
+        let selection = textView.selectedRange()
+        guard selection.length == 0 else { return false }
+        let source = textView.string as NSString
+        let paragraph = currentParagraphRange(in: textView)
+        let paragraphText = source.substring(with: paragraph).trimmingCharacters(in: .newlines)
+        let markerLength = (Self.listMarker as NSString).length
+
+        if paragraphText.hasPrefix(Self.listMarker) {
+            let content = paragraphText.dropFirst(Self.listMarker.count).trimmingCharacters(in: .whitespaces)
+            if content.isEmpty {
+                textView.insertText("", replacementRange: NSRange(location: paragraph.location, length: markerLength))
+            } else {
+                textView.insertText("\n" + Self.listMarker, replacementRange: selection)
+            }
+            return true
+        }
+
+        let endsWithNewline = paragraph.length > 0
+            && source.substring(with: NSRange(location: NSMaxRange(paragraph) - 1, length: 1)) == "\n"
+        let textEnd = NSMaxRange(paragraph) - (endsWithNewline ? 1 : 0)
+        if let font = textView.typingAttributes[.font] as? NSFont,
+           Self.isHeadingFont(font),
+           !paragraphText.isEmpty,
+           selection.location >= textEnd {
+            textView.insertText("\n", replacementRange: selection)
+            var typing = textView.typingAttributes
+            typing[.font] = Self.bodyFont(family: font.familyName ?? "Arial")
+            typing[.paragraphStyle] = textView.defaultParagraphStyle ?? NSParagraphStyle.default
+            textView.typingAttributes = typing
+            return true
+        }
+
+        if paragraphText.isEmpty, typingAttributesAreQuoted(in: textView) {
+            if paragraph.length > 0, paragraph.location < storage.length {
+                let existing = storage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+                let style = (existing?.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+                Self.clearQuoteIndentation(in: style)
+                storage.beginEditing()
+                storage.removeAttribute(.foregroundColor, range: paragraph)
+                storage.removeAttribute(.backgroundColor, range: paragraph)
+                storage.addAttribute(.paragraphStyle, value: style, range: paragraph)
+                storage.endEditing()
+                textView.didChangeText()
+            }
+            setQuoteTypingAttributes(enabled: false, in: textView)
+            updateSelectionFormatting()
+            return true
+        }
+        return false
+    }
+
+    /// Backspace logo após o marcador de lista remove o marcador em vez de um caractere.
+    func handleDeleteBackward() -> Bool {
+        guard let textView else { return false }
+        let selection = textView.selectedRange()
+        guard selection.length == 0 else { return false }
+        let source = textView.string as NSString
+        let paragraph = currentParagraphRange(in: textView)
+        let markerLength = (Self.listMarker as NSString).length
+        guard paragraph.length >= markerLength,
+              selection.location == paragraph.location + markerLength,
+              source.substring(with: NSRange(location: paragraph.location, length: markerLength)) == Self.listMarker else {
+            return false
+        }
+        textView.insertText("", replacementRange: NSRange(location: paragraph.location, length: markerLength))
+        return true
+    }
+
+    /// Atalhos no início do parágrafo, ao digitar espaço: "#" ou "##" viram título,
+    /// ">" vira citação, "-" ou "*" viram lista. Devolve true quando consumiu o espaço.
+    func handleTypedSpace() -> Bool {
+        guard let textView else { return false }
+        let selection = textView.selectedRange()
+        guard selection.length == 0 else { return false }
+        let source = textView.string as NSString
+        let location = min(selection.location, source.length)
+        let paragraph = source.paragraphRange(for: NSRange(location: location, length: 0))
+        let prefixRange = NSRange(location: paragraph.location, length: location - paragraph.location)
+        guard (1...2).contains(prefixRange.length) else { return false }
+        let remainder = source.substring(with: NSRange(location: location, length: NSMaxRange(paragraph) - location))
+            .trimmingCharacters(in: .newlines)
+        guard remainder.isEmpty else { return false }
+        switch source.substring(with: prefixRange) {
+        case "#", "##":
+            textView.insertText("", replacementRange: prefixRange)
+            heading()
+        case ">":
+            textView.insertText("", replacementRange: prefixRange)
+            quotation()
+        case "-", "*":
+            textView.insertText(Self.listMarker, replacementRange: prefixRange)
+        default:
+            return false
+        }
+        return true
+    }
+
+    // MARK: - Internos
+
     private func footnoteNumbers(in text: String) -> Set<Int> {
         guard let expression = try? NSRegularExpression(pattern: "[⁰¹²³⁴⁵⁶⁷⁸⁹]+") else { return [] }
         let source = text as NSString
@@ -160,14 +359,35 @@ final class EditorCommands: ObservableObject {
         uniqueKeysWithValues: superscriptToDecimal.map { ($0.value, $0.key) }
     )
 
-    private func styleSelection(_ font: (NSFont) -> NSFont) {
-        guard let textView, let storage = textView.textStorage else { return }
-        focusTextView()
-        let range = paragraphRange(in: textView)
-        let current = storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont ?? NSFont.systemFont(ofSize: 10)
-        storage.addAttribute(.font, value: font(current), range: range)
-        textView.didChangeText()
-        updateSelectionFormatting()
+    private static func clearQuoteIndentation(in style: NSMutableParagraphStyle) {
+        style.headIndent = 0
+        style.firstLineHeadIndent = 0
+        style.tailIndent = 0
+        style.paragraphSpacingBefore = 0
+        style.paragraphSpacing = 0
+    }
+
+    private func typingAttributesAreQuoted(in textView: NSTextView) -> Bool {
+        ((textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle)?.headIndent ?? 0) >= 20
+    }
+
+    private func setQuoteTypingAttributes(enabled: Bool, in textView: NSTextView) {
+        var typing = textView.typingAttributes
+        let current = typing[.paragraphStyle] as? NSParagraphStyle
+        if enabled {
+            typing[.paragraphStyle] = Self.quoteParagraphStyle(basedOn: current ?? textView.defaultParagraphStyle)
+            typing[.foregroundColor] = Self.quoteForegroundColor
+            typing[.backgroundColor] = Self.quoteBackgroundColor
+        } else {
+            let style = (current?.mutableCopy() as? NSMutableParagraphStyle)
+                ?? (textView.defaultParagraphStyle?.mutableCopy() as? NSMutableParagraphStyle)
+                ?? NSMutableParagraphStyle()
+            Self.clearQuoteIndentation(in: style)
+            typing[.paragraphStyle] = style
+            typing.removeValue(forKey: .foregroundColor)
+            typing.removeValue(forKey: .backgroundColor)
+        }
+        textView.typingAttributes = typing
     }
 
     private func toggleFontTrait(_ trait: NSFontTraitMask) {
@@ -251,21 +471,26 @@ final class EditorCommands: ObservableObject {
             if selectedFontSize != size { selectedFontSize = size }
             isBoldActive = hasTrait(.boldFontMask, in: safeSelection, textView: textView, storage: storage, fallback: font)
             isItalicActive = hasTrait(.italicFontMask, in: safeSelection, textView: textView, storage: storage, fallback: font)
-            isHeadingActive = font.pointSize >= 13 && NSFontManager.shared.traits(of: font).contains(.boldFontMask)
+            isHeadingActive = Self.isHeadingFont(font)
         } else {
             isBoldActive = false
             isItalicActive = false
             isHeadingActive = false
         }
         let paragraphRanges = paragraphRanges(in: textView)
-        isQuoteActive = !paragraphRanges.isEmpty && paragraphRanges.allSatisfy { range in
-            guard let storage, storage.length > 0 else { return false }
-            return isQuoted(range, in: storage)
-        }
-        isListActive = !paragraphRanges.isEmpty && paragraphRanges.allSatisfy { range in
-            guard let storage, range.location < storage.length else { return false }
-            let prefixLength = min(2, range.length)
-            return (storage.string as NSString).substring(with: NSRange(location: range.location, length: prefixLength)) == "• "
+        if paragraphRanges.isEmpty {
+            isQuoteActive = typingAttributesAreQuoted(in: textView)
+            isListActive = false
+        } else {
+            isQuoteActive = paragraphRanges.allSatisfy { range in
+                guard let storage, storage.length > 0 else { return false }
+                return isQuoted(range, in: storage)
+            }
+            isListActive = paragraphRanges.allSatisfy { range in
+                guard let storage, range.location < storage.length else { return false }
+                let prefixLength = min(2, range.length)
+                return (storage.string as NSString).substring(with: NSRange(location: range.location, length: prefixLength)) == Self.listMarker
+            }
         }
     }
 
@@ -300,19 +525,20 @@ final class EditorCommands: ObservableObject {
         textView.window?.makeFirstResponder(textView)
     }
 
-    private func paragraphRange(in textView: NSTextView) -> NSRange {
+    /// Parágrafo que contém a seleção. Com o cursor depois da última quebra de linha,
+    /// devolve o parágrafo vazio final (comprimento zero), não o parágrafo anterior.
+    private func currentParagraphRange(in textView: NSTextView) -> NSRange {
         let source = textView.string as NSString
         let selection = textView.selectedRange()
-        let location = min(selection.location, max(source.length - 1, 0))
-        return source.length == 0 ? NSRange(location: 0, length: 0) : source.paragraphRange(for: NSRange(location: location, length: selection.length))
+        let location = min(selection.location, source.length)
+        let length = min(selection.length, source.length - location)
+        return source.paragraphRange(for: NSRange(location: location, length: length))
     }
 
     private func paragraphRanges(in textView: NSTextView) -> [NSRange] {
         let source = textView.string as NSString
         guard source.length > 0 else { return [] }
-        let selection = textView.selectedRange()
-        let start = min(selection.location, source.length - 1)
-        let expanded = source.paragraphRange(for: NSRange(location: start, length: selection.length))
+        let expanded = currentParagraphRange(in: textView)
         var ranges: [NSRange] = []
         var location = expanded.location
         while location < NSMaxRange(expanded) {
@@ -325,8 +551,33 @@ final class EditorCommands: ObservableObject {
     }
 }
 
+/// NSTextView do manuscrito: desenha o fundo das citações em bloco e encaminha Return,
+/// Backspace e o espaço após "#", ">" e "-" para as conveniências de EditorCommands.
 @MainActor
 final class QuotationTextView: NSTextView {
+    weak var commands: EditorCommands?
+
+    override func insertNewline(_ sender: Any?) {
+        if let commands, commands.handleNewline() { return }
+        super.insertNewline(sender)
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+        if let commands, commands.handleDeleteBackward() { return }
+        super.deleteBackward(sender)
+    }
+
+    override func insertText(_ string: Any, replacementRange: NSRange) {
+        if let typed = string as? String,
+           typed == " ",
+           replacementRange.location == NSNotFound || replacementRange.length == 0,
+           let commands,
+           commands.handleTypedSpace() {
+            return
+        }
+        super.insertText(string, replacementRange: replacementRange)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         drawQuotationBlocks(in: dirtyRect)
         super.draw(dirtyRect)
@@ -385,7 +636,17 @@ struct RichTextEditor: NSViewRepresentable {
         textView.drawsBackground = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
-        textView.font = NSFont(name: "Arial", size: 10)
+        textView.isContinuousSpellCheckingEnabled = true
+        textView.isGrammarCheckingEnabled = false
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
+        let bodyFont = NSFont(name: "Arial", size: EditorCommands.bodyPointSize)
+        textView.font = bodyFont
+        textView.defaultParagraphStyle = EditorCommands.bodyParagraphStyle()
+        var typing = textView.typingAttributes
+        if let bodyFont { typing[.font] = bodyFont }
+        typing[.paragraphStyle] = EditorCommands.bodyParagraphStyle()
+        textView.typingAttributes = typing
         textView.textContainerInset = NSSize(width: 24, height: 22)
         textView.minSize = NSSize(width: 0, height: 0)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -394,6 +655,7 @@ struct RichTextEditor: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.textContainer?.widthTracksTextView = true
         textView.delegate = context.coordinator
+        textView.commands = commands
         scrollView.documentView = textView
         commands.textView = textView
         context.coordinator.apply(rtfData, to: textView)
@@ -403,6 +665,7 @@ struct RichTextEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         commands.textView = textView
+        (textView as? QuotationTextView)?.commands = commands
         context.coordinator.parent = self
         context.coordinator.apply(rtfData, to: textView)
     }
@@ -429,6 +692,7 @@ struct RichTextEditor: NSViewRepresentable {
                 documentAttributes: nil
             ) {
                 textView.textStorage?.setAttributedString(content)
+                Self.applyBodyRhythm(in: textView)
             } else if data == nil {
                 textView.string = ""
             }
@@ -438,6 +702,23 @@ struct RichTextEditor: NSViewRepresentable {
                 guard let commands, let textView else { return }
                 commands.updateWordCount(from: textView.string)
             }
+        }
+
+        /// Parágrafos gravados sem estilo explícito recebem o ritmo do corpo, para que texto
+        /// antigo e texto novo leiam igual. Recuo, título e espaçamento existentes são preservados.
+        private static func applyBodyRhythm(in textView: NSTextView) {
+            guard let storage = textView.textStorage, storage.length > 0 else { return }
+            let body = EditorCommands.bodyParagraphStyle()
+            var ranges: [NSRange] = []
+            storage.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+                if value == nil { ranges.append(range) }
+            }
+            guard !ranges.isEmpty else { return }
+            storage.beginEditing()
+            for range in ranges {
+                storage.addAttribute(.paragraphStyle, value: body, range: range)
+            }
+            storage.endEditing()
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
