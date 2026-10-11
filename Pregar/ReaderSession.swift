@@ -680,9 +680,9 @@ struct ReaderWindowView: View {
             .buttonStyle(.bordered)
             .disabled(tab == nil)
         }
-        .padding(.leading, 86)
+        .padding(.leading, PrototypeStyle.Layout.windowControlsInset)
         .padding(.trailing, 12)
-        .frame(height: 52)
+        .frame(height: PrototypeStyle.Layout.headerHeight)
         .background(PrototypeStyle.canvas)
     }
 
@@ -693,8 +693,7 @@ struct ReaderWindowView: View {
                 Text(tab.title).font(PrototypeStyle.serif(17, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
                 Text(pdfMetadata(for: tab))
                     .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
-                Text("SEÇÕES DESTA OBRA")
-                    .font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(PrototypeStyle.muted)
+                SectionLabel("Seções desta obra")
                     .padding(.top, 5)
                 ScrollView {
                     LazyVStack(spacing: 3) {
@@ -721,12 +720,12 @@ struct ReaderWindowView: View {
                 }
             } else {
                 Text(tab.title).font(PrototypeStyle.serif(19, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-                Text("LEITURA WEB").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(PrototypeStyle.muted)
+                SectionLabel("Leitura web")
                 Text(webSession?.currentURL.host ?? tab.location)
                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                     .textSelection(.enabled)
                 if let reference = tab.reference {
-                    Text("Passagem da preparação").font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+                    SectionLabel("Passagem da preparação")
                     Text(reference).font(PrototypeStyle.serif(14)).foregroundStyle(PrototypeStyle.ink)
                 }
                 Spacer()
@@ -815,7 +814,7 @@ struct ReaderWindowView: View {
         VStack(alignment: .leading, spacing: 15) {
             if tab.kind == .pdf {
                 HStack {
-                    Text("ONDE ESTÁ").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(PrototypeStyle.muted)
+                    SectionLabel("Onde está")
                     Rectangle().fill(PrototypeStyle.line).frame(height: 1)
                 }
                 if let section = activeSection {
@@ -839,7 +838,7 @@ struct ReaderWindowView: View {
                 .buttonStyle(.bordered).font(.system(size: 12))
             } else {
                 HStack {
-                    Text("ONDE ESTÁ").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(PrototypeStyle.muted)
+                    SectionLabel("Onde está")
                     Rectangle().fill(PrototypeStyle.line).frame(height: 1)
                 }
                 locationRow("Endereço", value: webSession?.currentURL.absoluteString ?? tab.location)
@@ -852,7 +851,7 @@ struct ReaderWindowView: View {
 
             Divider().overlay(PrototypeStyle.line)
             HStack {
-                Text("PARA A REVISÃO").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(PrototypeStyle.muted)
+                SectionLabel("Para a revisão")
                 Rectangle().fill(PrototypeStyle.line).frame(height: 1)
             }
             if let section = activeSection {
@@ -1037,7 +1036,12 @@ private struct ReaderNewTabSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Nova aba").font(PrototypeStyle.serif(24, weight: .semibold))
+            SheetHeader(
+                title: "Nova aba",
+                subtitle: "Abra um artigo ou site no Leitor, ao lado dos PDFs da Biblioteca.",
+                symbol: "globe",
+                accent: accent
+            )
             TextField("Endereço web", text: $address)
                 .textFieldStyle(.roundedBorder).onSubmit(add)
             if let errorMessage { Text(errorMessage).font(.system(size: 12)).foregroundStyle(.red) }
@@ -1049,8 +1053,9 @@ private struct ReaderNewTabSheet: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(24)
-        .frame(width: 480)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 500)
+        .background(PrototypeStyle.canvas)
     }
 
     private func add() {
@@ -1075,8 +1080,12 @@ private struct PageCorrectionSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Corrigir página inicial").font(PrototypeStyle.serif(22, weight: .semibold))
-            Text(title).font(.system(size: 13)).foregroundStyle(PrototypeStyle.muted).lineLimit(2)
+            SheetHeader(
+                title: "Corrigir página inicial",
+                subtitle: title,
+                symbol: "pencil",
+                accent: accent
+            )
             Stepper(value: $page, in: 1...max(pageCount, 1)) {
                 Text("Página física \(page) de \(pageCount)").monospacedDigit()
             }
@@ -1088,6 +1097,8 @@ private struct PageCorrectionSheet: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(24).frame(width: 480)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 500)
+        .background(PrototypeStyle.canvas)
     }
 }

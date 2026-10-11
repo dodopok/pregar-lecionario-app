@@ -112,14 +112,22 @@ struct BibleComparisonView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                TextField("Referência bíblica", text: $inputReference)
-                    .font(PrototypeStyle.serif(16, weight: .semibold))
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 13)
-                    .frame(width: 222, height: 30, alignment: .center)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 7))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
-                    .onSubmit { commitReference() }
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(PrototypeStyle.muted)
+                        .accessibilityHidden(true)
+                    TextField("Referência, ex. João 3:16", text: $inputReference)
+                        .font(PrototypeStyle.serif(16, weight: .semibold))
+                        .textFieldStyle(.plain)
+                        .onSubmit { commitReference() }
+                        .accessibilityLabel("Referência bíblica")
+                }
+                .padding(.horizontal, 12)
+                .frame(width: 250, height: 30, alignment: .center)
+                .background(.white, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
+                .help("Digite a referência e pressione Enter")
 
                 HStack(spacing: 2) {
                     scopeButton(.pericope)
@@ -181,9 +189,9 @@ struct BibleComparisonView: View {
                 .scrollIndicators(.hidden)
                 .frame(maxWidth: 220)
             }
-            .padding(.leading, 104)
+            .padding(.leading, PrototypeStyle.Layout.windowControlsInset)
             .padding(.trailing, 22)
-            .frame(height: 52)
+            .frame(height: PrototypeStyle.Layout.headerHeight)
             .background(PrototypeStyle.canvas)
 
             Divider()
@@ -499,9 +507,12 @@ struct ReviewRequestSheet: View {
             if let report {
                 reportView(report)
             } else {
-                Text("Nova revisão").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-                Text("Aponta e fundamenta. Não escreve, não completa, não sugere frases.")
-                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                SheetHeader(
+                    title: "Nova revisão",
+                    subtitle: "Aponta e fundamenta. Não escreve, não completa, não sugere frases.",
+                    symbol: "checkmark.seal",
+                    accent: accent
+                )
 
                 LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 8) {
                     ForEach(SermonReviewCriterion.allCases) { criterion in
@@ -516,12 +527,10 @@ struct ReviewRequestSheet: View {
                         .font(.system(size: 12))
                     }
                 }
-                .padding(13)
-                .background(.white, in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(PrototypeStyle.line, lineWidth: 1))
+                .panelCard()
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("PARA A REVISÃO").font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+                    SectionLabel("Para a revisão")
                     Text(payloadDescription)
                         .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
                     if !needsBible {
@@ -541,9 +550,7 @@ struct ReviewRequestSheet: View {
                         }
                     }
                 }
-                .padding(13)
-                .background(.white, in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(PrototypeStyle.line, lineWidth: 1))
+                .panelCard()
 
                 HStack(spacing: 8) {
                     Image(systemName: "key.fill").foregroundStyle(accent)
@@ -553,9 +560,7 @@ struct ReviewRequestSheet: View {
                         .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                     Spacer(minLength: 0)
                     Button("Configurar") { configureAI() }
-                        .font(.system(size: 11, weight: .medium))
-                        .buttonStyle(.plain)
-                        .foregroundStyle(accent)
+                        .buttonStyle(.linkAction(accent, compact: true))
                 }
                 if needsBible && !bibleSources.contains(where: { $0.id.hasPrefix("bible:") && !$0.text.isEmpty }) {
                     Label("O texto bíblico ainda não foi carregado; Fidelidade ficará indisponível.", systemImage: "exclamationmark.triangle")
@@ -584,8 +589,8 @@ struct ReviewRequestSheet: View {
                 }
             }
         }
-        .padding(22)
-        .frame(width: 540)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 560)
         .frame(minHeight: 300)
         .background(PrototypeStyle.canvas)
     }
@@ -652,7 +657,7 @@ struct ReviewRequestSheet: View {
                                         selectQuote(finding.manuscriptQuote)
                                         dismiss()
                                     }
-                                    .font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(accent)
+                                    .buttonStyle(.linkAction(accent, compact: true))
                                 }
                                 Text(finding.observation)
                                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
@@ -768,11 +773,14 @@ struct EmergencyQuestionsSheet: View {
             if let questions {
                 resultView(questions)
             } else {
-                Text("Perguntas de emergência").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-                Text("Perguntas sobre o que você já escreveu. Sem ideias novas, sem aplicação, sem redação.")
-                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                SheetHeader(
+                    title: "Perguntas de emergência",
+                    subtitle: "Perguntas sobre o que você já escreveu. Sem ideias novas, sem aplicação, sem redação.",
+                    symbol: "questionmark.circle",
+                    accent: accent
+                )
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("ESCOPO").font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+                    SectionLabel("Escopo")
                     Text(payloadDescription)
                         .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
                     if !selectedMaterials.isEmpty {
@@ -784,9 +792,7 @@ struct EmergencyQuestionsSheet: View {
                         }
                     }
                 }
-                .padding(13)
-                .background(.white, in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(PrototypeStyle.line, lineWidth: 1))
+                .panelCard()
 
                 HStack(spacing: 8) {
                     Image(systemName: "key.fill").foregroundStyle(accent)
@@ -796,7 +802,7 @@ struct EmergencyQuestionsSheet: View {
                         .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                     Spacer(minLength: 0)
                     Button("Configurar") { configureAI() }
-                        .font(.system(size: 11, weight: .medium)).buttonStyle(.plain).foregroundStyle(accent)
+                        .buttonStyle(.linkAction(accent, compact: true))
                 }
                 if context.manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Label("Escreva no manuscrito antes de pedir perguntas.", systemImage: "exclamationmark.triangle")
@@ -825,8 +831,8 @@ struct EmergencyQuestionsSheet: View {
                 }
             }
         }
-        .padding(22)
-        .frame(width: 540)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 560)
         .frame(minHeight: 300)
         .background(PrototypeStyle.canvas)
     }
@@ -864,7 +870,7 @@ struct EmergencyQuestionsSheet: View {
                                     .font(.system(size: 13, weight: .medium)).foregroundStyle(PrototypeStyle.ink)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Button("Ir ao trecho", systemImage: "text.viewfinder") { selectQuote(item.manuscriptQuote) }
-                                    .font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(accent)
+                                    .buttonStyle(.linkAction(accent, compact: true))
                                 if !item.evidenceQuote.isEmpty {
                                     Text("“\(item.evidenceQuote)”")
                                         .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
@@ -932,16 +938,14 @@ struct GoogleDriveConnectionSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 12) {
-                Image(systemName: googleDrive.isConnected ? "checkmark.icloud.fill" : "icloud")
-                    .font(.system(size: 24)).foregroundStyle(accent)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Google Drive").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-                    Text(googleDrive.isConnected ? "Conectado neste Mac" : "Integração da preparação")
-                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-                }
-                Spacer()
-            }
+            SheetHeader(
+                title: "Google Drive",
+                subtitle: googleDrive.isConnected
+                    ? "Conectado neste Mac. A cópia do sermão e o documento de ideias ficam na sua conta."
+                    : "Mantém uma cópia do sermão no Drive e lê o documento de ideias anotado pelo iPhone.",
+                symbol: googleDrive.isConnected ? "checkmark.icloud" : "icloud",
+                accent: accent
+            )
 
             if googleDrive.isConnected {
                 HStack(spacing: 10) {
@@ -953,8 +957,7 @@ struct GoogleDriveConnectionSheet: View {
                     }
                     .disabled(googleDrive.isConnecting || googleDrive.isSaving)
                 }
-                .padding(14)
-                .background(.white, in: RoundedRectangle(cornerRadius: 8))
+                .panelCard()
                 Text("Os documentos ligados continuam identificados nos sermões deste Mac. Ao reconectar, use a mesma conta Google.")
                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
             } else {
@@ -966,8 +969,7 @@ struct GoogleDriveConnectionSheet: View {
                     Text("Identificador público do app para OAuth de desktop. Não use client secret.")
                         .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                 }
-                .padding(14)
-                .background(.white, in: RoundedRectangle(cornerRadius: 8))
+                .panelCard()
                 Text("A autorização abre no navegador padrão e retorna para esta janela. O token de renovação fica no Acesso às Chaves deste Mac.")
                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
             }
@@ -998,8 +1000,8 @@ struct GoogleDriveConnectionSheet: View {
                 }
             }
         }
-        .padding(22)
-        .frame(width: 560, height: 340)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 560, height: 360)
         .background(PrototypeStyle.canvas)
         .preferredColorScheme(.light)
     }
@@ -1029,9 +1031,12 @@ struct TabletPreparationSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Preparar para pregar").font(PrototypeStyle.serif(22, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-            Text("Uma cópia paginada para leitura no tablet. O manuscrito original não muda.")
-                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+            SheetHeader(
+                title: "Preparar para pregar",
+                subtitle: "Uma cópia paginada para leitura no tablet. O manuscrito original não muda.",
+                symbol: "ipad.landscape",
+                accent: accent
+            )
 
             HStack(spacing: 14) {
                 Text("Formato").foregroundStyle(PrototypeStyle.muted)
@@ -1054,9 +1059,8 @@ struct TabletPreparationSheet: View {
                 .disabled(true)
                 .help("A disponibilidade offline é controlada no aplicativo Google Drive do tablet.")
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(format == "PDF" ? "CÓPIA PDF PARA O TABLET" : "GOOGLE DOC")
-                    .font(.system(size: 10, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+            VStack(alignment: .leading, spacing: 6) {
+                SectionLabel(format == "PDF" ? "Cópia PDF para o tablet" : "Google Doc")
                 if format == "Google Doc" {
                     if googleDrive.isLoading {
                         Label("Verificando conexão…", systemImage: "hourglass")
@@ -1110,25 +1114,27 @@ struct TabletPreparationSheet: View {
                         .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                 }
             }
-            .padding(13)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white, in: RoundedRectangle(cornerRadius: 8))
+            .panelCard()
 
-            ScrollView {
-                Text(manuscript.isEmpty ? "O manuscrito está vazio." : manuscript)
-                    .font(.custom(readingFont, size: readingSize))
-                    .foregroundStyle(PrototypeStyle.ink)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
+            VStack(alignment: .leading, spacing: 6) {
+                SectionLabel("Prévia da leitura")
+                ScrollView {
+                    Text(manuscript.isEmpty ? "O manuscrito está vazio." : manuscript)
+                        .font(.custom(readingFont, size: readingSize))
+                        .foregroundStyle(PrototypeStyle.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(PrototypeStyle.Spacing.lg)
+                }
+                .frame(height: 160)
+                .background(.white, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
             }
-            .frame(height: 170)
-            .background(.white, in: RoundedRectangle(cornerRadius: 8))
 
             HStack {
                 if format == "Google Doc" && !googleDrive.isConnected {
                     Button("Conectar Google Drive", systemImage: "icloud") { showingDriveConnection = true }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(accent)
+                        .buttonStyle(.linkAction(accent))
                 }
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -1148,8 +1154,8 @@ struct TabletPreparationSheet: View {
             }
         }
         .font(.system(size: 12))
-        .padding(22)
-        .frame(width: 650, height: 620)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 650, height: 640)
         .background(PrototypeStyle.canvas)
         .alert("Preparar para pregar", isPresented: Binding(
             get: { alertMessage != nil },

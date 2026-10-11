@@ -85,9 +85,9 @@ struct PDFLibraryView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(appearance.accent)
             }
-            .padding(.leading, 100)
+            .padding(.leading, PrototypeStyle.Layout.windowControlsInset)
             .padding(.trailing, 18)
-            .frame(height: 52)
+            .frame(height: PrototypeStyle.Layout.headerHeight)
             .background(PrototypeStyle.canvas)
 
             Divider()
@@ -162,7 +162,7 @@ struct PDFLibraryView: View {
             PDFLibraryMetadataEditor(record: record, accent: appearance.accent) { metadata in
                 saveMetadata(metadata, for: record)
             }
-            .frame(width: 560, height: 360)
+            .frame(width: 560, height: 400)
         }
         .sheet(isPresented: $isImportingPublicDriveFolder) {
             GoogleDrivePublicFolderImportSheet(accent: appearance.accent, isLibraryIndexing: $isIndexing) { urls in
@@ -256,8 +256,7 @@ struct PDFLibraryView: View {
                     }
 
                     HStack(spacing: 10) {
-                        Text("SEÇÕES ENCONTRADAS")
-                            .font(.system(size: 11, weight: .bold)).foregroundStyle(PrototypeStyle.muted)
+                        SectionLabel("Seções encontradas")
                         Rectangle().fill(PrototypeStyle.line).frame(height: 1)
                         Text("\((selectedRecord.sections?.count ?? selectedRecord.bookmarkCount).formatted())")
                             .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
@@ -577,12 +576,12 @@ private struct GoogleDrivePublicFolderImportSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Importar PDFs do Drive")
-                    .font(PrototypeStyle.serif(21, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-                Text("Use o link de uma pasta compartilhada como “Qualquer pessoa com o link”.")
-                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-            }
+            SheetHeader(
+                title: "Importar PDFs do Drive",
+                subtitle: "Use o link de uma pasta compartilhada como “Qualquer pessoa com o link”.",
+                symbol: "arrow.down.doc",
+                accent: accent
+            )
 
             Form {
                 TextField("Link público da pasta", text: $folderLink)
@@ -640,8 +639,8 @@ private struct GoogleDrivePublicFolderImportSheet: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(22)
-        .frame(width: 590, height: 450)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 590, height: 470)
         .background(PrototypeStyle.canvas)
         .preferredColorScheme(.light)
     }
@@ -687,12 +686,13 @@ private struct PDFLibraryMetadataEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Corrigir metadados")
-                    .font(PrototypeStyle.serif(21, weight: .semibold))
-                    .foregroundStyle(PrototypeStyle.ink)
-            }
-            .padding(.bottom, 19)
+            SheetHeader(
+                title: "Corrigir metadados",
+                subtitle: "Os valores substituem os dados lidos do PDF; o arquivo não é alterado.",
+                symbol: "pencil",
+                accent: accent
+            )
+            .padding(.bottom, PrototypeStyle.Spacing.lg)
 
             Divider()
 
@@ -732,8 +732,8 @@ private struct PDFLibraryMetadataEditor: View {
             }
             .padding(.top, 14)
         }
-        .padding(24)
-        .background(PrototypeStyle.paper)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .background(PrototypeStyle.canvas)
     }
 
     private var cleanedMetadata: PDFLibraryMetadataOverrides {
@@ -847,7 +847,7 @@ struct SermonArchiveView: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 250)
             }
-            .padding(.leading, 100).padding(.trailing, 18).frame(height: 52).background(PrototypeStyle.canvas)
+            .padding(.leading, PrototypeStyle.Layout.windowControlsInset).padding(.trailing, 18).frame(height: PrototypeStyle.Layout.headerHeight).background(PrototypeStyle.canvas)
             Divider()
 
             VStack(spacing: 0) {

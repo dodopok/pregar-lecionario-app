@@ -174,7 +174,7 @@ struct APISettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.leading, 82)
+        .padding(.leading, PrototypeStyle.Layout.windowControlsInset)
         .padding(.trailing, 22)
         .padding(.vertical, 7)
     }
@@ -223,7 +223,7 @@ struct APISettingsView: View {
                 .padding(.top, 3)
             }
 
-            Text("CONTEXTO LITÚRGICO").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
+            SectionLabel("Contexto litúrgico")
                 .padding(.bottom, -12)
             PreferenceGroup {
                 PreferenceRow(label: "Livro de oração") {
@@ -296,7 +296,7 @@ struct APISettingsView: View {
                     if provider != AIProvider.allCases.last { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
                 }
             }
-            Text("REVISÃO E PESQUISA").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
+            SectionLabel("Revisão e pesquisa")
                 .padding(.bottom, -12)
             PreferenceGroup {
                 PreferenceRow(label: "Provedor de revisão") {
@@ -352,7 +352,7 @@ struct APISettingsView: View {
 
     private var tabletContent: some View {
         VStack(alignment: .leading, spacing: 22) {
-            Text("TABLET").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
+            SectionLabel("Leitura no tablet")
                 .padding(.bottom, -12)
             PreferenceGroup {
                 PreferenceRow(label: "Dispositivos") {
@@ -377,7 +377,7 @@ struct APISettingsView: View {
 
     private var libraryContent: some View {
         VStack(alignment: .leading, spacing: 22) {
-            Text("DADOS LOCAIS").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
+            SectionLabel("Dados locais")
                 .padding(.bottom, -12)
             PreferenceGroup {
                 VStack(alignment: .leading, spacing: 9) {
@@ -423,7 +423,7 @@ struct APISettingsView: View {
                 }
                 .padding(.top, 4)
             }
-            Text("RECURSOS WEB").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
+            SectionLabel("Fontes favoritas")
                 .padding(.bottom, -12)
             PreferenceGroup {
                 ForEach(Array(favoriteSites.enumerated()), id: \.element.id) { index, site in
@@ -439,7 +439,7 @@ struct APISettingsView: View {
                 .frame(minHeight: 46)
             }
 
-            Text("AUTORES FAVORITOS").font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(PrototypeStyle.muted)
+            SectionLabel("Autores favoritos")
                 .padding(.bottom, -12)
             PreferenceGroup {
                 ForEach(Array(favoriteAuthors.enumerated()), id: \.element.id) { index, author in
@@ -839,15 +839,12 @@ private struct PrayerBookPickerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Livro de oração")
-                        .font(PrototypeStyle.serif(22, weight: .semibold))
-                        .foregroundStyle(PrototypeStyle.ink)
-                    Text("Escolha pelo nome, jurisdição e descrição.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(PrototypeStyle.muted)
-                }
-                Spacer()
+                SheetHeader(
+                    title: "Livro de oração",
+                    subtitle: "Escolha pelo nome, jurisdição e descrição.",
+                    symbol: "book.closed",
+                    accent: accent
+                )
                 Button("Fechar") { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
@@ -1139,8 +1136,12 @@ private struct FavoriteSiteEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(site.title.isEmpty ? "Adicionar site favorito" : "Editar site favorito")
-                .font(PrototypeStyle.serif(20, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+            SheetHeader(
+                title: site.title.isEmpty ? "Adicionar site favorito" : "Editar site favorito",
+                subtitle: "Fontes favoritas são consultadas por passagem na aba Materiais da Mesa.",
+                symbol: "globe",
+                accent: accent
+            )
             Form {
                 TextField("Nome", text: $site.title)
                 TextField("Endereço base (HTTPS)", text: $baseURLText)
@@ -1175,8 +1176,8 @@ private struct FavoriteSiteEditor: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 590, height: 550)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 600, height: 580)
         .background(PrototypeStyle.canvas)
         .preferredColorScheme(.light)
     }
@@ -1242,8 +1243,12 @@ private struct FavoriteAuthorEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(author.name.isEmpty ? "Adicionar autor favorito" : "Editar autor favorito")
-                .font(PrototypeStyle.serif(20, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+            SheetHeader(
+                title: author.name.isEmpty ? "Adicionar autor favorito" : "Editar autor favorito",
+                subtitle: "A pesquisa de materiais prioriza estes autores; o sermão nunca é enviado.",
+                symbol: "person.text.rectangle",
+                accent: accent
+            )
             Form {
                 TextField("Nome do autor", text: $author.name)
                 TextField("Site do autor (opcional)", text: $referenceURLText)
@@ -1262,8 +1267,8 @@ private struct FavoriteAuthorEditor: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 500, height: 270)
+        .padding(PrototypeStyle.Spacing.xxl)
+        .frame(width: 520, height: 300)
         .background(PrototypeStyle.canvas)
         .preferredColorScheme(.light)
     }

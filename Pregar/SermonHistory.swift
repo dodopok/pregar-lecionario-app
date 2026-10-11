@@ -187,20 +187,18 @@ struct SermonHistorySheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Histórico deste sermão")
-                        .font(PrototypeStyle.serif(22, weight: .semibold))
-                        .foregroundStyle(PrototypeStyle.ink)
-                    Text("Cada versão é recuperável. Restaurar cria uma versão nova; nada se perde.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(PrototypeStyle.muted)
-                }
-                Spacer()
+            HStack(alignment: .top) {
+                SheetHeader(
+                    title: "Histórico deste sermão",
+                    subtitle: "Cada versão é recuperável. Restaurar cria uma versão nova; nada se perde.",
+                    symbol: "clock.arrow.circlepath",
+                    accent: accent
+                )
                 Button("Fechar") { dismiss() }
                     .buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
             }
-            .padding(.bottom, 18)
+            .padding(.bottom, PrototypeStyle.Spacing.lg)
 
             Divider()
 
@@ -217,7 +215,7 @@ struct SermonHistorySheet: View {
                 }
             }
         }
-        .padding(24)
+        .padding(PrototypeStyle.Spacing.xxl)
         .frame(minWidth: 700, minHeight: 440)
         .background(PrototypeStyle.canvas)
         .task { await reload() }

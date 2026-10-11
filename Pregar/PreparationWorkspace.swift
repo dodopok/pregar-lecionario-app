@@ -33,6 +33,7 @@ struct PreparationWorkspace: View {
     @State private var isReadingsVisible = true
     @State private var isContextVisible = true
     @State private var focusMode = false
+    @AppStorage("pregar.onboarding.dismissed.v1") private var onboardingDismissed = false
     @State private var selectedBible = "nvt"
     @State private var alternativeTexts: [String: [String: BiblePassageText]] = [:]
     @State private var loadingTranslations: Set<String> = []
@@ -104,7 +105,7 @@ struct PreparationWorkspace: View {
                             trailingPadding: 16,
                             dividerOnLeadingEdge: false
                         ) {
-                            isReadingsVisible = true
+                            withAnimation(.easeInOut(duration: 0.16)) { isReadingsVisible = true }
                         }
                     }
 
@@ -133,7 +134,7 @@ struct PreparationWorkspace: View {
                             selectQuote: { editorCommands.selectQuote($0) },
                             insertText: { editorCommands.insertText($0) },
                             emergencyQuestions: { showingQuestions = true },
-                            collapse: { isContextVisible = false }
+                            collapse: { withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = false } }
                         )
                         .frame(width: 320)
                     } else if !focusMode {
@@ -145,7 +146,7 @@ struct PreparationWorkspace: View {
                             trailingPadding: 12,
                             dividerOnLeadingEdge: true
                         ) {
-                            isContextVisible = true
+                            withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = true }
                         }
                     }
                 }
@@ -267,14 +268,14 @@ struct PreparationWorkspace: View {
     }
 
     private var workspaceToolbar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: PrototypeStyle.Spacing.sm) {
             Button {
-                isSidebarVisible.toggle()
+                withAnimation(.easeInOut(duration: 0.16)) { isSidebarVisible.toggle() }
             } label: {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(isSidebarVisible || focusMode ? PrototypeStyle.muted : accentColor)
-                    .frame(width: 34, height: 34)
+                    .frame(width: PrototypeStyle.Layout.iconButtonSize, height: PrototypeStyle.Layout.iconButtonSize)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.hoverHighlight)
@@ -292,18 +293,23 @@ struct PreparationWorkspace: View {
                     .foregroundStyle(PrototypeStyle.muted)
                     .lineLimit(1)
             }
+            .padding(.leading, PrototypeStyle.Spacing.xs)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: PrototypeStyle.Spacing.sm)
 
-            toolbarAction("book.closed", title: "Bíblia", help: "Abrir a Bíblia com o texto principal (⌘1)") {
-                bibleSession.reference = activeDraft?.mainReadingReference ?? ""
-                openWindow(id: "bible")
+            HStack(spacing: 2) {
+                toolbarAction("book.closed", title: "Bíblia", help: "Abrir a Bíblia com o texto principal (⌘1)") {
+                    bibleSession.reference = activeDraft?.mainReadingReference ?? ""
+                    openWindow(id: "bible")
+                }
+                toolbarAction("doc.text", title: "Leitor", help: "Abrir o Leitor de PDFs e sites (⌘2)") {
+                    openWindow(id: "reader")
+                }
+                toolbarAction("ipad.landscape", title: "Tablet", help: "Preparar a cópia para pregar (⇧⌘T)") { showingTablet = true }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
             }
-            toolbarAction("doc.text", title: "Leitor", help: "Abrir o Leitor de PDFs e sites (⌘2)") {
-                openWindow(id: "reader")
-            }
-            toolbarAction("ipad.landscape", title: "Tablet", help: "Preparar a cópia para pregar (⇧⌘T)") { showingTablet = true }
-                .keyboardShortcut("t", modifiers: [.command, .shift])
+
+            toolbarDivider
 
             Button {
                 withAnimation(.easeInOut(duration: 0.16)) { focusMode.toggle() }
@@ -311,14 +317,17 @@ struct PreparationWorkspace: View {
                 Label("Foco", systemImage: focusMode ? "arrow.up.left.and.arrow.down.right" : "rectangle.compress.vertical")
                     .font(.system(size: 12, weight: focusMode ? .semibold : .regular))
                     .foregroundStyle(focusMode ? accentColor : PrototypeStyle.muted)
-                    .padding(.horizontal, 8)
-                    .frame(height: 34)
-                    .background(focusMode ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 7))
+                    .padding(.horizontal, PrototypeStyle.Spacing.sm)
+                    .frame(height: PrototypeStyle.Layout.iconButtonSize)
+                    .background(focusMode ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.hoverHighlight)
             .keyboardShortcut("f", modifiers: [.command, .shift])
             .help(focusMode ? "Sair do modo de escrita (⇧⌘F)" : "Modo de escrita: recolhe calendário, leituras e materiais (⇧⌘F)")
+            .accessibilityLabel(focusMode ? "Sair do modo de escrita" : "Entrar no modo de escrita")
+
+            toolbarDivider
 
             Button {
                 contextTab = .review
@@ -326,14 +335,8 @@ struct PreparationWorkspace: View {
                 showingReview = true
             } label: {
                 Label("Revisar", systemImage: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .frame(height: 31)
-                    .background(accentColor, in: RoundedRectangle(cornerRadius: 8))
-                    .contentShape(RoundedRectangle(cornerRadius: 8))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.primaryAction(accentColor))
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .help("Solicitar uma revisão do manuscrito (⇧⌘R)")
 
@@ -343,16 +346,26 @@ struct PreparationWorkspace: View {
                 Image(systemName: "gearshape")
                     .font(.system(size: 15))
                     .foregroundStyle(PrototypeStyle.muted)
-                    .frame(width: 34, height: 34)
+                    .frame(width: PrototypeStyle.Layout.iconButtonSize, height: PrototypeStyle.Layout.iconButtonSize)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.hoverHighlight)
             .help("Preferências (⌘,)")
+            .accessibilityLabel("Preferências")
         }
-        .padding(.horizontal, 18)
-        .frame(height: 52)
+        .padding(.leading, isSidebarVisible && !focusMode ? 18 : PrototypeStyle.Layout.windowControlsInset)
+        .padding(.trailing, 18)
+        .frame(height: PrototypeStyle.Layout.headerHeight)
         .background(PrototypeStyle.canvas)
         .overlay(alignment: .top) { Rectangle().fill(accentColor).frame(height: 2) }
+    }
+
+    private var toolbarDivider: some View {
+        Rectangle()
+            .fill(PrototypeStyle.line)
+            .frame(width: 1, height: 18)
+            .padding(.horizontal, 2)
+            .accessibilityHidden(true)
     }
 
     private var toolbarSubtitle: String {
@@ -383,7 +396,7 @@ struct PreparationWorkspace: View {
                     if let draft { chooseMainReading(reading, for: draft) }
                 },
                 chooseBible: loadTranslation,
-                collapse: { isReadingsVisible = false }
+                collapse: { withAnimation(.easeInOut(duration: 0.16)) { isReadingsVisible = false } }
             )
             .overlay {
                 if displayingPreviousDay {
@@ -405,10 +418,7 @@ struct PreparationWorkspace: View {
         } else {
             VStack(spacing: 0) {
                 HStack {
-                    Text("LEITURAS")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(1)
-                        .foregroundStyle(PrototypeStyle.muted)
+                    SectionLabel("Leituras")
                     Spacer()
                     if settingsStore.hasAPIKey, isLoading { ProgressView().controlSize(.small).tint(accentColor) }
                 }
@@ -422,14 +432,15 @@ struct PreparationWorkspace: View {
                         Image(systemName: "calendar.badge.exclamationmark")
                         Text("Não foi possível carregar este dia")
                         Text(loadError).multilineTextAlignment(.center).lineLimit(4)
-                        Button("Tentar novamente") { Task { await loadDay() } }
-                            .buttonStyle(.bordered)
+                        Button("Tentar novamente", systemImage: "arrow.clockwise") { Task { await loadDay() } }
+                            .buttonStyle(.secondaryAction)
                     } else {
                         Image(systemName: "key.horizontal")
-                        Text("Configure sua chave da Estêvão API")
-                        Button("Configurar") { openPreferences() }
-                            .buttonStyle(.borderedProminent)
-                            .tint(accentColor)
+                        Text("Conecte a Estêvão API para carregar as leituras do dia")
+                            .multilineTextAlignment(.center)
+                        Button("Configurar chave", systemImage: "key") { openPreferences() }
+                            .buttonStyle(.primaryAction(accentColor))
+                            .help("Abre as Preferências na seção Estêvão API (⌘,)")
                     }
                 }
                 .font(.system(size: 12))
@@ -611,18 +622,25 @@ struct PreparationWorkspace: View {
                 .menuStyle(.borderlessButton)
                 .help("Tamanho da fonte")
                 Divider().frame(height: 22).padding(.horizontal, 4)
-                editorTextButton("Título", isActive: editorCommands.isHeadingActive, action: editorCommands.heading)
-                editorTextButton("Citação", isActive: editorCommands.isQuoteActive, action: editorCommands.quotation)
-                editorTextButton("Lista", isActive: editorCommands.isListActive, action: editorCommands.bulletedList)
-                editorTextButton("Nota", action: editorCommands.footnote)
+                editorTextButton("Título", help: "Transformar o parágrafo em título", isActive: editorCommands.isHeadingActive, action: editorCommands.heading)
+                editorTextButton("Citação", help: "Destacar o parágrafo como citação em bloco", isActive: editorCommands.isQuoteActive, action: editorCommands.quotation)
+                editorTextButton("Lista", help: "Alternar marcadores de lista no parágrafo", isActive: editorCommands.isListActive, action: editorCommands.bulletedList)
+                editorTextButton("Nota", help: "Inserir nota de rodapé no ponto do cursor", action: editorCommands.footnote)
             }
-            .buttonStyle(.plain)
             .padding(.horizontal, 5)
             .padding(.vertical, 3)
-            .background(PrototypeStyle.paper.opacity(0.92), in: RoundedRectangle(cornerRadius: 10))
-            .shadow(color: .black.opacity(0.08), radius: 16, y: 5)
+            .background(PrototypeStyle.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous).stroke(PrototypeStyle.line.opacity(0.6), lineWidth: 1))
+            .shadow(color: .black.opacity(0.07), radius: 14, y: 4)
             .padding(.top, 14)
             .padding(.bottom, 12)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Formatação do manuscrito")
+
+            if !onboardingDismissed && editorCommands.isEmpty {
+                onboardingCard
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
@@ -663,12 +681,18 @@ struct PreparationWorkspace: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .topLeading) {
                     if editorCommands.isEmpty {
-                        Text("Comece a escrever seu sermão…")
-                            .font(.custom("Arial", size: 10))
-                            .foregroundStyle(PrototypeStyle.muted.opacity(0.8))
-                            .padding(.leading, 53)
-                            .padding(.top, 22)
-                            .allowsHitTesting(false)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Comece a escrever seu sermão…")
+                                .font(.custom("Arial", size: 10))
+                                .foregroundStyle(PrototypeStyle.muted.opacity(0.85))
+                            Text("Negrito ⌘B · Itálico ⌘I · Título, citação, lista e nota na barra acima")
+                                .font(.system(size: 10))
+                                .foregroundStyle(PrototypeStyle.muted.opacity(0.6))
+                        }
+                        .padding(.leading, 53)
+                        .padding(.top, 22)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                     }
                 }
                 .padding(.horizontal, 28)
@@ -691,27 +715,85 @@ struct PreparationWorkspace: View {
             Image(systemName: symbol)
                 .foregroundStyle(isActive ? accentColor : PrototypeStyle.ink)
                 .frame(width: 32, height: 32)
-                .background(isActive ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .background(isActive ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
                 .contentShape(Rectangle())
         }
         .keyboardShortcut(shortcut, modifiers: .command)
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverHighlight(cornerRadius: 5))
         .help(symbol == "bold" ? "\(title) (⌘B)" : "\(title) (⌘I)")
         .accessibilityLabel(title)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
-    private func editorTextButton(_ title: String, isActive: Bool = false, action: @escaping () -> Void) -> some View {
+    private func editorTextButton(_ title: String, help: String, isActive: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 12))
+                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
                 .foregroundStyle(isActive ? accentColor : PrototypeStyle.ink)
                 .padding(.horizontal, 8)
                 .frame(height: 32)
-                .background(isActive ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .background(isActive ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .help(title)
+        .buttonStyle(.hoverHighlight(cornerRadius: 5))
+        .help(help)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    /// Orientação de primeiro uso. Aparece enquanto o manuscrito está vazio e some
+    /// definitivamente ao ser dispensada; não cobre nem interrompe a escrita.
+    private var onboardingCard: some View {
+        VStack(alignment: .leading, spacing: PrototypeStyle.Spacing.md) {
+            HStack(alignment: .center) {
+                Text("Como funciona a Mesa")
+                    .font(PrototypeStyle.serif(16, weight: .semibold))
+                    .foregroundStyle(PrototypeStyle.ink)
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { onboardingDismissed = true }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(PrototypeStyle.muted)
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.hoverHighlight)
+                .help("Ocultar esta orientação")
+                .accessibilityLabel("Ocultar orientação de primeiro uso")
+            }
+            HStack(alignment: .top, spacing: PrototypeStyle.Spacing.lg) {
+                onboardingStep(1, symbol: "calendar", title: "Escolha o domingo", detail: "O calendário à esquerda carrega as leituras e a coleta do dia.")
+                onboardingStep(2, symbol: "text.book.closed", title: "Marque o texto principal", detail: "O círculo ao lado de uma leitura guia os materiais e a revisão.")
+                onboardingStep(3, symbol: "pencil.line", title: "Escreva e revise", detail: "Tudo é salvo neste Mac. Revisar aponta problemas, nunca reescreve.")
+            }
+        }
+        .panelCard(padding: PrototypeStyle.Spacing.lg, background: PrototypeStyle.manuscript)
+        .frame(maxWidth: 640)
+        .padding(.horizontal, 32)
+        .padding(.bottom, PrototypeStyle.Spacing.md)
+    }
+
+    private func onboardingStep(_ number: Int, symbol: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: PrototypeStyle.Spacing.sm) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(accentColor)
+                .frame(width: 28, height: 28)
+                .background(PrototypeStyle.softAccent(accentColor), in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(number). \(title)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(PrototypeStyle.ink)
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func statusBar(draft: SermonDraft) -> some View {
@@ -744,19 +826,27 @@ struct PreparationWorkspace: View {
                     Circle().fill(googleDrive.isConnected ? driveColor : PrototypeStyle.muted.opacity(0.42)).frame(width: 6, height: 6)
                     Text(driveStatus).foregroundStyle(googleDrive.isConnected ? driveColor : PrototypeStyle.muted)
                 }
+                .padding(.horizontal, PrototypeStyle.Spacing.sm)
+                .frame(height: PrototypeStyle.Layout.compactControlHeight)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help(googleDrive.isConnected ? "Gerenciar conexão com o Google Drive" : "Conectar Google Drive")
-            Button("v\(currentRevisionNumber) · histórico") {
+            .buttonStyle(.hoverHighlight(cornerRadius: 5))
+            .help(googleDrive.isConnected ? "Gerenciar conexão com o Google Drive" : "Conectar Google Drive para manter uma cópia do sermão")
+            Button {
                 showingHistory = true
+            } label: {
+                Label("v\(currentRevisionNumber) · histórico", systemImage: "clock.arrow.circlepath")
+                    .foregroundStyle(accentColor)
+                    .padding(.horizontal, PrototypeStyle.Spacing.sm)
+                    .frame(height: PrototypeStyle.Layout.compactControlHeight)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(accentColor)
+            .buttonStyle(.hoverHighlight(cornerRadius: 5))
             .keyboardShortcut("h", modifiers: [.command, .shift])
             .help("Abrir histórico recuperável deste sermão (⇧⌘H)")
         }
         .font(.system(size: 11))
-        .padding(.horizontal, 20)
+        .padding(.horizontal, PrototypeStyle.Spacing.md)
         .frame(height: 34)
         .background(PrototypeStyle.canvas)
         .overlay(alignment: .top) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }

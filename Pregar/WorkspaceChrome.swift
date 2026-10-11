@@ -127,9 +127,7 @@ struct CalendarSidebarView: View {
             .font(.system(size: 12))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("DOMINGOS")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(PrototypeStyle.muted)
+                SectionLabel("Domingos")
                     .padding(.horizontal, 6)
                 ForEach(sundays, id: \.self) { sunday in
                     sundayRow(sunday)
@@ -322,10 +320,7 @@ struct ScripturePanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("LEITURAS")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1)
-                    .foregroundStyle(PrototypeStyle.muted)
+                SectionLabel("Leituras")
                 Spacer()
                 Menu {
                     ForEach(translations, id: \.0) { code, label in
@@ -343,12 +338,13 @@ struct ScripturePanelView: View {
                     }
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(PrototypeStyle.ink)
-                    .padding(.horizontal, 8)
-                    .frame(height: 22)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 7))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
+                    .padding(.horizontal, 10)
+                    .frame(height: PrototypeStyle.Layout.compactControlHeight)
+                    .background(.white, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
                 }
                 .menuStyle(.borderlessButton)
+                .help("Tradução exibida nas leituras")
                 Button(action: collapse) {
                     Image(systemName: "sidebar.left")
                         .font(.system(size: 13, weight: .regular))
@@ -434,7 +430,7 @@ struct ScripturePanelView: View {
                                 .foregroundStyle(primary ? accent : PrototypeStyle.muted)
                             if reading.slot == "gospel" {
                                 Text("· EVANGELHO")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(accent)
                             }
                         }
@@ -468,9 +464,7 @@ struct ScripturePanelView: View {
             }
 
             if primary {
-                Text("TEXTO PRINCIPAL DO SERMÃO")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(accent)
+                SectionLabel("Texto principal do sermão", color: accent)
             }
 
             if expanded {
@@ -479,9 +473,9 @@ struct ScripturePanelView: View {
                         ForEach(verses) { verse in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("\(verse.number)")
-                                    .font(.system(size: 9, weight: .bold).monospacedDigit())
-                                    .foregroundStyle(accent.opacity(0.8))
-                                    .frame(width: 16, alignment: .trailing)
+                                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                                    .foregroundStyle(accent.opacity(0.85))
+                                    .frame(width: 18, alignment: .trailing)
                                 Text(verse.text)
                                     .font(PrototypeStyle.serif(14))
                                     .foregroundStyle(PrototypeStyle.ink.opacity(0.90))
@@ -523,10 +517,7 @@ struct ScripturePanelView: View {
     }
 
     private func sectionLabel(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 10, weight: .bold))
-            .tracking(1)
-            .foregroundStyle(PrototypeStyle.muted)
+        SectionLabel(title)
     }
 }
 
@@ -763,15 +754,22 @@ struct ResourceContextPanel: View {
                 }
             }
 
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 ForEach(MaterialFilter.allCases, id: \.self) { option in
-                    Button(option.rawValue) { filter = option }
-                        .font(.system(size: 11, weight: filter == option ? .medium : .regular))
-                        .foregroundStyle(filter == option ? .white : PrototypeStyle.ink.opacity(0.72))
-                        .padding(.horizontal, 10)
-                        .frame(height: 22)
-                        .background(filter == option ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.06), in: Capsule())
-                        .buttonStyle(.plain)
+                    Button {
+                        filter = option
+                    } label: {
+                        Text(option.rawValue)
+                            .font(.system(size: 11, weight: filter == option ? .semibold : .medium))
+                            .foregroundStyle(filter == option ? .white : PrototypeStyle.ink.opacity(0.78))
+                            .padding(.horizontal, 11)
+                            .frame(height: PrototypeStyle.Layout.compactControlHeight)
+                            .background(filter == option ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.06), in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.hoverHighlight(cornerRadius: 12))
+                    .help(filterHelp(option))
+                    .accessibilityAddTraits(filter == option ? .isSelected : [])
                 }
             }
 
@@ -812,9 +810,8 @@ struct ResourceContextPanel: View {
             }
             if filter != .sites {
                 Button("Abrir biblioteca de PDFs", systemImage: "book.closed", action: openLibrary)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(accent)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.linkAction(accent, compact: true))
+                    .help("Importar e indexar comentários em PDF (⌘3)")
             }
 
             if filter != .library {
@@ -1014,17 +1011,26 @@ struct ResourceContextPanel: View {
 
     private func materialActionButton(title: String, isOpen: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 10, weight: .medium))
+            Label(title, systemImage: isOpen ? "checkmark" : "arrow.up.forward")
+                .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
-                .padding(.horizontal, 9)
-                .frame(height: 22)
-                .background(isOpen ? accent.opacity(0.12) : .white, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(isOpen ? .clear : PrototypeStyle.line, lineWidth: 1))
+                .padding(.horizontal, 10)
+                .frame(height: PrototypeStyle.Layout.compactControlHeight)
+                .background(isOpen ? PrototypeStyle.softAccent(accent) : .white, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous).stroke(isOpen ? .clear : PrototypeStyle.line, lineWidth: 1))
                 .foregroundStyle(isOpen ? accent : PrototypeStyle.ink)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverHighlight(cornerRadius: PrototypeStyle.Radius.control))
+        .help(isOpen ? "Este material já está aberto no Leitor" : "Abrir no Leitor, na página ou endereço indicado")
+    }
+
+    private func filterHelp(_ option: MaterialFilter) -> String {
+        switch option {
+        case .all: "PDFs da Biblioteca e artigos das fontes favoritas"
+        case .library: "Somente seções dos PDFs indexados"
+        case .sites: "Somente artigos das fontes favoritas e outras pesquisas"
+        }
     }
 
     private func reviewInclusionToggle(for tab: ReaderTab) -> some View {
@@ -1185,9 +1191,7 @@ struct ResourceContextPanel: View {
                     .foregroundStyle(PrototypeStyle.muted)
                 if researchError.localizedCaseInsensitiveContains("chave") {
                     Button("Configurar IA", systemImage: "key", action: openSettings)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(accent)
-                        .buttonStyle(.plain)
+                        .buttonStyle(.linkAction(accent, compact: true))
                 }
             }
 
@@ -1198,10 +1202,8 @@ struct ResourceContextPanel: View {
                     researchReports[reference] == nil ? "Buscar outros materiais" : "Atualizar pesquisa",
                     systemImage: "sparkle.magnifyingglass"
                 )
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(accent)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.secondaryAction(compact: true))
             .disabled(reference.isEmpty || researchInProgressReference != nil)
             .help("Usa o provedor de pesquisa escolhido. Envia somente passagem e ocasião; o manuscrito não é enviado. O provedor pode cobrar a busca.")
         }
@@ -1362,18 +1364,18 @@ struct ResourceContextPanel: View {
                 Text("Conecte o Google Drive para usar seu documento separado de ideias.")
                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
                 Button("Conectar Google Drive", systemImage: "icloud", action: openDriveConnection)
-                    .font(.system(size: 12, weight: .medium)).foregroundStyle(accent).buttonStyle(.plain)
+                    .buttonStyle(.primaryAction(accent, compact: true))
             } else if googleDrive.ideasDocumentID == nil {
                 Text("Crie um Google Doc independente para continuar anotando pelo iPhone.")
                     .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
-                Button {
-                    Task { await createIdeasDocument() }
-                } label: {
+                HStack(spacing: PrototypeStyle.Spacing.sm) {
+                    Button("Criar documento de ideias", systemImage: "doc.badge.plus") {
+                        Task { await createIdeasDocument() }
+                    }
+                    .buttonStyle(.primaryAction(accent, compact: true))
+                    .disabled(isPreparingIdeas)
                     if isPreparingIdeas { ProgressView().controlSize(.small) }
-                    else { Label("Criar documento de ideias", systemImage: "doc.badge.plus") }
                 }
-                .font(.system(size: 12, weight: .medium)).foregroundStyle(accent).buttonStyle(.plain)
-                .disabled(isPreparingIdeas)
             } else {
                 HStack(spacing: 12) {
                     Button {
@@ -1383,14 +1385,18 @@ struct ResourceContextPanel: View {
                     } label: {
                         Label("Abrir no Google Docs", systemImage: "arrow.up.right.square")
                     }
-                    .font(.system(size: 11, weight: .medium)).foregroundStyle(accent).buttonStyle(.plain)
+                    .buttonStyle(.linkAction(accent, compact: true))
                     Button {
                         Task { await refreshIdeasIfLinked() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain).foregroundStyle(PrototypeStyle.muted)
+                    .buttonStyle(.hoverHighlight).foregroundStyle(PrototypeStyle.muted)
                     .help("Atualizar ideias do Google Drive")
+                    .accessibilityLabel("Atualizar ideias")
                     if isPreparingIdeas { ProgressView().controlSize(.small) }
                 }
                 Text(googleDrive.ideasUpdatedAt.map { "Atualizado \($0.formatted(date: .omitted, time: .shortened))" } ?? "Documento de ideias")
@@ -1516,11 +1522,12 @@ struct ResourceContextPanel: View {
                                     .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
                                     .lineLimit(3).fixedSize(horizontal: false, vertical: true)
                                 Text([finding.evidenceSourceTitle, finding.evidenceCitation].compactMap { $0 }.joined(separator: " · "))
-                                    .font(.system(size: 9)).foregroundStyle(PrototypeStyle.muted)
+                                    .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
                             }
                             if !finding.manuscriptQuote.isEmpty {
                                 Button("Ir ao trecho", systemImage: "text.viewfinder") { selectQuote(finding.manuscriptQuote) }
-                                    .font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(accent)
+                                    .buttonStyle(.linkAction(accent, compact: true))
+                                    .help("Selecionar este trecho no manuscrito")
                             }
                         }
                         .padding(.vertical, 8)
@@ -1540,25 +1547,27 @@ struct ResourceContextPanel: View {
                     .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
                 }
             }
+            HStack(spacing: PrototypeStyle.Spacing.sm) {
+                Button("Nova revisão", systemImage: "checkmark", action: newReview)
+                    .buttonStyle(.primaryAction(accent, compact: true))
+                    .help("Solicitar uma revisão do manuscrito (⇧⌘R)")
+                Button("Perguntas", systemImage: "questionmark.circle", action: emergencyQuestions)
+                    .buttonStyle(.secondaryAction(compact: true))
+                    .help("Perguntas de emergência sobre o que já está escrito")
+            }
+            .padding(.top, PrototypeStyle.Spacing.xs)
             Text("Perguntas de emergência são uma ação separada e nunca são solicitadas automaticamente.")
                 .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted).fixedSize(horizontal: false, vertical: true)
-            Button("Perguntas de emergência", systemImage: "questionmark.circle", action: emergencyQuestions)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(accent)
-                .buttonStyle(.plain)
-            Button("Nova revisão", systemImage: "checkmark", action: newReview)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(accent)
-                .buttonStyle(.plain)
         }
     }
 
     private func badge(_ value: String, color: Color) -> some View {
         Text(value)
-            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .font(.system(size: 10, weight: .bold, design: .rounded).monospacedDigit())
             .foregroundStyle(.white)
-            .frame(minWidth: 14, minHeight: 14)
-            .background(color, in: Circle())
+            .padding(.horizontal, 4)
+            .frame(minWidth: 16, minHeight: 16)
+            .background(color, in: Capsule())
     }
 
     private func sectionHeading(_ title: String, color: Color) -> some View {
