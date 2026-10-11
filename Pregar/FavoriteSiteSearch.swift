@@ -72,6 +72,27 @@ struct FavoriteSiteSearchReport: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+@MainActor
+final class FavoriteSiteSearchAutoGate {
+    private var lastAttemptAt: [String: Date] = [:]
+    private var activeKeys: Set<String> = []
+
+    func begin(cacheKey: String, now: Date = .now) -> Bool {
+        guard !activeKeys.contains(cacheKey) else { return false }
+        if let lastAttempt = lastAttemptAt[cacheKey], now.timeIntervalSince(lastAttempt) < 24 * 60 * 60 {
+            return false
+        }
+        activeKeys.insert(cacheKey)
+        lastAttemptAt[cacheKey] = now
+        return true
+    }
+
+    func finish(cacheKey: String, wasCancelled: Bool) {
+        activeKeys.remove(cacheKey)
+        if wasCancelled { lastAttemptAt.removeValue(forKey: cacheKey) }
+    }
+}
+
 enum FavoriteSiteSearchError: Error {
     case invalidReference
     case invalidRequest

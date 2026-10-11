@@ -7,6 +7,28 @@ final class FavoriteSiteSearchTests: XCTestCase {
         XCTAssertTrue(PregarRuntime.isIsolatedTestHost)
     }
 
+    @MainActor
+    func testAutomaticFavoriteSearchIsDeduplicatedAndThrottledForOneDay() {
+        let gate = FavoriteSiteSearchAutoGate()
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+        XCTAssertTrue(gate.begin(cacheKey: "Matthew 21|2026-09-27", now: start))
+        XCTAssertFalse(gate.begin(cacheKey: "Matthew 21|2026-09-27", now: start.addingTimeInterval(1)))
+        gate.finish(cacheKey: "Matthew 21|2026-09-27", wasCancelled: false)
+        XCTAssertFalse(gate.begin(cacheKey: "Matthew 21|2026-09-27", now: start.addingTimeInterval(60)))
+        XCTAssertTrue(gate.begin(cacheKey: "Matthew 21|2026-09-27", now: start.addingTimeInterval(86_401)))
+    }
+
+    @MainActor
+    func testCancelledAutomaticFavoriteSearchCanRetry() {
+        let gate = FavoriteSiteSearchAutoGate()
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+        XCTAssertTrue(gate.begin(cacheKey: "Matthew 21|2026-09-27", now: start))
+        gate.finish(cacheKey: "Matthew 21|2026-09-27", wasCancelled: true)
+        XCTAssertTrue(gate.begin(cacheKey: "Matthew 21|2026-09-27", now: start.addingTimeInterval(1)))
+    }
+
     func testCacheKeyIncludesLiturgicalContext() {
         let date = ISO8601DateFormatter().date(from: "2026-09-27T12:00:00Z")!
         let nextSunday = ISO8601DateFormatter().date(from: "2026-10-04T12:00:00Z")!

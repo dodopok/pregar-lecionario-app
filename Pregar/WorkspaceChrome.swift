@@ -513,6 +513,8 @@ struct ScripturePanelView: View {
 }
 
 struct ResourceContextPanel: View {
+    @MainActor private static let automaticFavoriteSiteSearchGate = FavoriteSiteSearchAutoGate()
+
     @EnvironmentObject private var readerSession: ReaderSessionStore
     @EnvironmentObject private var aiSettings: AISettingsStore
     @EnvironmentObject private var googleDrive: GoogleDriveStore
@@ -549,6 +551,8 @@ struct ResourceContextPanel: View {
     @State private var researchError: String?
     @State private var favoriteSiteReports: [String: FavoriteSiteSearchReport] = [:]
     @State private var favoriteSiteSearchInProgressReference: String?
+    @State private var favoriteSiteSearchActiveReferences: Set<String> = []
+    @State private var favoriteSiteLoadingClearTask: Task<Void, Never>?
     @State private var isPreparingIdeas = false
     @State private var ideasError: String?
     @State private var openingPDFPath: String?
@@ -645,7 +649,15 @@ struct ResourceContextPanel: View {
         .onChange(of: savedResearchReports) { _, _ in restoreResearchReports() }
         .onChange(of: savedFavoriteSiteReports) { _, _ in restoreFavoriteSiteReports() }
         .onChange(of: selectedTab) { _, tab in
-            if tab == .ideas { Task { await refreshIdeasIfLinked() } }
+            if tab == .ideas {
+                Task { await refreshIdeasIfLinked() }
+            } else if tab == .materials, filter != .library {
+                Task { await searchFavoriteSitesIfStale(reference: reference, cacheKey: favoriteSiteSearchKey) }
+            }
+        }
+        .onChange(of: filter) { _, newFilter in
+            guard selectedTab == .materials, newFilter != .library else { return }
+            Task { await searchFavoriteSitesIfStale(reference: reference, cacheKey: favoriteSiteSearchKey) }
         }
         .onChange(of: googleDrive.isConnected) { _, connected in
             if connected && selectedTab == .ideas { Task { await refreshIdeasIfLinked() } }
@@ -686,9 +698,15 @@ struct ResourceContextPanel: View {
             matchedPDFs = results
             isMatchingPDFs = false
         }
-        .task(id: "\(favoriteSiteSearchKey)|\(selectedTab == .materials)|\(filter != .library)") {
+        .task(id: favoriteSiteSearchKey) {
             guard selectedTab == .materials, filter != .library,
                   ScriptureReference.parse(reference) != nil else { return }
+            do {
+                try await Task.sleep(nanoseconds: 650_000_000)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
             await searchFavoriteSitesIfStale(reference: reference, cacheKey: favoriteSiteSearchKey)
         }
     }
@@ -721,7 +739,7 @@ struct ResourceContextPanel: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(PrototypeStyle.muted)
                     .help("Atualizar resultados das fontes favoritas")
-                    .disabled(reference.isEmpty || favoriteSiteSearchInProgressReference != nil)
+                    .disabled(reference.isEmpty || !favoriteSiteSearchActiveReferences.isEmpty)
                 }
             }
 
@@ -1015,18 +1033,30 @@ struct ResourceContextPanel: View {
 
     @MainActor
     private func searchFavoriteSitesIfStale(reference: String, cacheKey: String) async {
-        if let report = favoriteSiteReports[cacheKey], Date.now.timeIntervalSince(report.searchedAt) < 24 * 60 * 60 { return }
-        await refreshFavoriteSites(reference: reference, cacheKey: cacheKey)
+        let cachedReport = favoriteSiteReports[cacheKey]
+        if let cachedReport, Date.now.timeIntervalSince(cachedReport.searchedAt) < 24 * 60 * 60 { return }
+        guard ScriptureReference.parse(reference) != nil,
+              !favoriteSiteSearchActiveReferences.contains(cacheKey),
+              Self.automaticFavoriteSiteSearchGate.begin(cacheKey: cacheKey) else { return }
+        defer {
+            Self.automaticFavoriteSiteSearchGate.finish(cacheKey: cacheKey, wasCancelled: Task.isCancelled)
+        }
+        await refreshFavoriteSites(reference: reference, cacheKey: cacheKey, showsLoading: cachedReport == nil)
     }
 
     @MainActor
-    private func refreshFavoriteSites(reference: String, cacheKey: String) async {
-        guard favoriteSiteSearchInProgressReference != cacheKey,
+    private func refreshFavoriteSites(reference: String, cacheKey: String, showsLoading: Bool = true) async {
+        guard !favoriteSiteSearchActiveReferences.contains(cacheKey),
               !reference.isEmpty,
               ScriptureReference.parse(reference) != nil else { return }
-        favoriteSiteSearchInProgressReference = cacheKey
+        favoriteSiteSearchActiveReferences.insert(cacheKey)
+        if showsLoading {
+            favoriteSiteLoadingClearTask?.cancel()
+            favoriteSiteSearchInProgressReference = cacheKey
+        }
         defer {
-            if favoriteSiteSearchInProgressReference == cacheKey { favoriteSiteSearchInProgressReference = nil }
+            favoriteSiteSearchActiveReferences.remove(cacheKey)
+            scheduleFavoriteSiteLoadingClear()
         }
         let report = await FavoriteSiteSearchClient().search(
             reference: reference,
@@ -1039,6 +1069,25 @@ struct ResourceContextPanel: View {
         guard !Task.isCancelled, favoriteSiteSearchKey == cacheKey else { return }
         favoriteSiteReports[cacheKey] = report
         persistFavoriteSiteReports()
+    }
+
+    @MainActor
+    private func scheduleFavoriteSiteLoadingClear() {
+        guard favoriteSiteSearchActiveReferences.isEmpty,
+              let visibleReference = favoriteSiteSearchInProgressReference else { return }
+        favoriteSiteLoadingClearTask?.cancel()
+        favoriteSiteLoadingClearTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: 500_000_000)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled,
+                  favoriteSiteSearchActiveReferences.isEmpty,
+                  favoriteSiteSearchInProgressReference == visibleReference else { return }
+            favoriteSiteSearchInProgressReference = nil
+            favoriteSiteLoadingClearTask = nil
+        }
     }
 
     private func restoreFavoriteSiteReports() {
