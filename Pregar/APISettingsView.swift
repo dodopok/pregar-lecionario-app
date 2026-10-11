@@ -306,8 +306,10 @@ struct APISettingsView: View {
                 }
                 PreferenceRow(label: "Modelo de revisão") {
                     Picker("Modelo de revisão", selection: $reviewModel) {
-                        ForEach(reviewProvider.models, id: \.self) { Text(reviewProvider.modelDisplayName(for: $0)).tag($0) }
-                    }.labelsHidden().frame(width: 220, alignment: .leading)
+                        ForEach(aiStore.modelOptions(for: reviewProvider, including: reviewModel)) { model in
+                            Text(model.displayName).tag(model.id)
+                        }
+                    }.labelsHidden().frame(width: 300, alignment: .leading)
                 }
                 PreferenceRow(label: "Pesquisa de materiais") {
                     Picker("Provedor de pesquisa", selection: $researchProvider) {
@@ -316,8 +318,28 @@ struct APISettingsView: View {
                 }
                 PreferenceRow(label: "Modelo de pesquisa") {
                     Picker("Modelo de pesquisa", selection: $researchModel) {
-                        ForEach(researchProvider.models, id: \.self) { Text(researchProvider.modelDisplayName(for: $0)).tag($0) }
-                    }.labelsHidden().frame(width: 220, alignment: .leading)
+                        ForEach(aiStore.modelOptions(for: researchProvider, including: researchModel)) { model in
+                            Text(model.displayName).tag(model.id)
+                        }
+                    }.labelsHidden().frame(width: 300, alignment: .leading)
+                }
+            }
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 10) {
+                    Text("Modelos do Claude").font(.system(size: 13, weight: .medium))
+                    if aiStore.isLoadingClaudeModels { ProgressView().controlSize(.small) }
+                    Spacer()
+                    Button("Atualizar modelos", systemImage: "arrow.clockwise") { aiStore.refreshClaudeModels() }
+                        .disabled(!aiStore.hasKey(for: .anthropic) || aiStore.isLoadingClaudeModels)
+                }
+                if let error = aiStore.claudeModelsError {
+                    Text("\(error) A última lista disponível foi mantida.")
+                        .font(.system(size: 12)).foregroundStyle(.orange)
+                } else {
+                    Text(aiStore.hasKey(for: .anthropic)
+                         ? "A lista é consultada na sua conta ao abrir o app e ao salvar a chave. Novos modelos aparecem automaticamente."
+                         : "Salve a chave do Claude para consultar todos os modelos disponíveis na sua conta.")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                 }
             }
             Text("A revisão Perplexity usa a Agent API com resposta estruturada. Sonar é o modelo; não é o endpoint. A pesquisa envia apenas passagem e ocasião, nunca o manuscrito.")
@@ -325,6 +347,7 @@ struct APISettingsView: View {
         }
         .onChange(of: reviewProvider) { _, provider in reviewModel = provider.suggestedModel }
         .onChange(of: researchProvider) { _, provider in researchModel = provider.suggestedModel }
+        .onAppear { aiStore.refreshClaudeModels() }
     }
 
     private var tabletContent: some View {

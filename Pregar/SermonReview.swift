@@ -199,7 +199,7 @@ enum SermonReviewError: LocalizedError {
     case noKey
     case invalidModel
     case contextTooLarge
-    case provider(status: Int)
+    case provider(status: Int, detail: String? = nil)
     case unreadableResponse
 
     var errorDescription: String? {
@@ -209,9 +209,46 @@ enum SermonReviewError: LocalizedError {
         case .noKey: "A chave deste provedor não está disponível no Acesso às Chaves."
         case .invalidModel: "O modelo escolhido não pertence ao provedor selecionado."
         case .contextTooLarge: "O conjunto selecionado excede o limite desta revisão. Desmarque alguns materiais e tente novamente."
-        case let .provider(status): "O provedor recusou a revisão (HTTP \(status)). Verifique a chave, o modelo e os limites da conta."
+        case let .provider(status, detail): "O provedor recusou a revisão (HTTP \(status)). \(detail ?? "Verifique a chave, o modelo e os limites da conta.")"
         case .unreadableResponse: "A resposta do provedor não pôde ser validada. Nenhuma observação foi exibida."
         }
+    }
+}
+
+enum ClaudeStructuredOutputSchema {
+    static func adapted(_ schema: [String: Any]) -> [String: Any] {
+        var result = schema
+        var constraints: [String] = []
+        for key in ["minLength", "maxLength", "minimum", "maximum", "multipleOf", "maxItems"] {
+            if let value = result.removeValue(forKey: key) { constraints.append("\(key): \(value)") }
+        }
+        if let minItems = result["minItems"] as? Int, minItems > 1 {
+            result.removeValue(forKey: "minItems")
+            constraints.append("minItems: \(minItems)")
+        }
+        if !constraints.isEmpty {
+            let description = result["description"] as? String ?? ""
+            result["description"] = ([description] + constraints).filter { !$0.isEmpty }.joined(separator: ". ")
+        }
+        for key in ["properties", "$defs", "definitions"] {
+            if let properties = result[key] as? [String: [String: Any]] {
+                result[key] = properties.mapValues { adapted($0) }
+            }
+        }
+        if let items = result["items"] as? [String: Any] { result["items"] = adapted(items) }
+        // Each finding alternative has a different criterion enum, so anyOf remains unambiguous.
+        if let alternatives = result.removeValue(forKey: "oneOf") as? [[String: Any]] {
+            result["anyOf"] = alternatives
+        }
+        for key in ["anyOf", "allOf"] {
+            if let alternatives = result[key] as? [[String: Any]] {
+                result[key] = alternatives.map { adapted($0) }
+            }
+        }
+        if result["type"] as? String == "array", result["items"] == nil {
+            result["items"] = ["type": "string"]
+        }
+        return result
     }
 }
 
@@ -228,19 +265,22 @@ struct SermonAIReviewClient {
             throw SermonReviewError.emptyManuscript
         }
         guard !context.criteria.isEmpty else { throw SermonReviewError.noCriteria }
-        guard configuration.provider.models.contains(configuration.model) else { throw SermonReviewError.invalidModel }
+        guard configuration.provider.acceptsModel(configuration.model) else { throw SermonReviewError.invalidModel }
         guard !configuration.apiKey.isEmpty else { throw SermonReviewError.noKey }
         guard sources.allSatisfy({ $0.text.utf8.count <= PDFReviewSourceExtractor.maximumBytesPerSource }) else {
             throw SermonReviewError.contextTooLarge
         }
         let inputSize = context.manuscript.utf8.count + sources.reduce(0) { $0 + $1.text.utf8.count }
         guard inputSize <= Self.maximumInputBytes else { throw SermonReviewError.contextTooLarge }
+        if sources.isEmpty && context.criteria.allSatisfy({ $0 == .fidelity }) {
+            return SermonAIReviewResult(findings: [], rejectedFindingCount: 0, rejectionReasons: [])
+        }
 
         let request = try Self.makeRequest(context: context, sources: sources, configuration: configuration)
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw SermonReviewError.unreadableResponse }
         guard (200..<300).contains(response.statusCode) else {
-            throw SermonReviewError.provider(status: response.statusCode)
+            throw SermonReviewError.provider(status: response.statusCode, detail: AIProviderResponseError.detail(in: data, redacting: configuration.apiKey))
         }
         guard let output = Self.outputText(in: data, from: configuration.provider),
               let outputData = output.data(using: .utf8),
@@ -333,7 +373,7 @@ struct SermonAIReviewClient {
                 "max_tokens": maxOutputTokens,
                 "system": systemPrompt,
                 "messages": [["role": "user", "content": userText]],
-                "output_config": ["format": ["type": "json_schema", "schema": schema]]
+                "output_config": ["format": ["type": "json_schema", "schema": ClaudeStructuredOutputSchema.adapted(schema)]]
             ]
         case .google:
             request.setValue(configuration.apiKey, forHTTPHeaderField: "x-goog-api-key")
@@ -711,7 +751,7 @@ enum SermonAIQuestionError: LocalizedError {
     case noKey
     case invalidModel
     case contextTooLarge
-    case provider(status: Int)
+    case provider(status: Int, detail: String? = nil)
     case unreadableResponse
     case invalidQuestion
 
@@ -721,7 +761,7 @@ enum SermonAIQuestionError: LocalizedError {
         case .noKey: "A chave deste provedor não está disponível no Acesso às Chaves."
         case .invalidModel: "O modelo escolhido não pertence ao provedor selecionado."
         case .contextTooLarge: "O conjunto selecionado excede o limite desta ação. Desmarque alguns materiais e tente novamente."
-        case let .provider(status): "O provedor recusou a solicitação (HTTP \(status)). Verifique a chave, o modelo e os limites da conta."
+        case let .provider(status, detail): "O provedor recusou a solicitação (HTTP \(status)). \(detail ?? "Verifique a chave, o modelo e os limites da conta.")"
         case .unreadableResponse: "A resposta do provedor não pôde ser validada. Nenhuma pergunta foi exibida."
         case .invalidQuestion: "A resposta ultrapassou o escopo permitido. Nenhuma pergunta foi exibida."
         }
@@ -740,7 +780,7 @@ struct SermonAIQuestionClient {
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw SermonAIQuestionError.unreadableResponse }
         guard (200..<300).contains(response.statusCode) else {
-            throw SermonAIQuestionError.provider(status: response.statusCode)
+            throw SermonAIQuestionError.provider(status: response.statusCode, detail: AIProviderResponseError.detail(in: data, redacting: configuration.apiKey))
         }
         guard let output = SermonAIReviewClient.outputText(in: data, from: configuration.provider),
               let outputData = output.data(using: .utf8),
@@ -761,7 +801,7 @@ struct SermonAIQuestionClient {
         guard !context.manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw SermonAIQuestionError.emptyManuscript
         }
-        guard configuration.provider.models.contains(configuration.model) else { throw SermonAIQuestionError.invalidModel }
+        guard configuration.provider.acceptsModel(configuration.model) else { throw SermonAIQuestionError.invalidModel }
         guard !configuration.apiKey.isEmpty else { throw SermonAIQuestionError.noKey }
         guard sources.allSatisfy({ $0.text.utf8.count <= PDFReviewSourceExtractor.maximumBytesPerSource }) else {
             throw SermonAIQuestionError.contextTooLarge

@@ -4,6 +4,119 @@ import XCTest
 
 final class SermonReviewTests: XCTestCase {
     @MainActor
+    func testLiveClaudeCatalogAndStructuredReviewWhenOptedIn() async throws {
+        #if PREGAR_LIVE_ANTHROPIC_TEST
+        let isOptedIn = true
+        #else
+        let isOptedIn = ProcessInfo.processInfo.environment["PREGAR_LIVE_ANTHROPIC_TEST"] == "1"
+        #endif
+        guard isOptedIn else { throw XCTSkip("Ative PREGAR_LIVE_ANTHROPIC_TEST para usar a chave salva com texto sintético.") }
+        guard let key = await AISettingsStore().key(for: .anthropic), !key.isEmpty else {
+            throw XCTSkip("Nenhuma chave Claude está disponível neste contexto de assinatura.")
+        }
+        let models = try await AIModelCatalogClient().claudeModels(apiKey: key)
+        for model in ["claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-5-5"] where models.contains(where: { $0.id == model }) {
+            let context = reviewContext(criteria: SermonReviewCriterion.allCases, manuscript: "A excessão confirma a regra.")
+            let sources = [SermonReviewSource(id: "synthetic", title: "Fonte sintética", citation: "Teste", text: "A regra admite exceções.")]
+            let configuration = SermonReviewConfiguration(provider: .anthropic, model: model, apiKey: key)
+            let request = try SermonAIReviewClient.makeRequest(context: context, sources: sources, configuration: configuration)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = try XCTUnwrap(response as? HTTPURLResponse).statusCode
+            guard status == 200 else {
+                throw SermonReviewError.provider(status: status, detail: AIProviderResponseError.detail(in: data, redacting: key))
+            }
+            // Validate the real response locally without paying for a second request.
+            ReviewStubURLProtocol.setHandler { _ in (status, data) }
+            let session = stubSession()
+            defer { session.invalidateAndCancel() }
+            let result = try await SermonAIReviewClient(session: session).review(
+                context: context, sources: sources, configuration: configuration
+            )
+            XCTAssertTrue(
+                result.findings.contains { $0.criterion == .spelling && $0.correction == "exceção" },
+                "\(model): \(SermonAIReviewClient.outputText(in: data, from: .anthropic) ?? "sem saída") · rejeitados: \(result.rejectionReasons)"
+            )
+            print("Claude · \(model) · HTTP 200 com resposta estruturada · chave não exibida")
+        }
+        XCTAssertFalse(models.isEmpty)
+    }
+
+    func testClaudeReviewSchemaUsesSupportedUnionsAndPreservesCriterionAndSourceConstraints() throws {
+        let request = try SermonAIReviewClient.makeRequest(
+            context: reviewContext(criteria: SermonReviewCriterion.allCases),
+            sources: [bibleSource()],
+            configuration: SermonReviewConfiguration(provider: .anthropic, model: "claude-opus-5-5", apiKey: "secret-key")
+        )
+        let body = try XCTUnwrap(request.httpBody)
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let config = try XCTUnwrap(root["output_config"] as? [String: Any])
+        let format = try XCTUnwrap(config["format"] as? [String: Any])
+        let schema = try XCTUnwrap(format["schema"] as? [String: Any])
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let findings = try XCTUnwrap(properties["findings"] as? [String: Any])
+        let items = try XCTUnwrap(findings["items"] as? [String: Any])
+        let alternatives = try XCTUnwrap(items["anyOf"] as? [[String: Any]])
+        XCTAssertNil(items["oneOf"])
+        XCTAssertEqual(alternatives.count, SermonReviewCriterion.allCases.count)
+        for (criterion, alternative) in zip(SermonReviewCriterion.allCases, alternatives) {
+            let fields = try XCTUnwrap(alternative["properties"] as? [String: Any])
+            XCTAssertEqual((fields["criterion"] as? [String: Any])?["enum"] as? [String], [criterion.rawValue])
+            let observation = try XCTUnwrap(fields["observation"] as? [String: Any])
+            XCTAssertNil(observation["minLength"])
+            XCTAssertNil(observation["maxLength"])
+            XCTAssertTrue((observation["description"] as? String)?.contains("800") == true)
+            XCTAssertEqual(alternative["additionalProperties"] as? Bool, false)
+            if criterion == .fidelity {
+                XCTAssertEqual((fields["evidence_source_id"] as? [String: Any])?["enum"] as? [String], [bibleSource().id])
+            }
+        }
+    }
+
+    func testClaudeSchemaAdaptationDoesNotTreatPropertyNamesAsSchemaKeywords() throws {
+        let input: [String: Any] = ["type": "object", "properties": [
+            "oneOf": ["type": "string", "maxLength": 3],
+            "maxLength": ["type": "string", "enum": ["oneOf"]]
+        ]]
+        let properties = try XCTUnwrap(ClaudeStructuredOutputSchema.adapted(input)["properties"] as? [String: Any])
+        XCTAssertNotNil(properties["oneOf"])
+        XCTAssertNotNil(properties["maxLength"])
+        XCTAssertEqual((properties["maxLength"] as? [String: Any])?["enum"] as? [String], ["oneOf"])
+    }
+
+    func testClaudeFidelityWithoutSourcesDoesNotMakeAnUnusableRequest() async throws {
+        ReviewStubURLProtocol.setHandler { _ in
+            XCTFail("Fidelidade sem fontes deve ser resolvida localmente.")
+            return (400, Data())
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIReviewClient(session: session).review(
+            context: reviewContext(criteria: [.fidelity]), sources: [], configuration: configuration(for: .anthropic)
+        )
+        XCTAssertTrue(result.findings.isEmpty)
+    }
+
+    func testClaudeProviderErrorShowsTheReasonWithoutExposingCredentials() async throws {
+        let data = try JSONSerialization.data(withJSONObject: ["error": [
+            "message": "Schema type 'oneOf' is not supported. secret-key sk-ant-test-secret"
+        ]])
+        ReviewStubURLProtocol.setHandler { _ in (400, data) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        do {
+            _ = try await SermonAIReviewClient(session: session).review(
+                context: reviewContext(criteria: [.spelling]), sources: [], configuration: configuration(for: .anthropic)
+            )
+            XCTFail("HTTP 400 deve ser informado.")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("oneOf"))
+            XCTAssertTrue(error.localizedDescription.contains("400"))
+            XCTAssertFalse(error.localizedDescription.contains("secret-key"))
+            XCTAssertFalse(error.localizedDescription.contains("sk-ant-test-secret"))
+        }
+    }
+
+    @MainActor
     func testLivePerplexityAgentAPIUsesSavedKeyForSyntheticStructuredReviewWhenOptedIn() async throws {
         #if PREGAR_LIVE_PERPLEXITY_TEST
         let isOptedIn = true
@@ -467,6 +580,83 @@ final class SermonReviewTests: XCTestCase {
         case .google:
             return try! JSONSerialization.data(withJSONObject: ["output_text": json])
         }
+    }
+}
+
+final class AIModelCatalogTests: XCTestCase {
+    func testClaudeCatalogUsesAuthenticatedPaginationKeepsNewModelsAndDropsDuplicatesAndRetiredModels() async throws {
+        var requests: [URLRequest] = []
+        ReviewStubURLProtocol.setHandler { request in
+            requests.append(request)
+            let isFirstPage = !request.url!.absoluteString.contains("after_id")
+            let models: [[String: Any]] = isFirstPage
+                ? [["id": "claude-opus-6-1", "display_name": "Claude Opus 6.1"],
+                   ["id": "claude-retired-test", "display_name": "Retired", "lifecycle": "retired"]]
+                : [["id": "claude-opus-6-1", "display_name": "Duplicate"],
+                   ["id": "claude-sonnet-5-5", "display_name": "Claude Sonnet 5.5"],
+                   ["id": "gpt-other-provider", "display_name": "Other"]]
+            return (200, try! JSONSerialization.data(withJSONObject: [
+                "data": models, "has_more": isFirstPage, "last_id": "claude-opus-6-1"
+            ]))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let models = try await AIModelCatalogClient(session: session).claudeModels(apiKey: "secret-key")
+        XCTAssertEqual(models.map(\.id), ["claude-opus-6-1", "claude-sonnet-5-5"])
+        XCTAssertEqual(models.first?.displayName, "Claude Opus 6.1")
+        XCTAssertEqual(requests.count, 2)
+        for request in requests {
+            XCTAssertEqual(request.url?.host, "api.anthropic.com")
+            XCTAssertEqual(request.url?.path, "/v1/models")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-api-key"), "secret-key")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "anthropic-version"), "2023-06-01")
+            XCTAssertFalse(request.url!.absoluteString.contains("secret-key"))
+        }
+        XCTAssertTrue(requests.last!.url!.absoluteString.contains("after_id=claude-opus-6-1"))
+    }
+
+    func testClaudeCatalogRejectsServerErrorsAndRepeatedPaginationCursors() async throws {
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        ReviewStubURLProtocol.setHandler { _ in (401, Data()) }
+        do {
+            _ = try await AIModelCatalogClient(session: session).claudeModels(apiKey: "secret-key")
+            XCTFail("Chave recusada deve ser informada.")
+        } catch let error as AIModelCatalogError {
+            guard case .provider(status: 401) = error else { return XCTFail("Erro inesperado: \(error)") }
+        }
+        ReviewStubURLProtocol.setHandler { _ in (200, Data(#"{"data":[{"id":"claude-opus-5-5","display_name":"Opus"}],"has_more":true,"last_id":"same"}"#.utf8)) }
+        do {
+            _ = try await AIModelCatalogClient(session: session).claudeModels(apiKey: "secret-key")
+            XCTFail("Paginação inválida deve terminar sem repetir chamadas indefinidamente.")
+        } catch let error as AIModelCatalogError {
+            guard case .unreadableResponse = error else { return XCTFail("Erro inesperado: \(error)") }
+        }
+    }
+
+    @MainActor
+    func testDynamicClaudeSelectionAndCachedCatalogSurviveSavingAndReloadingPreferences() throws {
+        let suite = "PregarClaudeCatalogTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let cached = [AIModelOption(id: "claude-opus-6-1", displayName: "Claude Opus 6.1")]
+        defaults.set(try JSONEncoder().encode(cached), forKey: "ai.models.anthropic")
+        let store = AISettingsStore(defaults: defaults, loadsKeys: false)
+        store.save(reviewProvider: .anthropic, reviewModel: "claude-opus-6-1", researchProvider: .anthropic, researchModel: "claude-opus-6-1")
+        let restored = AISettingsStore(defaults: defaults, loadsKeys: false)
+        restored.reloadPreferences()
+        XCTAssertEqual(restored.reviewModel, "claude-opus-6-1")
+        XCTAssertEqual(restored.researchModel, "claude-opus-6-1")
+        XCTAssertEqual(restored.modelOptions(for: .anthropic), cached)
+        XCTAssertEqual(restored.modelOptions(for: .anthropic, including: "claude-sonnet-5").last?.id, "claude-sonnet-5")
+        XCTAssertFalse(AIProvider.anthropic.acceptsModel("gpt-6-sol"))
+        XCTAssertFalse(AIProvider.anthropic.acceptsModel("claude-unsafe/identifier"))
+    }
+
+    private func stubSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ReviewStubURLProtocol.self]
+        return URLSession(configuration: configuration)
     }
 }
 

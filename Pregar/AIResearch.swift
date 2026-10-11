@@ -51,7 +51,7 @@ enum AIResearchError: LocalizedError {
     case emptyReference
     case noKey
     case invalidModel
-    case provider(status: Int)
+    case provider(status: Int, detail: String? = nil)
     case unreadableResponse
 
     var errorDescription: String? {
@@ -59,7 +59,7 @@ enum AIResearchError: LocalizedError {
         case .emptyReference: "Escolha uma passagem antes de pesquisar materiais."
         case .noKey: "A chave do provedor de pesquisa não está salva no Acesso às Chaves."
         case .invalidModel: "O modelo escolhido não pertence ao provedor de pesquisa."
-        case let .provider(status): "O provedor recusou a pesquisa (HTTP \(status)). Verifique a chave, o modelo e os créditos disponíveis."
+        case let .provider(status, detail): "O provedor recusou a pesquisa (HTTP \(status)). \(detail ?? "Verifique a chave, o modelo e os créditos disponíveis.")"
         case .unreadableResponse: "O provedor não retornou fontes verificáveis. Tente novamente ou abra as fontes favoritas."
         }
     }
@@ -76,7 +76,7 @@ struct AIResearchClient {
         guard !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AIResearchError.emptyReference
         }
-        guard configuration.provider.models.contains(configuration.model) else {
+        guard configuration.provider.acceptsModel(configuration.model) else {
             throw AIResearchError.invalidModel
         }
         guard !configuration.apiKey.isEmpty else { throw AIResearchError.noKey }
@@ -85,7 +85,7 @@ struct AIResearchClient {
         let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw AIResearchError.unreadableResponse }
         guard (200..<300).contains(response.statusCode) else {
-            throw AIResearchError.provider(status: response.statusCode)
+            throw AIResearchError.provider(status: response.statusCode, detail: AIProviderResponseError.detail(in: data, redacting: configuration.apiKey))
         }
         let sources = Self.sources(in: data, from: configuration.provider)
         guard !sources.isEmpty else { throw AIResearchError.unreadableResponse }
