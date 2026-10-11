@@ -517,6 +517,7 @@ final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate {
 
 struct ReaderWindowView: View {
     @EnvironmentObject private var reader: ReaderSessionStore
+    @EnvironmentObject private var appearance: AppAppearanceStore
     @Environment(\.openWindow) private var openWindow
     @State private var showingNewTab = false
     @State private var showingPageCorrection = false
@@ -594,7 +595,7 @@ struct ReaderWindowView: View {
             if loaded == nil { failedPDFTabID = tab.id }
         }
         .sheet(isPresented: $showingNewTab) {
-            ReaderNewTabSheet { url in
+            ReaderNewTabSheet(accent: appearance.accent) { url in
                 _ = reader.openWeb(
                     title: url.host ?? url.absoluteString,
                     url: url,
@@ -607,6 +608,7 @@ struct ReaderWindowView: View {
             if let tab, let document {
                 PageCorrectionSheet(
                     title: tab.title,
+                    accent: appearance.accent,
                     page: $correctionPage,
                     pageCount: document.pageCount
                 ) { page in
@@ -620,15 +622,17 @@ struct ReaderWindowView: View {
     private var tabBar: some View {
         HStack(spacing: 8) {
             Button(action: navigateBack) {
-                Image(systemName: "chevron.left").frame(width: 25, height: 28)
+                Image(systemName: "chevron.left").frame(width: 28, height: 28).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).disabled(!canNavigateBack)
-            .help("Voltar")
+            .buttonStyle(.hoverHighlight).disabled(!canNavigateBack)
+            .keyboardShortcut("[", modifiers: .command)
+            .help("Voltar (⌘[)")
             Button(action: navigateForward) {
-                Image(systemName: "chevron.right").frame(width: 25, height: 28)
+                Image(systemName: "chevron.right").frame(width: 28, height: 28).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).disabled(!canNavigateForward)
-            .help("Avançar")
+            .buttonStyle(.hoverHighlight).disabled(!canNavigateForward)
+            .keyboardShortcut("]", modifiers: .command)
+            .help("Avançar (⌘])")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 7) {
@@ -650,8 +654,10 @@ struct ReaderWindowView: View {
                                 Image(systemName: "xmark").font(.system(size: 10, weight: .medium))
                                     .foregroundStyle(PrototypeStyle.muted)
                                     .frame(width: 18, height: 18)
+                                    .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.hoverHighlight(cornerRadius: 5))
+                            .padding(.trailing, 6)
                             .help("Fechar aba")
                         }
                         .background(item.id == reader.selectedID ? .white : .clear, in: RoundedRectangle(cornerRadius: 8))
@@ -661,9 +667,11 @@ struct ReaderWindowView: View {
             }
 
             Button { showingNewTab = true } label: {
-                Image(systemName: "plus").frame(width: 28, height: 30)
+                Image(systemName: "plus").frame(width: 28, height: 30).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).help("Nova aba")
+            .buttonStyle(.hoverHighlight)
+            .keyboardShortcut("t", modifiers: .command)
+            .help("Nova aba (⌘T)")
             Spacer(minLength: 4)
             Button(action: copyWithSource) {
                 Label("Copiar com origem", systemImage: "doc.on.doc")
@@ -705,9 +713,9 @@ struct ReaderWindowView: View {
                                 .foregroundStyle(PrototypeStyle.ink)
                                 .padding(.horizontal, 10).padding(.vertical, 8)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(section.id == activeSection?.id ? PrototypeStyle.softGreen : .clear, in: RoundedRectangle(cornerRadius: 7))
+                                .background(section.id == activeSection?.id ? PrototypeStyle.softAccent(appearance.accent) : .clear, in: RoundedRectangle(cornerRadius: 7))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.hoverHighlight)
                         }
                     }
                 }
@@ -748,7 +756,7 @@ struct ReaderWindowView: View {
                         Spacer()
                         if let activeSection {
                             Label(tab.reference == nil ? activeSection.title : "Mesma passagem · seção \(activeSection.title)", systemImage: "text.book.closed")
-                                .font(.system(size: 11, weight: .medium)).foregroundStyle(PrototypeStyle.green)
+                                .font(.system(size: 11, weight: .medium)).foregroundStyle(appearance.accent)
                                 .lineLimit(1)
                         }
                     }
@@ -874,7 +882,7 @@ struct ReaderWindowView: View {
         } actions: {
             HStack {
                 Button("Nova aba", systemImage: "plus") { showingNewTab = true }
-                    .buttonStyle(.borderedProminent).tint(PrototypeStyle.green)
+                    .buttonStyle(.borderedProminent).tint(appearance.accent)
                 Button("Biblioteca de PDFs", systemImage: "books.vertical") { openWindow(id: "library") }
                     .buttonStyle(.bordered)
             }
@@ -931,7 +939,7 @@ struct ReaderWindowView: View {
     private func locationRow(_ label: String, value: String, green: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(label).foregroundStyle(PrototypeStyle.muted).frame(width: 76, alignment: .leading)
-            Text(value).foregroundStyle(green ? PrototypeStyle.green : PrototypeStyle.ink)
+            Text(value).foregroundStyle(green ? appearance.accent : PrototypeStyle.ink)
                 .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
         }
         .font(.system(size: 12))
@@ -1024,6 +1032,7 @@ private struct ReaderNewTabSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var address = "https://"
     @State private var errorMessage: String?
+    let accent: Color
     let open: (URL) -> Void
 
     var body: some View {
@@ -1036,7 +1045,7 @@ private struct ReaderNewTabSheet: View {
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Abrir", systemImage: "arrow.right", action: add)
-                    .buttonStyle(.borderedProminent).tint(PrototypeStyle.green)
+                    .buttonStyle(.borderedProminent).tint(accent)
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -1059,6 +1068,7 @@ private struct ReaderNewTabSheet: View {
 private struct PageCorrectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
+    let accent: Color
     @Binding var page: Int
     let pageCount: Int
     let save: (Int) -> Void
@@ -1074,7 +1084,7 @@ private struct PageCorrectionSheet: View {
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Salvar") { save(page); dismiss() }
-                    .buttonStyle(.borderedProminent).tint(PrototypeStyle.green)
+                    .buttonStyle(.borderedProminent).tint(accent)
                     .keyboardShortcut(.defaultAction)
             }
         }

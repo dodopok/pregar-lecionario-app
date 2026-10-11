@@ -7,6 +7,7 @@ struct PreparationWorkspace: View {
     @EnvironmentObject private var appearanceStore: AppAppearanceStore
     @EnvironmentObject private var bibleSession: BibleWindowSession
     @EnvironmentObject private var googleDrive: GoogleDriveStore
+    @EnvironmentObject private var navigation: WorkspaceNavigationStore
     @Environment(\.openWindow) private var openWindow
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SermonDraft.modifiedAt, order: .reverse) private var drafts: [SermonDraft]
@@ -86,7 +87,7 @@ struct PreparationWorkspace: View {
 
             VStack(spacing: 0) {
                 workspaceToolbar
-                dayHeader
+                if !focusMode { dayHeader }
                 Divider()
 
                 HStack(spacing: 0) {
@@ -98,6 +99,7 @@ struct PreparationWorkspace: View {
                         collapsedPanelRail(
                             title: "Leituras",
                             symbol: "sidebar.left",
+                            shortcut: "2",
                             topPadding: 14,
                             trailingPadding: 16,
                             dividerOnLeadingEdge: false
@@ -138,6 +140,7 @@ struct PreparationWorkspace: View {
                         collapsedPanelRail(
                             title: "Materiais",
                             symbol: "sidebar.right",
+                            shortcut: "3",
                             topPadding: 3,
                             trailingPadding: 12,
                             dividerOnLeadingEdge: true
@@ -222,6 +225,7 @@ struct PreparationWorkspace: View {
         }
         .onAppear {
             guard !PregarRuntime.isIsolatedTestHost else { return }
+            consumeNavigationRequest()
             ensureDraft(for: selectedDate)
             Task { await loadHistory(for: selectedDate) }
             Task { await loadReviewReports(for: selectedDayKey) }
@@ -230,6 +234,7 @@ struct PreparationWorkspace: View {
             if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
         .onChange(of: day?.color) { _, _ in appearanceStore.accent = accentColor }
+        .onChange(of: navigation.dateRequest) { _, _ in consumeNavigationRequest() }
         .onChange(of: settingsStore.isLoadingCredential) { _, loading in
             if !loading && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
@@ -268,12 +273,14 @@ struct PreparationWorkspace: View {
             } label: {
                 Image(systemName: "sidebar.left")
                     .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(PrototypeStyle.muted)
+                    .foregroundStyle(isSidebarVisible || focusMode ? PrototypeStyle.muted : accentColor)
                     .frame(width: 34, height: 34)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help("Mostrar ou ocultar calendário")
+            .buttonStyle(.hoverHighlight)
+            .keyboardShortcut("1", modifiers: [.command, .option])
+            .help("Mostrar ou ocultar calendário (⌥⌘1)")
+            .accessibilityLabel(isSidebarVisible ? "Ocultar calendário" : "Mostrar calendário")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(activeDraft?.mainReadingReference ?? "Preparação do sermão")
@@ -288,27 +295,30 @@ struct PreparationWorkspace: View {
 
             Spacer(minLength: 8)
 
-            toolbarAction("book.closed", title: "Bíblia") {
+            toolbarAction("book.closed", title: "Bíblia", help: "Abrir a Bíblia com o texto principal (⌘1)") {
                 bibleSession.reference = activeDraft?.mainReadingReference ?? ""
                 openWindow(id: "bible")
             }
-            toolbarAction("doc.text", title: "Leitor") {
+            toolbarAction("doc.text", title: "Leitor", help: "Abrir o Leitor de PDFs e sites (⌘2)") {
                 openWindow(id: "reader")
             }
-            toolbarAction("ipad.landscape", title: "Tablet") { showingTablet = true }
+            toolbarAction("ipad.landscape", title: "Tablet", help: "Preparar a cópia para pregar (⇧⌘T)") { showingTablet = true }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
 
             Button {
-                focusMode.toggle()
+                withAnimation(.easeInOut(duration: 0.16)) { focusMode.toggle() }
             } label: {
                 Label("Foco", systemImage: focusMode ? "arrow.up.left.and.arrow.down.right" : "rectangle.compress.vertical")
-                    .font(.system(size: 12))
+                    .font(.system(size: 12, weight: focusMode ? .semibold : .regular))
                     .foregroundStyle(focusMode ? accentColor : PrototypeStyle.muted)
-                    .padding(.horizontal, 5)
+                    .padding(.horizontal, 8)
                     .frame(height: 34)
+                    .background(focusMode ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 7))
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help("Modo de escrita")
+            .buttonStyle(.hoverHighlight)
+            .keyboardShortcut("f", modifiers: [.command, .shift])
+            .help(focusMode ? "Sair do modo de escrita (⇧⌘F)" : "Modo de escrita: recolhe calendário, leituras e materiais (⇧⌘F)")
 
             Button {
                 contextTab = .review
@@ -324,7 +334,8 @@ struct PreparationWorkspace: View {
                     .contentShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
-            .help("Solicitar uma revisão")
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .help("Solicitar uma revisão do manuscrito (⇧⌘R)")
 
             Button {
                 openPreferences()
@@ -335,8 +346,8 @@ struct PreparationWorkspace: View {
                     .frame(width: 34, height: 34)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help("Preferências")
+            .buttonStyle(.hoverHighlight)
+            .help("Preferências (⌘,)")
         }
         .padding(.horizontal, 18)
         .frame(height: 52)
@@ -445,21 +456,23 @@ struct PreparationWorkspace: View {
         openWindow(id: "preferences")
     }
 
-    private func toolbarAction(_ symbol: String, title: String, action: @escaping () -> Void) -> some View {
+    private func toolbarAction(_ symbol: String, title: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: symbol)
                 .font(.system(size: 12))
                 .foregroundStyle(PrototypeStyle.muted)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 8)
                 .frame(height: 34)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverHighlight)
+        .help(help)
     }
 
     private func collapsedPanelRail(
         title: String,
         symbol: String,
+        shortcut: KeyEquivalent,
         topPadding: CGFloat,
         trailingPadding: CGFloat,
         dividerOnLeadingEdge: Bool,
@@ -471,12 +484,13 @@ struct PreparationWorkspace: View {
                 Button(action: action) {
                     Image(systemName: symbol)
                         .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(PrototypeStyle.muted)
+                        .foregroundStyle(accentColor)
                         .frame(width: 32, height: 30)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help("Mostrar painel de \(title.lowercased())")
+                .buttonStyle(.hoverHighlight)
+                .keyboardShortcut(shortcut, modifiers: [.command, .option])
+                .help("Mostrar painel de \(title.lowercased()) (⌥⌘\(shortcut.character))")
                 .accessibilityLabel("Mostrar painel de \(title.lowercased())")
             }
             Spacer(minLength: 0)
@@ -677,7 +691,7 @@ struct PreparationWorkspace: View {
             Image(systemName: symbol)
                 .foregroundStyle(isActive ? accentColor : PrototypeStyle.ink)
                 .frame(width: 32, height: 32)
-                .background(isActive ? PrototypeStyle.softGreen : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .background(isActive ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .contentShape(Rectangle())
         }
         .keyboardShortcut(shortcut, modifiers: .command)
@@ -693,7 +707,7 @@ struct PreparationWorkspace: View {
                 .foregroundStyle(isActive ? accentColor : PrototypeStyle.ink)
                 .padding(.horizontal, 8)
                 .frame(height: 32)
-                .background(isActive ? PrototypeStyle.softGreen : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .background(isActive ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -703,6 +717,8 @@ struct PreparationWorkspace: View {
     private func statusBar(draft: SermonDraft) -> some View {
         let words = editorCommands.wordCount
         let pages = Double(words) / 720
+        // ~2.100 palavras renderam 20–24 min na prática do usuário; ≈ 96 palavras por minuto.
+        let minutes = Int((Double(words) / 96).rounded())
         let driveStatus: String = {
             if googleDrive.isLoading { return "Drive · verificando" }
             if googleDrive.isSaving { return "Drive · salvando" }
@@ -716,8 +732,10 @@ struct PreparationWorkspace: View {
         }()
         let driveColor: Color = draft.googleDriveSyncError == nil ? accentColor : .orange
         return HStack(spacing: 12) {
-            Text("\(words.formatted()) palavras · ≈ \(pages.formatted(.number.precision(.fractionLength(1)))) páginas")
+            Text("\(words.formatted()) palavras · ≈ \(pages.formatted(.number.precision(.fractionLength(1)))) páginas · ≈ \(minutes) min")
                 .foregroundStyle(PrototypeStyle.muted)
+                .monospacedDigit()
+                .help("Estimativa a partir do seu ritmo habitual: 3 páginas rendem 20–24 minutos")
             Text("seu habitual: 3 páginas ≈ 20–24 min")
                 .foregroundStyle(PrototypeStyle.muted.opacity(0.72))
             Spacer()
@@ -734,7 +752,8 @@ struct PreparationWorkspace: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(accentColor)
-            .help("Abrir histórico recuperável deste sermão")
+            .keyboardShortcut("h", modifiers: [.command, .shift])
+            .help("Abrir histórico recuperável deste sermão (⇧⌘H)")
         }
         .font(.system(size: 11))
         .padding(.horizontal, 20)
@@ -879,6 +898,15 @@ struct PreparationWorkspace: View {
         } catch {
             reviewReports = []
         }
+    }
+
+    /// Atende pedidos de outras janelas (Arquivo) para abrir a preparação de uma data.
+    private func consumeNavigationRequest() {
+        guard let requested = navigation.consumeDateRequest() else { return }
+        let day = Calendar.current.startOfDay(for: requested)
+        if focusMode { focusMode = false }
+        selectedDate = day
+        calendarMonth = day
     }
 
     private func ensureDraft(for date: Date) {

@@ -13,9 +13,11 @@ struct PregarApp: App {
     @StateObject private var readerSession = ReaderSessionStore(userDefaults: PregarRuntime.makeAppUserDefaults())
     @StateObject private var bibleSession = BibleWindowSession()
     @StateObject private var googleDrive = GoogleDriveStore()
+    @StateObject private var navigation = WorkspaceNavigationStore()
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "workspace") {
             PreparationWorkspace()
                 .environmentObject(settings)
                 .environmentObject(aiSettings)
@@ -23,8 +25,10 @@ struct PregarApp: App {
                 .environmentObject(readerSession)
                 .environmentObject(bibleSession)
                 .environmentObject(googleDrive)
+                .environmentObject(navigation)
                 .frame(minWidth: 1220, minHeight: 740)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
+                .overlay(WorkspaceWindowRegistrar(navigation: navigation).frame(width: 0, height: 0))
         }
         .defaultSize(width: 1440, height: 900)
         .windowResizability(.contentMinSize)
@@ -32,11 +36,35 @@ struct PregarApp: App {
         .modelContainer(sermonModelContainer)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .appSettings) {
+                Button("Preferências…") { openWindow(id: "preferences") }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
+            CommandMenu("Preparação") {
+                Button("Bíblia", systemImage: "book.closed") { openWindow(id: "bible") }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("Leitor", systemImage: "doc.text") { openWindow(id: "reader") }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("Biblioteca de PDFs", systemImage: "books.vertical") { openWindow(id: "library") }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("Arquivo de sermões", systemImage: "archivebox") { openWindow(id: "archive") }
+                    .keyboardShortcut("4", modifiers: .command)
+                Divider()
+                Button("Mesa de preparação", systemImage: "square.text.square") {
+                    if navigation.isWorkspaceVisible, let window = navigation.workspaceWindow {
+                        window.makeKeyAndOrderFront(nil)
+                    } else {
+                        openWindow(id: "workspace")
+                    }
+                }
+                .keyboardShortcut("0", modifiers: .command)
+            }
         }
 
         Window("Leitor", id: "reader") {
             ReaderWindowView()
                 .environmentObject(readerSession)
+                .environmentObject(appearance)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
         .defaultSize(width: 1380, height: 860)
@@ -57,6 +85,7 @@ struct PregarApp: App {
         Window("Biblioteca de PDFs", id: "library") {
             PDFLibraryView()
                 .environmentObject(readerSession)
+                .environmentObject(appearance)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
         .defaultSize(width: 1320, height: 820)
@@ -66,6 +95,8 @@ struct PregarApp: App {
         Window("Arquivo de sermões", id: "archive") {
             SermonArchiveView()
                 .environmentObject(readerSession)
+                .environmentObject(appearance)
+                .environmentObject(navigation)
                 .overlay(WindowChromeConfigurator().frame(width: 0, height: 0))
         }
         .defaultSize(width: 1220, height: 760)

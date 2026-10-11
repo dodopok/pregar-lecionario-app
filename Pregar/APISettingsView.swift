@@ -12,7 +12,7 @@ private enum PreferencesSection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var symbol: String {
         switch self {
-        case .api: "plus"
+        case .api: "network"
         case .intelligence: "sparkle"
         case .tablet: "ipad.landscape"
         case .library: "book.closed"
@@ -169,7 +169,7 @@ struct APISettingsView: View {
                     .background(section == item ? accent.opacity(0.11) : .clear, in: RoundedRectangle(cornerRadius: 10))
                     .contentShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hoverHighlight(cornerRadius: 10))
                 .accessibilityAddTraits(section == item ? .isSelected : [])
             }
         }
@@ -612,14 +612,14 @@ struct APISettingsView: View {
             Button { editingSite = site } label: {
                 Image(systemName: "pencil").frame(width: 30, height: 30).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).help("Editar \(site.title)")
+            .buttonStyle(.hoverHighlight).help("Editar \(site.title)")
             Button(role: .destructive) {
                 sitePendingDeletion = site
                 confirmsSiteDeletion = true
             } label: {
                 Image(systemName: "trash").frame(width: 30, height: 30).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).help("Remover \(site.title)")
+            .buttonStyle(.hoverHighlight).help("Remover \(site.title)")
         }
         .font(.system(size: 12))
         .frame(minHeight: 52)
@@ -638,14 +638,14 @@ struct APISettingsView: View {
             Button { editingAuthor = author } label: {
                 Image(systemName: "pencil").frame(width: 30, height: 30).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).help("Editar \(author.name)")
+            .buttonStyle(.hoverHighlight).help("Editar \(author.name)")
             Button(role: .destructive) {
                 authorPendingDeletion = author
                 confirmsAuthorDeletion = true
             } label: {
                 Image(systemName: "trash").frame(width: 30, height: 30).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).help("Remover \(author.name)")
+            .buttonStyle(.hoverHighlight).help("Remover \(author.name)")
         }
         .font(.system(size: 12))
         .frame(minHeight: 52)

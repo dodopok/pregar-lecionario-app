@@ -23,6 +23,7 @@ private enum PDFLibraryCoverCache {
 
 struct PDFLibraryView: View {
     @EnvironmentObject private var readerSession: ReaderSessionStore
+    @EnvironmentObject private var appearance: AppAppearanceStore
     @Environment(\.openWindow) private var openWindow
     @AppStorage("pregar.library.records.v1") private var savedRecords = Data()
     @AppStorage("pregar.library.records.revision.v1") private var savedLibraryRevision = 0
@@ -82,7 +83,7 @@ struct PDFLibraryView: View {
                 .disabled(isIndexing)
                 Button("Importar PDF…", systemImage: "plus", action: { isImporting = true })
                     .buttonStyle(.borderedProminent)
-                    .tint(PrototypeStyle.green)
+                    .tint(appearance.accent)
             }
             .padding(.leading, 100)
             .padding(.trailing, 18)
@@ -104,8 +105,9 @@ struct PDFLibraryView: View {
                                 } label: {
                                     recordRow(record, selected: record.id == selectedID)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.hoverHighlight(cornerRadius: 9))
                                 .disabled(isIndexing)
+                                .accessibilityAddTraits(record.id == selectedID ? .isSelected : [])
                             }
                         }
                         .padding(7)
@@ -157,13 +159,13 @@ struct PDFLibraryView: View {
         .preferredColorScheme(.light)
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.pdf], allowsMultipleSelection: true, onCompletion: importFiles)
         .sheet(item: $metadataRecord) { record in
-            PDFLibraryMetadataEditor(record: record) { metadata in
+            PDFLibraryMetadataEditor(record: record, accent: appearance.accent) { metadata in
                 saveMetadata(metadata, for: record)
             }
             .frame(width: 560, height: 360)
         }
         .sheet(isPresented: $isImportingPublicDriveFolder) {
-            GoogleDrivePublicFolderImportSheet(accent: PrototypeStyle.green, isLibraryIndexing: $isIndexing) { urls in
+            GoogleDrivePublicFolderImportSheet(accent: appearance.accent, isLibraryIndexing: $isIndexing) { urls in
                 index(paths: urls.map(\.path))
             }
         }
@@ -193,7 +195,7 @@ struct PDFLibraryView: View {
                                 .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                             if let ocrPageNumbers = selectedRecord.ocrPageNumbers, !ocrPageNumbers.isEmpty {
                                 Text("OCR · \(ocrPageNumbers.count) páginas examinadas")
-                                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.green)
+                                    .font(.system(size: 12)).foregroundStyle(appearance.accent)
                             }
                         }
                     }
@@ -287,7 +289,7 @@ struct PDFLibraryView: View {
             } actions: {
                 Button("Importar PDF…") { isImporting = true }
                     .buttonStyle(.borderedProminent)
-                    .tint(PrototypeStyle.green)
+                    .tint(appearance.accent)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -309,7 +311,7 @@ struct PDFLibraryView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)
-        .background(selected ? PrototypeStyle.softGreen : .clear, in: RoundedRectangle(cornerRadius: 9))
+        .background(selected ? PrototypeStyle.softAccent(appearance.accent) : .clear, in: RoundedRectangle(cornerRadius: 9))
         .contentShape(Rectangle())
     }
 
@@ -347,8 +349,9 @@ struct PDFLibraryView: View {
                     .frame(minHeight: section.context == nil ? 37 : 44)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hoverHighlight(cornerRadius: 6))
                 .disabled(openingPDFRecordID != nil)
+                .help("Abrir no leitor na página física \(section.startPage)")
                 .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
             }
         }
@@ -668,10 +671,12 @@ private struct PDFLibraryMetadataEditor: View {
     @State private var metadata: PDFLibraryMetadataOverrides
 
     let record: PDFLibraryRecord
+    let accent: Color
     let onSave: (PDFLibraryMetadataOverrides) -> Void
 
-    init(record: PDFLibraryRecord, onSave: @escaping (PDFLibraryMetadataOverrides) -> Void) {
+    init(record: PDFLibraryRecord, accent: Color, onSave: @escaping (PDFLibraryMetadataOverrides) -> Void) {
         self.record = record
+        self.accent = accent
         self.onSave = onSave
         _metadata = State(initialValue: PDFLibraryMetadataOverrides(record: record))
     }
@@ -721,7 +726,7 @@ private struct PDFLibraryMetadataEditor: View {
                     onSave(cleanedMetadata)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(PrototypeStyle.green)
+                .tint(accent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!hasTitle)
             }
@@ -800,6 +805,9 @@ private struct ArchiveMaterialCountRequest: Sendable {
 
 struct SermonArchiveView: View {
     @EnvironmentObject private var readerSession: ReaderSessionStore
+    @EnvironmentObject private var appearance: AppAppearanceStore
+    @EnvironmentObject private var navigation: WorkspaceNavigationStore
+    @Environment(\.openWindow) private var openWindow
     @Query(sort: \SermonDraft.liturgicalDate, order: .reverse) private var drafts: [SermonDraft]
     @AppStorage("pregar.library.records.v1") private var savedPDFRecords = Data()
     @AppStorage("pregar.library.records.revision.v1") private var savedLibraryRevision = 0
@@ -826,6 +834,9 @@ struct SermonArchiveView: View {
         VStack(spacing: 0) {
             HStack(spacing: 15) {
                 Text("Arquivo").font(PrototypeStyle.serif(16, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+                Text(archiveSummary)
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                    .lineLimit(1)
                 Spacer()
                 Picker("Buscar por", selection: $searchMode) {
                     ForEach(ArchiveSearchMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
@@ -847,73 +858,28 @@ struct SermonArchiveView: View {
                     archiveHeader("APARECE COMO", width: 190)
                     archiveHeader("MATERIAIS", width: 80)
                     archiveHeader("DRIVE", width: 110)
+                    Color.clear.frame(width: 18)
                 }
                 .padding(.horizontal, 22)
                 .frame(height: 34)
                 .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
 
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(results) { draft in
-                            HStack(spacing: 12) {
-                                Text(draft.liturgicalDate.formatted(.dateTime.day().month(.twoDigits).year().locale(Locale(identifier: "pt_BR"))))
-                                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
-                                    .frame(width: 100, alignment: .leading)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(draft.liturgicalOccasion ?? draft.liturgicalCelebration ?? "—")
-                                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
-                                    let context = [draft.liturgicalSeason, draft.liturgicalCelebration == draft.liturgicalOccasion ? nil : draft.liturgicalCelebration]
-                                        .compactMap { $0 }.joined(separator: " · ")
-                                    if !context.isEmpty {
-                                        Text(context).font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted).lineLimit(1)
-                                    }
+                if results.isEmpty {
+                    archiveEmptyState
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(results) { draft in
+                                Button {
+                                    openInWorkspace(draft)
+                                } label: {
+                                    archiveRow(draft)
                                 }
-                                .frame(width: 200, alignment: .leading)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(draft.title.isEmpty ? draft.mainReadingReference ?? "Preparação sem título" : draft.title)
-                                        .font(PrototypeStyle.serif(15, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
-                                    if let reference = draft.mainReadingReference {
-                                        Text(reference).font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(draft.mainReadingReference == nil ? "—" : "passagem principal")
-                                    .font(.system(size: 12, weight: .medium)).foregroundStyle(draft.mainReadingReference == nil ? PrototypeStyle.muted : PrototypeStyle.green)
-                                    .frame(width: 190, alignment: .leading)
-                                if let reference = draft.mainReadingReference {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("\(pdfMatchCounts[archiveKey(for: draft)] ?? 0) PDFs")
-                                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
-                                        let reviewedCount = ReaderTab.countMarkedForReview(
-                                            in: readerSession.tabs,
-                                            reference: reference,
-                                            sermonDateKey: archiveKey(for: draft)
-                                        )
-                                        if reviewedCount > 0 {
-                                            Text("\(reviewedCount) na revisão")
-                                                .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
-                                        }
-                                    }
-                                    .frame(width: 80, alignment: .leading)
-                                } else {
-                                    Text("—").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
-                                        .frame(width: 80, alignment: .leading)
-                                }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    if let path = draft.tabletPDFPath, FileManager.default.fileExists(atPath: path) {
-                                        Text("PDF salvo").foregroundStyle(PrototypeStyle.green)
-                                        Text(draft.tabletPDFUpdatedAt?.formatted(date: .omitted, time: .shortened) ?? "")
-                                            .foregroundStyle(PrototypeStyle.muted)
-                                    } else {
-                                        Text(draft.tabletPDFPath == nil ? "sem cópia" : "não encontrado")
-                                            .foregroundStyle(PrototypeStyle.muted)
-                                    }
-                                }
-                                .font(.system(size: 10)).frame(width: 110, alignment: .leading)
+                                .buttonStyle(.hoverHighlight(cornerRadius: 0))
+                                .help("Abrir esta preparação na Mesa")
+                                .accessibilityLabel(archiveRowLabel(for: draft))
+                                .accessibilityHint("Abre a preparação na Mesa")
                             }
-                            .padding(.horizontal, 22)
-                            .frame(minHeight: 58)
-                            .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
                         }
                     }
                 }
@@ -933,6 +899,119 @@ struct SermonArchiveView: View {
             }.value
             guard !Task.isCancelled else { return }
             pdfMatchCounts = counts
+        }
+    }
+
+    private func archiveRow(_ draft: SermonDraft) -> some View {
+        HStack(spacing: 12) {
+            Text(draft.liturgicalDate.formatted(.dateTime.day().month(.twoDigits).year().locale(Locale(identifier: "pt_BR"))))
+                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                .frame(width: 100, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(draft.liturgicalOccasion ?? draft.liturgicalCelebration ?? "—")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                let context = [draft.liturgicalSeason, draft.liturgicalCelebration == draft.liturgicalOccasion ? nil : draft.liturgicalCelebration]
+                    .compactMap { $0 }.joined(separator: " · ")
+                if !context.isEmpty {
+                    Text(context).font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted).lineLimit(1)
+                }
+            }
+            .frame(width: 200, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(draft.title.isEmpty ? draft.mainReadingReference ?? "Preparação sem título" : draft.title)
+                    .font(PrototypeStyle.serif(15, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
+                if let reference = draft.mainReadingReference {
+                    Text(reference).font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(draft.mainReadingReference == nil ? "—" : "passagem principal")
+                .font(.system(size: 12, weight: .medium)).foregroundStyle(draft.mainReadingReference == nil ? PrototypeStyle.muted : appearance.accent)
+                .frame(width: 190, alignment: .leading)
+            archiveMaterialsCell(draft)
+                .frame(width: 80, alignment: .leading)
+            archiveDriveCell(draft)
+                .frame(width: 110, alignment: .leading)
+            Image(systemName: "arrow.right.circle")
+                .font(.system(size: 14))
+                .foregroundStyle(appearance.accent)
+                .frame(width: 18)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 22)
+        .frame(minHeight: 58)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+    }
+
+    @ViewBuilder
+    private func archiveMaterialsCell(_ draft: SermonDraft) -> some View {
+        if let reference = draft.mainReadingReference {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(pdfMatchCounts[archiveKey(for: draft)] ?? 0) PDFs")
+                    .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                let reviewedCount = ReaderTab.countMarkedForReview(
+                    in: readerSession.tabs,
+                    reference: reference,
+                    sermonDateKey: archiveKey(for: draft)
+                )
+                if reviewedCount > 0 {
+                    Text("\(reviewedCount) na revisão")
+                        .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
+                }
+            }
+        } else {
+            Text("—").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+        }
+    }
+
+    private func archiveDriveCell(_ draft: SermonDraft) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let path = draft.tabletPDFPath, FileManager.default.fileExists(atPath: path) {
+                Text("PDF salvo").foregroundStyle(appearance.accent)
+                Text(draft.tabletPDFUpdatedAt?.formatted(date: .omitted, time: .shortened) ?? "")
+                    .foregroundStyle(PrototypeStyle.muted)
+            } else {
+                Text(draft.tabletPDFPath == nil ? "sem cópia" : "não encontrado")
+                    .foregroundStyle(PrototypeStyle.muted)
+            }
+        }
+        .font(.system(size: 10))
+    }
+
+    private var archiveSummary: String {
+        let total = drafts.count
+        let shown = results.count
+        guard total > 0 else { return "nenhuma preparação ainda" }
+        if shown == total { return "\(total) \(total == 1 ? "preparação" : "preparações")" }
+        return "\(shown) de \(total) preparações"
+    }
+
+    private var archiveEmptyState: some View {
+        Group {
+            if drafts.isEmpty {
+                ContentUnavailableView {
+                    Label("Arquivo vazio", systemImage: "archivebox")
+                } description: {
+                    Text("Cada data aberta na Mesa cria uma preparação; elas aparecem aqui com ocasião, passagem e materiais.")
+                }
+            } else {
+                ContentUnavailableView.search(text: searchText)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func archiveRowLabel(for draft: SermonDraft) -> String {
+        let title = draft.title.isEmpty ? (draft.mainReadingReference ?? "Preparação sem título") : draft.title
+        let date = draft.liturgicalDate.formatted(.dateTime.day().month(.wide).year().locale(Locale(identifier: "pt_BR")))
+        return [title, draft.liturgicalOccasion ?? draft.liturgicalCelebration, date].compactMap { $0 }.joined(separator: ", ")
+    }
+
+    private func openInWorkspace(_ draft: SermonDraft) {
+        navigation.open(date: draft.liturgicalDate)
+        if !navigation.isWorkspaceVisible {
+            openWindow(id: "workspace")
         }
     }
 

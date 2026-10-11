@@ -63,7 +63,8 @@ struct CalendarSidebarView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 24, height: 24)
-                    .background(PrototypeStyle.green, in: RoundedRectangle(cornerRadius: 7))
+                    .background(accent, in: RoundedRectangle(cornerRadius: 7))
+                    .animation(.easeInOut(duration: 0.3), value: accent)
                 Text("Pregar")
                     .font(PrototypeStyle.serif(17, weight: .semibold))
                     .foregroundStyle(PrototypeStyle.ink)
@@ -105,15 +106,22 @@ struct CalendarSidebarView: View {
 
             HStack(spacing: 6) {
                 weekButton("chevron.left", accessibility: "Semana anterior", days: -7)
-                Button("Hoje") {
+                Button {
                     let today = calendar.startOfDay(for: .now)
                     selectedDate = today
                     calendarMonth = today
+                } label: {
+                    Text("Hoje")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(PrototypeStyle.ink)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 30)
+                        .background(PrototypeStyle.paper, in: RoundedRectangle(cornerRadius: 7))
+                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
+                        .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 30)
-                .contentShape(Rectangle())
-                .foregroundStyle(PrototypeStyle.ink)
+                .buttonStyle(.hoverHighlight)
+                .help("Voltar para hoje")
                 weekButton("chevron.right", accessibility: "Próxima semana", days: 7)
             }
             .font(.system(size: 12))
@@ -168,7 +176,7 @@ struct CalendarSidebarView: View {
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverHighlight)
         .foregroundStyle(PrototypeStyle.muted)
         .help(accessibility)
         .accessibilityLabel(accessibility)
@@ -177,13 +185,14 @@ struct CalendarSidebarView: View {
     private func calendarDay(_ date: Date) -> some View {
         let selected = calendar.isDate(date, inSameDayAs: selectedDate)
         let isSunday = calendar.component(.weekday, from: date) == 1
+        let isToday = calendar.isDateInToday(date)
         return Button {
             selectedDate = calendar.startOfDay(for: date)
         } label: {
             VStack(spacing: 1) {
                 Text(date.formatted(.dateTime.day()))
-                    .font(.system(size: 12, weight: selected ? .bold : .regular))
-                    .foregroundStyle(selected ? .white : PrototypeStyle.ink.opacity(isSunday ? 1 : 0.82))
+                    .font(.system(size: 12, weight: selected || isToday ? .bold : .regular))
+                    .foregroundStyle(selected ? .white : (isToday ? accent : PrototypeStyle.ink.opacity(isSunday ? 1 : 0.82)))
                 Circle()
                     .fill(isSunday && !selected ? accent : .clear)
                     .frame(width: 3, height: 3)
@@ -191,10 +200,16 @@ struct CalendarSidebarView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 30)
             .background(selected ? accent : .clear, in: RoundedRectangle(cornerRadius: 7))
+            .overlay {
+                if isToday && !selected {
+                    RoundedRectangle(cornerRadius: 7).strokeBorder(accent.opacity(0.55), lineWidth: 1)
+                }
+            }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(date.formatted(date: .long, time: .omitted))
+        .buttonStyle(.hoverHighlight)
+        .help(isToday ? "Hoje" : date.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "pt_BR"))))
+        .accessibilityLabel(isToday ? "Hoje, \(date.formatted(date: .long, time: .omitted))" : date.formatted(date: .long, time: .omitted))
     }
 
     private func weekButton(_ symbol: String, accessibility: String, days: Int) -> some View {
@@ -210,7 +225,7 @@ struct CalendarSidebarView: View {
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(PrototypeStyle.line, lineWidth: 1))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverHighlight)
         .help(accessibility)
         .accessibilityLabel(accessibility)
     }
@@ -238,7 +253,7 @@ struct CalendarSidebarView: View {
             .background(selected ? accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 7))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverHighlight)
     }
 
     @MainActor
@@ -283,7 +298,8 @@ struct CalendarSidebarView: View {
                 .frame(height: 34)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverHighlight)
+        .help(title)
     }
 }
 
@@ -339,9 +355,10 @@ struct ScripturePanelView: View {
                         .frame(width: 32, height: 30)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hoverHighlight)
                 .foregroundStyle(PrototypeStyle.muted)
-                .help("Ocultar painel de leituras")
+                .keyboardShortcut("2", modifiers: [.command, .option])
+                .help("Ocultar painel de leituras (⌥⌘2)")
                 .accessibilityLabel("Ocultar painel de leituras")
             }
             .padding(.horizontal, 16)
@@ -442,9 +459,10 @@ struct ScripturePanelView: View {
                     Image(systemName: primary ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 17, weight: .regular))
                         .foregroundStyle(primary ? accent : PrototypeStyle.muted.opacity(0.45))
-                        .frame(width: 25, height: 27)
+                        .frame(width: 27, height: 27)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hoverHighlight(cornerRadius: 13))
                 .help(primary ? "Texto principal do sermão" : "Usar como texto principal")
                 .accessibilityLabel(primary ? "Desmarcar texto principal" : "Usar \(reading.label) como texto principal")
             }
@@ -606,7 +624,8 @@ struct ResourceContextPanel: View {
                         .background(selectedTab == tab ? .white : .clear, in: RoundedRectangle(cornerRadius: 7))
                         .shadow(color: selectedTab == tab ? .black.opacity(0.10) : .clear, radius: 2, y: 1)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hoverHighlight)
+                    .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
                 }
                 Button {
                     collapse()
@@ -616,9 +635,10 @@ struct ResourceContextPanel: View {
                         .frame(width: 32, height: 30)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hoverHighlight)
                 .foregroundStyle(PrototypeStyle.muted)
-                .help("Ocultar painel de materiais")
+                .keyboardShortcut("3", modifiers: [.command, .option])
+                .help("Ocultar painel de materiais (⌥⌘3)")
                 .accessibilityLabel("Ocultar painel de materiais")
             }
             .padding(.horizontal, 12)
@@ -736,7 +756,7 @@ struct ResourceContextPanel: View {
                             .frame(width: 24, height: 24)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hoverHighlight)
                     .foregroundStyle(PrototypeStyle.muted)
                     .help("Atualizar resultados das fontes favoritas")
                     .disabled(reference.isEmpty || !favoriteSiteSearchActiveReferences.isEmpty)
@@ -1396,7 +1416,7 @@ struct ResourceContextPanel: View {
                                         .frame(width: 24, height: 24)
                                         .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain).foregroundStyle(accent)
+                                .buttonStyle(.hoverHighlight).foregroundStyle(accent)
                                 .help("Inserir esta ideia no manuscrito")
                             }
                         }

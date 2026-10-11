@@ -1,6 +1,6 @@
 # Progresso de implementação
 
-Atualizado em 28 de setembro de 2026.
+Atualizado em 11 de outubro de 2026.
 
 ## Referência visual
 
@@ -193,6 +193,22 @@ O host é uma constante do app e a tela da Estêvão API não permite editá-lo.
 - A restauração pede confirmação, substitui sermões, histórico e dados locais cobertos pelo pacote, limpa preferências permitidas ausentes no backup e atualiza a sessão do Leitor e stores de preferências. Não envia nada ao Google Drive; o hash sincronizado é redefinido para evitar envio automático do conteúdo restaurado. Tokens e chaves da Estêvão API/IA ficam intocados no Acesso às Chaves; tokens OAuth e Client ID do Google não são incluídos.
 - O manifesto mantém SHA-256 por arquivo. Antes de restaurar, o app confere hashes, caminhos permitidos e referências aos PDFs; caminhos inesperados, conteúdo alterado e symlinks em arquivos referenciados são rejeitados. Links de página cujo PDF já não existe são descartados, sem impedir o backup.
 - Testes sintéticos cobrem ciclo de criação/restauração (RTF, PDF, Biblioteca, Leitor e histórico), preferências ausentes, preservação de credenciais do destino, checksum alterado, caminho adulterado e arquivo simbólico. A suíte macOS passou com 73 testes; assinatura verificada como `Apple Development: DOUGLAS DE ARAUJO SILVA`, `TeamIdentifier=R573HPN65Q`. Nenhum dado real do Drive ou sermão foi usado.
+
+## Refinamento de UI/UX (11/10/2026)
+
+Rodada de ajustes de interface e usabilidade, sem mudança de modelo de dados, de contratos de API ou do formato do manuscrito.
+
+- Acento litúrgico em todas as janelas. Biblioteca, Leitor, Arquivo e as folhas de nova aba, correção de página e metadados usavam o verde fixo do protótipo; agora recebem `AppAppearanceStore` e seguem a cor do dia, como já faziam Mesa, Bíblia e Preferências. O monograma "Pregar" na barra lateral também acompanha a cor, com transição suave. Estados ativos/selecionados (negrito, itálico, título, citação, lista, obra selecionada na Biblioteca, seção ativa no Leitor) usam `PrototypeStyle.softAccent(_:)` em vez de `softGreen`.
+- Arquivo abre a preparação. As linhas do Arquivo eram apenas informativas; agora cada linha é um botão que leva a Mesa para a data daquele sermão e traz a janela para a frente (`WorkspaceNavigationStore`, em `WindowChrome.swift`). Se a Mesa estiver fechada, a janela é reaberta e consome o pedido ao aparecer. O cabeçalho mostra a contagem ("12 preparações" ou "3 de 12") e há estado vazio tanto para arquivo sem sermões quanto para busca sem resultado.
+- Atalhos e menu. `⌘,` abre Preferências; o menu "Preparação" oferece Bíblia `⌘1`, Leitor `⌘2`, Biblioteca `⌘3`, Arquivo `⌘4` e Mesa `⌘0`. Na Mesa: `⌥⌘1/2/3` alternam calendário, leituras e materiais; `⇧⌘F` modo de escrita; `⇧⌘R` revisão; `⇧⌘T` tablet; `⇧⌘H` histórico. No Leitor: `⌘[`/`⌘]` voltam/avançam e `⌘T` abre nova aba. Todos os atalhos aparecem nos tooltips dos botões correspondentes.
+- Modo de escrita. Além dos painéis, o cabeçalho do dia é recolhido e o botão "Foco" fica marcado com o acento; a transição é animada. Sair do modo (ou abrir uma data pelo Arquivo) restaura a composição.
+- Calendário. O dia de hoje recebe contorno e número na cor do acento, sem conflitar com a seleção; o botão "Hoje" ganhou a mesma linguagem visual dos botões de semana; cada dia mostra a data completa no tooltip.
+- Resposta ao cursor. `HoverHighlightButtonStyle` (em `PrototypeStyle.swift`) substitui `.plain` em botões de ícone, linhas de lista e abas: realce arredondado discreto ao passar o cursor e ao pressionar, com opacidade reduzida quando desabilitado. Aplicado na barra superior, trilhos de painel, calendário, domingos, abas Materiais/Ideias/Revisão, obras e seções da Biblioteca, abas do Leitor, navegação das Preferências e botões Perícope/Capítulo da Bíblia.
+- Barra de status. Além de palavras e páginas, mostra a estimativa de minutos de pregação (≈ 96 palavras/min, derivado das 2.115 palavras ≈ 20–24 min da amostra do usuário).
+- Textos. O rodapé da Bíblia dizia "Texto ilustrativo", herança do protótipo; agora mostra a referência consultada, o número de traduções e a origem (Estêvão API v2), ou orienta a digitar uma referência. O ícone da seção Estêvão API nas Preferências passou de "+" para "network".
+- Acessibilidade. Abas e seletores anunciam `isSelected`; linhas do Arquivo têm rótulo com título, ocasião e data e dica "Abre a preparação na Mesa"; o botão de texto principal nas leituras ganhou área de clique maior.
+
+Limites desta rodada: as alterações foram feitas em ambiente sem Xcode, portanto build, testes e conferência visual ainda não foram executados. Antes de considerar a rodada concluída, rodar a suíte macOS e reabrir Mesa, Arquivo, Biblioteca e Leitor para validar o acento dinâmico, o retorno do Arquivo à Mesa e os atalhos com o editor em foco.
 
 ## Próximos passos
 

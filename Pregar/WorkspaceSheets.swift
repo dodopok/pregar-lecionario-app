@@ -241,10 +241,11 @@ struct BibleComparisonView: View {
                 .background(PrototypeStyle.paper)
             }
 
-            HStack {
-                Text("Texto ilustrativo — a versão real vem da Estêvão API v2.")
+            HStack(spacing: 10) {
+                Text(footerStatus)
                     .font(.system(size: 11))
                     .foregroundStyle(PrototypeStyle.muted)
+                    .lineLimit(1)
                 if let errorMessage {
                     Text(errorMessage).font(.system(size: 10)).foregroundStyle(.red).lineLimit(1)
                 }
@@ -266,6 +267,13 @@ struct BibleComparisonView: View {
         }
     }
 
+    private var footerStatus: String {
+        let trimmed = requestReference.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Digite uma referência e pressione Enter para comparar traduções." }
+        let count = displayedVersionCodes.count
+        return "\(trimmed) · \(count) \(count == 1 ? "tradução" : "traduções") · Estêvão API v2"
+    }
+
     private func scopeButton(_ value: PassageScope) -> some View {
         Button {
             scope = value
@@ -277,9 +285,10 @@ struct BibleComparisonView: View {
                 .frame(height: 26)
                 .background(scope == value ? .white : .clear, in: RoundedRectangle(cornerRadius: 7))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hoverHighlight)
         .frame(minHeight: 34)
         .contentShape(Rectangle())
+        .accessibilityAddTraits(scope == value ? .isSelected : [])
     }
 
     @ViewBuilder
