@@ -138,7 +138,9 @@ enum GoogleOAuthRequest {
         var components = URLComponents()
         components.queryItems = values.map { URLQueryItem(name: $0.key, value: $0.value) }
         request.httpBody = components.percentEncodedQuery?.replacingOccurrences(of: "%20", with: "+").data(using: .utf8)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await IntegrationLog.data(
+            for: request, using: session, integration: .googleDrive, operation: "OAuth · token"
+        )
         guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
         guard (200..<300).contains(response.statusCode) else {
             let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
@@ -832,7 +834,9 @@ struct GoogleDriveAPI {
         if request.value(forHTTPHeaderField: "Accept") == nil {
             request.setValue("application/json", forHTTPHeaderField: "Accept")
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await IntegrationLog.data(
+            for: request, using: session, integration: .googleDrive, operation: "Docs/Drive"
+        )
         guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
         return (data, response)
     }
@@ -963,7 +967,9 @@ struct GoogleDrivePublicFolderClient {
         var keys = pdf.parentResourceKeys
         if let resourceKey = pdf.file.resourceKey { keys[pdf.file.id] = resourceKey }
         setResourceKeyHeader(keys, on: &request)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await IntegrationLog.data(
+            for: request, using: session, integration: .googleDrive, operation: "pasta pública · download"
+        )
         guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
         guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
         guard data.count <= Self.maximumPDFSize else { throw GoogleDriveError.driveImportFileTooLarge(pdf.file.name) }
@@ -1029,7 +1035,9 @@ struct GoogleDrivePublicFolderClient {
         var request = URLRequest(url: components.url!)
         request.httpMethod = "GET"
         if let resourceKey { request.setValue("\(id)/\(resourceKey)", forHTTPHeaderField: "X-Goog-Drive-Resource-Keys") }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await IntegrationLog.data(
+            for: request, using: session, integration: .googleDrive, operation: "pasta pública · metadados"
+        )
         guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
         guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
         return try JSONDecoder().decode(GoogleDriveFile.self, from: data)
@@ -1055,7 +1063,9 @@ struct GoogleDrivePublicFolderClient {
             var request = URLRequest(url: components.url!)
             request.httpMethod = "GET"
             setResourceKeyHeader(resourceKeys, on: &request)
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await IntegrationLog.data(
+                for: request, using: session, integration: .googleDrive, operation: "pasta pública · listagem"
+            )
             guard let response = response as? HTTPURLResponse else { throw GoogleDriveError.invalidOAuthResponse }
             guard (200..<300).contains(response.statusCode) else { throw apiError(response, data: data) }
             let page = try JSONDecoder().decode(GoogleDriveFileList.self, from: data)

@@ -87,7 +87,9 @@ struct AIModelCatalogClient {
             request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
             request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await IntegrationLog.data(
+                for: request, using: session, integration: .ai, operation: "catálogo de modelos Claude"
+            )
             guard let response = response as? HTTPURLResponse else { throw AIModelCatalogError.unreadableResponse }
             guard (200..<300).contains(response.statusCode) else {
                 throw AIModelCatalogError.provider(status: response.statusCode)

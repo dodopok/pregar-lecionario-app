@@ -268,6 +268,18 @@ Deixado de fora de propósito: o catálogo de strings. Extrair as strings exige 
 
 Conferir primeiro ao abrir no Xcode: o `GeometryReader` da Mesa com os três painéis e o modo foco; a troca de aparência com janelas abertas (Mesa, Leitor, Preferências); a posição da barra flutuante ao rolar e ao selecionar perto das bordas; o Return no modo ensaio (o espaço é atalho de Iniciar/Pausar); e a inserção da epígrafe num manuscrito que já começa com citação.
 
+## Registro das integrações (11/10/2026)
+
+Pedido do usuário depois de um HTTP 400 na revisão pelo Claude cuja razão não ficou guardada: manter sempre um registro dos erros, em todas as integrações, para mandar mensagens completas.
+
+- **`IntegrationLog`** (em `APISettings.swift`, ao lado de `PregarRuntime`): grava cada chamada externa no Console (`os.Logger`, subsistema do app, categoria `integracoes`) e em `Application Support/<bundle id>/Logs/integracoes.log`, com rotação em 1 MB para `integracoes-anterior.log`. A linha tem data e hora, nível (OK, AVISO, ERRO), integração, operação, método e caminho (sem query), código HTTP, duração e, nas falhas, a resposta do serviço cortada em 4 KB. Corpo de requisição nunca é gravado; valores dos cabeçalhos de autenticação e da query, além de formatos conhecidos de chave e token (`sk-`, `AIza`, `ya29.`, `1//`, campos `access_token`/`refresh_token`), são substituídos por "[segredo removido]".
+- **`IntegrationLog.data(for:using:integration:operation:)`** envolve `URLSession.data(for:)` nos onze pontos de rede: Estêvão API, revisão, perguntas de emergência, pesquisa de materiais e catálogo de modelos Claude, busca nas fontes favoritas, OAuth e API do Google Drive, e a importação de pasta pública (metadados, listagem e download). Os chamadores continuam recebendo o mesmo par `(Data, URLResponse)`; nada mudou no tratamento de erro existente.
+- Registros adicionais onde o HTTP é 200 mas a resposta não serve: revisão e perguntas com JSON fora do esquema (ERRO com o corpo), rejeições da validação local da revisão (AVISO com contagem e motivos) e falhas de leitura das fontes favoritas.
+- **Preferências › Registros**: caminho do arquivo, últimas 400 linhas em fonte monoespaçada com seleção, botões Mostrar no Finder, Copiar registro, Atualizar e Limpar. O menu Ajuda ganhou "Registro de integrações no Finder".
+- Nos testes o registro vai para uma pasta temporária. Novo teste: um HTTP 400 do provedor gera a linha de ERRO com o motivo e sem a chave, sem o token do corpo e sem o manuscrito.
+
+Limites: sem Xcode no ambiente, build e testes seguem pendentes. Conferir primeiro o `switch error` com padrão de enum na busca das fontes favoritas e a interpolação com `privacy: .public` do `Logger`.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.

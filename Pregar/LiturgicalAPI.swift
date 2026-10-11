@@ -253,7 +253,9 @@ struct LiturgicalAPIClient {
         request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
         request.setValue("application/json, application/problem+json", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await IntegrationLog.data(
+            for: request, using: session, integration: .estevaoAPI, operation: "consulta"
+        )
         guard let response = response as? HTTPURLResponse else {
             throw LiturgicalAPIError(message: "A Estêvão API não retornou uma resposta HTTP válida.")
         }

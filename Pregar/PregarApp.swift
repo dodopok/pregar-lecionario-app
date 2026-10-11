@@ -60,6 +60,9 @@ struct PregarApp: App {
                 }
                 .keyboardShortcut("0", modifiers: .command)
             }
+            CommandGroup(after: .help) {
+                Button("Registro de integrações no Finder") { IntegrationLog.revealInFinder() }
+            }
         }
 
         Window("Leitor", id: "reader") {

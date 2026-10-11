@@ -42,7 +42,7 @@ O `project.pbxproj` lista os arquivos-fonte explicitamente. Um arquivo Swift nov
 
 ## Configurar na primeira abertura
 
-Tudo fica em **Preferências** (⌘,), numa barra lateral com seis seções.
+Tudo fica em **Preferências** (⌘,), numa barra lateral com sete seções.
 
 - **Estêvão API.** O app consome `https://api.caminhoanglicano.com.br` (host fixo) para calendário, leituras, coletas e textos bíblicos. Cole a chave da API; ela fica no Acesso às Chaves. Livro de oração (LOC 2027 por padrão), idioma e tradução principal (NVT) são preferências locais.
 - **Inteligência artificial.** Chaves próprias de OpenAI, Anthropic, Google e Perplexity, também no Acesso às Chaves, e a escolha de provedor e modelo para revisão e para pesquisa de materiais. Nada é enviado sem um comando explícito. Detalhes em [docs/ia-byok.md](docs/ia-byok.md).
@@ -50,6 +50,7 @@ Tudo fica em **Preferências** (⌘,), numa barra lateral com seis seções.
 - **Tablet.** Tipografia e formato da cópia de leitura.
 - **Biblioteca.** Pasta dos PDFs e backup/restauração local de tudo o que o app guarda.
 - **Fontes.** Sites e autores favoritos consultados por passagem.
+- **Registros.** O registro das chamadas externas, para diagnosticar erros (veja abaixo).
 
 Google Drive é opcional e fica dentro da própria preparação (folha Tablet e aba Ideias). Exige um OAuth Client ID de app para desktop criado no Google Cloud; o passo a passo está em [docs/google-drive-setup.md](docs/google-drive-setup.md). A importação de uma pasta pública do Drive para a Biblioteca usa uma chave de API da Drive API, separada do OAuth.
 
@@ -88,6 +89,18 @@ TEST_RUNNER_PREGAR_LIVE_SITE_TESTS=1 xcodebuild test -project Pregar.xcodeproj \
   -scheme Pregar -destination 'platform=macOS' -only-testing:PregarTests/FavoriteSiteSearchTests
 ```
 
+## Diagnosticar um erro de integração
+
+Toda chamada à Estêvão API, aos provedores de IA, às fontes favoritas e ao Google Drive é registrada em `Logs/integracoes.log`, dentro da pasta de suporte acima. Cada linha traz data e hora, OK ou ERRO, a integração, a operação (por exemplo "revisão · Anthropic · claude-opus-5-5"), método e caminho, código HTTP e duração. Nas falhas, a resposta do serviço vem logo abaixo, cortada em 4 KB. Rejeições da validação local da revisão aparecem como AVISO.
+
+Chaves, tokens e segredos em formato conhecido são removidos antes de gravar. O corpo das requisições nunca é gravado, então o manuscrito não vai para o arquivo. O arquivo gira em 1 MB; a versão anterior fica em `integracoes-anterior.log`.
+
+Para ver ou enviar um erro:
+
+1. Abra Preferências › Registros. As últimas linhas aparecem ali, com os botões Copiar registro e Mostrar no Finder.
+2. Ou use Ajuda › Registro de integrações no Finder.
+3. As mesmas linhas também vão para o Console do macOS, no subsistema `br.caminhoanglicano.pregar`, categoria `integracoes`.
+
 ## Atalhos
 
 | Atalho | Ação |
@@ -107,7 +120,7 @@ Os painéis da Mesa são redimensionáveis pelas alças entre eles; as larguras 
 ## Onde os dados ficam
 
 - **Manuscritos** em SwiftData, no armazenamento padrão do app, em RTF. Esse RTF é a fonte das exportações: título em negrito ≥ 13 pt, citação com recuo de 34 pt, lista com marcador "• " e nota em sobrescrito.
-- **Biblioteca, índices de PDF, histórico de versões, relatórios de revisão e sessão do Leitor** em `~/Library/Application Support/Pregar`. Os PDFs importados continuam nos caminhos originais; os baixados de pasta pública do Drive ficam numa subpasta própria.
+- **Biblioteca, índices de PDF, histórico de versões, relatórios de revisão, sessão do Leitor e registro de integrações** em `~/Library/Application Support/br.caminhoanglicano.pregar`. Os PDFs importados continuam nos caminhos originais; os baixados de pasta pública do Drive ficam numa subpasta própria.
 - **Chaves** (Estêvão API, provedores de IA, refresh token do Google, chave da Drive API) no Acesso às Chaves do macOS.
 - **Preferências** em UserDefaults.
 

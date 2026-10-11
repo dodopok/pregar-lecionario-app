@@ -514,7 +514,8 @@ struct SermonAIReviewClient {
         }
 
         let request = try Self.makeRequest(context: context, sources: sources, configuration: configuration)
-        let (data, response) = try await session.data(for: request)
+        let operation = "revisão · \(configuration.provider.name) · \(configuration.model)"
+        let (data, response) = try await IntegrationLog.data(for: request, using: session, integration: .ai, operation: operation)
         guard let response = response as? HTTPURLResponse else { throw SermonReviewError.unreadableResponse }
         guard (200..<300).contains(response.statusCode) else {
             throw SermonReviewError.provider(status: response.statusCode, detail: AIProviderResponseError.detail(in: data, redacting: configuration.apiKey))
@@ -522,6 +523,7 @@ struct SermonAIReviewClient {
         guard let output = Self.outputText(in: data, from: configuration.provider),
               let outputData = output.data(using: .utf8),
               let payload = try? JSONDecoder().decode(AIReviewPayload.self, from: outputData) else {
+            IntegrationLog.record(.error, .ai, operation, status: response.statusCode, body: data, note: "resposta sem JSON válido para o esquema")
             throw SermonReviewError.unreadableResponse
         }
 
@@ -542,9 +544,17 @@ struct SermonAIReviewClient {
             structure = validated.assessment
             structureAdjustments = validated.adjustments
         }
+        let rejectedCount = rejected.values.reduce(0, +)
+        if rejectedCount > 0 || structureAdjustments > 0 {
+            let reasons = rejected.keys.map(\.displayName).sorted().joined(separator: ", ")
+            IntegrationLog.record(
+                .warning, .ai, operation,
+                note: "validação local: \(rejectedCount) apontamentos rejeitados (\(reasons)) · \(structureAdjustments) ajustes no mapa"
+            )
+        }
         return SermonAIReviewResult(
             findings: findings,
-            rejectedFindingCount: rejected.values.reduce(0, +),
+            rejectedFindingCount: rejectedCount,
             rejectionReasons: rejected.keys.sorted { $0.displayName < $1.displayName },
             structure: structure,
             structureAdjustmentCount: structureAdjustments
@@ -1284,7 +1294,8 @@ struct SermonAIQuestionClient {
         configuration: SermonReviewConfiguration
     ) async throws -> [SermonAIQuestion] {
         let request = try Self.makeRequest(context: context, sources: sources, configuration: configuration)
-        let (data, response) = try await session.data(for: request)
+        let operation = "perguntas de emergência · \(configuration.provider.name) · \(configuration.model)"
+        let (data, response) = try await IntegrationLog.data(for: request, using: session, integration: .ai, operation: operation)
         guard let response = response as? HTTPURLResponse else { throw SermonAIQuestionError.unreadableResponse }
         guard (200..<300).contains(response.statusCode) else {
             throw SermonAIQuestionError.provider(status: response.statusCode, detail: AIProviderResponseError.detail(in: data, redacting: configuration.apiKey))
@@ -1293,6 +1304,7 @@ struct SermonAIQuestionClient {
               let outputData = output.data(using: .utf8),
               let result = try? JSONDecoder().decode(SermonAIQuestionResponse.self, from: outputData),
               result.questions.count <= 3 else {
+            IntegrationLog.record(.error, .ai, operation, status: response.statusCode, body: data, note: "resposta sem JSON válido para o esquema")
             throw SermonAIQuestionError.unreadableResponse
         }
 

@@ -280,13 +280,21 @@ struct FavoriteSiteSearchClient {
             return FavoriteSiteSearchGroup(site: site, searchURL: searchURL, articles: [], searchedAt: searchedAt, errorMessage: nil)
         }
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await IntegrationLog.data(
+                for: request, using: session, integration: .favoriteSites, operation: "busca · \(site.title)"
+            )
             guard let response = response as? HTTPURLResponse else { throw FavoriteSiteSearchError.invalidResponse }
             guard (200..<300).contains(response.statusCode) else { throw FavoriteSiteSearchError.httpStatus(response.statusCode) }
             guard data.count <= 2_000_000 else { throw FavoriteSiteSearchError.invalidResponse }
             let articles = try Self.articles(from: data, site: site, targetReference: reference, authors: authors)
             return FavoriteSiteSearchGroup(site: site, searchURL: searchURL, articles: articles, searchedAt: searchedAt, errorMessage: nil)
         } catch {
+            switch error {
+            case FavoriteSiteSearchError.httpStatus(_), is URLError:
+                break // já registrado por IntegrationLog.data
+            default:
+                IntegrationLog.record(.error, .favoriteSites, "busca · \(site.title)", request: request, error: error)
+            }
             return FavoriteSiteSearchGroup(
                 site: site,
                 searchURL: searchURL,

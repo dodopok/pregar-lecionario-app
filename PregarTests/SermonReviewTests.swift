@@ -96,6 +96,33 @@ final class SermonReviewTests: XCTestCase {
         XCTAssertTrue(result.findings.isEmpty)
     }
 
+    func testIntegrationLogRecordsProviderFailuresWithoutExposingSecrets() async throws {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "type": "error",
+            "error": ["type": "invalid_request_error", "message": "Your credit balance is too low. token sk-abcdefghijklmnop"]
+        ])
+        ReviewStubURLProtocol.setHandler { _ in (400, body) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        IntegrationLog.clear()
+        do {
+            _ = try await SermonAIReviewClient(session: session).review(
+                context: reviewContext(criteria: [.structure]), sources: [], configuration: configuration(for: .anthropic)
+            )
+            XCTFail("Um HTTP 400 deve ser propagado.")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("HTTP 400"), error.localizedDescription)
+        }
+        IntegrationLog.flush()
+        let text = try String(contentsOf: IntegrationLog.fileURL, encoding: .utf8)
+        XCTAssertTrue(text.contains("ERRO · IA · revisão"), text)
+        XCTAssertTrue(text.contains("HTTP 400"), text)
+        XCTAssertTrue(text.contains("credit balance"), text)
+        XCTAssertFalse(text.contains("secret-key"), text)
+        XCTAssertFalse(text.contains("sk-abcdefghijklmnop"), text)
+        XCTAssertFalse(text.contains("MANUSCRITO_PRIVADO"), text)
+    }
+
     func testClaudeProviderErrorShowsTheReasonWithoutExposingCredentials() async throws {
         let data = try JSONSerialization.data(withJSONObject: ["error": [
             "message": "Schema type 'oneOf' is not supported. secret-key sk-ant-test-secret"

@@ -1,5 +1,7 @@
-import Foundation
+import AppKit
 import Combine
+import Foundation
+import OSLog
 import Security
 import SwiftUI
 
@@ -14,6 +16,221 @@ enum PregarRuntime {
     static func makeAppUserDefaults() -> UserDefaults {
         guard isIsolatedTestHost else { return .standard }
         return UserDefaults(suiteName: "br.caminhoanglicano.pregar.tests.\(UUID().uuidString)")!
+    }
+}
+
+/// Registro persistente das integrações externas (Estêvão API, provedores de IA, fontes favoritas e
+/// Google Drive). Cada chamada vira uma linha no Console do sistema e num arquivo de texto com rotação:
+/// nível, integração, operação, método e caminho, código HTTP, duração e, nas falhas, a resposta do
+/// serviço. O corpo da requisição nunca é gravado (leva manuscrito e credenciais); o corpo da resposta
+/// só entra em falhas, truncado e com segredos removidos.
+enum IntegrationLog {
+    enum Integration: String, Sendable {
+        case estevaoAPI = "Estêvão API"
+        case ai = "IA"
+        case favoriteSites = "Fontes favoritas"
+        case googleDrive = "Google Drive"
+    }
+
+    enum Level: String, Sendable {
+        case ok = "OK"
+        case warning = "AVISO"
+        case error = "ERRO"
+    }
+
+    static let maximumFileSize = 1_000_000
+    static let maximumBodyExcerpt = 4_000
+
+    private static let queue = DispatchQueue(label: "br.caminhoanglicano.pregar.integration-log", qos: .utility)
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "br.caminhoanglicano.pregar", category: "integracoes")
+    private static let timestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = .current
+        return formatter
+    }()
+
+    static let directoryURL: URL = {
+        if PregarRuntime.isIsolatedTestHost {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("PregarTests-Logs-\(UUID().uuidString)", isDirectory: true)
+        }
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return support
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "Pregar", isDirectory: true)
+            .appendingPathComponent("Logs", isDirectory: true)
+    }()
+
+    static var fileURL: URL { directoryURL.appendingPathComponent("integracoes.log") }
+    static var previousFileURL: URL { directoryURL.appendingPathComponent("integracoes-anterior.log") }
+
+    /// Executa a requisição e registra o resultado. Devolve o mesmo par de `URLSession.data(for:)`,
+    /// então quem chama continua decidindo o que fazer com a resposta.
+    static func data(
+        for request: URLRequest,
+        using session: URLSession,
+        integration: Integration,
+        operation: String
+    ) async throws -> (Data, URLResponse) {
+        let started = Date.now
+        do {
+            let (data, response) = try await session.data(for: request)
+            let duration = Date.now.timeIntervalSince(started)
+            if let http = response as? HTTPURLResponse {
+                if (200..<300).contains(http.statusCode) {
+                    record(.ok, integration, operation, request: request, status: http.statusCode, duration: duration)
+                } else {
+                    record(.error, integration, operation, request: request, status: http.statusCode, duration: duration, body: data)
+                }
+            } else {
+                record(.error, integration, operation, request: request, duration: duration, note: "resposta não HTTP")
+            }
+            return (data, response)
+        } catch {
+            record(.error, integration, operation, request: request, duration: Date.now.timeIntervalSince(started), error: error)
+            throw error
+        }
+    }
+
+    static func record(
+        _ level: Level,
+        _ integration: Integration,
+        _ operation: String,
+        request: URLRequest? = nil,
+        status: Int? = nil,
+        duration: TimeInterval? = nil,
+        body: Data? = nil,
+        error: Error? = nil,
+        note: String? = nil
+    ) {
+        let secrets = secrets(in: request)
+        var parts = [timestampFormatter.string(from: .now), level.rawValue, integration.rawValue, operation]
+        if let request, let url = request.url {
+            parts.append("\(request.httpMethod ?? "GET") \(url.host ?? "")\(url.path)")
+        }
+        if let status { parts.append("HTTP \(status)") }
+        if let duration { parts.append(String(format: "%.1f s", duration)) }
+        if let note { parts.append(note) }
+        if let error { parts.append(describe(error)) }
+        var line = parts.joined(separator: " · ")
+        if let body, !body.isEmpty {
+            line += "\n    " + excerpt(of: body).replacingOccurrences(of: "\n", with: "\n    ")
+        }
+        line = redact(line, secrets: secrets)
+        switch level {
+        case .ok: logger.info("\(line, privacy: .public)")
+        case .warning: logger.notice("\(line, privacy: .public)")
+        case .error: logger.error("\(line, privacy: .public)")
+        }
+        queue.async { append(line) }
+    }
+
+    /// Últimas linhas do arquivo atual.
+    static func tail(lines maximum: Int = 400) -> String {
+        queue.sync {}
+        guard let text = try? String(contentsOf: fileURL, encoding: .utf8) else { return "" }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        return lines.suffix(maximum).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func clear() {
+        queue.sync {
+            try? FileManager.default.removeItem(at: fileURL)
+            try? FileManager.default.removeItem(at: previousFileURL)
+        }
+    }
+
+    /// Garante que o arquivo exista e o seleciona no Finder.
+    static func revealInFinder() {
+        queue.sync {
+            try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: fileURL.path) {
+                FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+            }
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+    }
+
+    /// Espera as gravações pendentes; usado pelos testes.
+    static func flush() {
+        queue.sync {}
+    }
+
+    // MARK: - Internos
+
+    private static func append(_ line: String) {
+        let fileManager = FileManager.default
+        try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let attributes = try? fileManager.attributesOfItem(atPath: fileURL.path)
+        if let size = attributes?[.size] as? NSNumber, size.intValue > maximumFileSize {
+            try? fileManager.removeItem(at: previousFileURL)
+            try? fileManager.moveItem(at: fileURL, to: previousFileURL)
+        }
+        if !fileManager.fileExists(atPath: fileURL.path) {
+            fileManager.createFile(atPath: fileURL.path, contents: nil)
+        }
+        guard let handle = try? FileHandle(forWritingTo: fileURL) else { return }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: Data((line + "\n").utf8))
+    }
+
+    private static func secrets(in request: URLRequest?) -> [String] {
+        guard let request else { return [] }
+        var values: [String] = []
+        for header in ["Authorization", "x-api-key", "X-API-Key", "x-goog-api-key"] {
+            if let value = request.value(forHTTPHeaderField: header) {
+                values.append(value.replacingOccurrences(of: "Bearer ", with: ""))
+            }
+        }
+        if let url = request.url, let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems {
+            for item in items where ["key", "access_token", "token"].contains(item.name.lowercased()) {
+                if let value = item.value { values.append(value) }
+            }
+        }
+        return values.filter { $0.count >= 6 }
+    }
+
+    private static let tokenPatterns = [
+        #"sk-[A-Za-z0-9_\-]{8,}"#,
+        #"AIza[0-9A-Za-z_\-]{20,}"#,
+        #"ya29\.[0-9A-Za-z_\-\.]{8,}"#,
+        #"1//[0-9A-Za-z_\-]{8,}"#
+    ]
+    private static let jsonSecretPattern = #""(access_token|refresh_token|id_token|client_secret|api_key)"\s*:\s*"[^"]*""#
+
+    /// Remove segredos conhecidos (valores dos cabeçalhos e da query) e formatos típicos de chave/token.
+    static func redact(_ text: String, secrets: [String]) -> String {
+        var result = text
+        for secret in secrets where !secret.isEmpty {
+            result = result.replacingOccurrences(of: secret, with: "[segredo removido]")
+        }
+        for pattern in tokenPatterns {
+            result = result.replacingOccurrences(of: pattern, with: "[segredo removido]", options: .regularExpression)
+        }
+        result = result.replacingOccurrences(of: jsonSecretPattern, with: "\"$1\":\"[segredo removido]\"", options: .regularExpression)
+        return result
+    }
+
+    private static func excerpt(of body: Data) -> String {
+        let sample = body.prefix(maximumBodyExcerpt)
+        let text = String(decoding: sample, as: UTF8.self)
+        let scalars = text.unicodeScalars
+        let printable = scalars.filter { $0 == "\n" || $0 == "\t" || !CharacterSet.controlCharacters.contains($0) }.count
+        guard scalars.isEmpty || printable * 10 >= scalars.count * 9 else {
+            return "<\(body.count) bytes não textuais>"
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return body.count > maximumBodyExcerpt ? trimmed + "… [\(body.count) bytes no total]" : trimmed
+    }
+
+    private static func describe(_ error: Error) -> String {
+        if let urlError = error as? URLError {
+            return "URLError \(urlError.code.rawValue): \(urlError.localizedDescription)"
+        }
+        let nsError = error as NSError
+        return "\(nsError.domain) \(nsError.code): \(error.localizedDescription)"
     }
 }
 

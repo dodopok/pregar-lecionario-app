@@ -10,6 +10,7 @@ private enum PreferencesSection: String, CaseIterable, Identifiable {
     case tablet = "Tablet"
     case library = "Biblioteca"
     case sources = "Fontes"
+    case logs = "Registros"
 
     var id: String { rawValue }
     var symbol: String {
@@ -20,6 +21,7 @@ private enum PreferencesSection: String, CaseIterable, Identifiable {
         case .tablet: "ipad.landscape"
         case .library: "book.closed"
         case .sources: "globe"
+        case .logs: "doc.text.magnifyingglass"
         }
     }
 }
@@ -34,6 +36,7 @@ struct APISettingsView: View {
     @EnvironmentObject private var readerSession: ReaderSessionStore
     @EnvironmentObject private var appearance: AppAppearanceStore
     @State private var section: PreferencesSection = .api
+    @State private var logText = ""
     @State private var settings: APISettings
     @State private var enteredKey = ""
     @State private var reviewProvider: AIProvider
@@ -212,6 +215,7 @@ struct APISettingsView: View {
         case .tablet: tabletContent
         case .library: libraryContent
         case .sources: sourcesContent
+        case .logs: logsContent
         }
     }
 
@@ -487,6 +491,64 @@ struct APISettingsView: View {
                 .padding(.top, 4)
             }
         }
+    }
+
+    private var logsContent: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            PreferenceGroup {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("Cada chamada à Estêvão API, aos provedores de IA, às fontes favoritas e ao Google Drive vira uma linha: OK ou ERRO, com código HTTP, duração e, nas falhas, a resposta do serviço.")
+                        .font(.system(size: 12)).foregroundStyle(PrototypeStyle.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Chaves e tokens são removidos antes de gravar; o manuscrito nunca é gravado. O arquivo gira em 1 MB e a versão anterior fica ao lado.")
+                        .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(IntegrationLog.fileURL.path)
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(PrototypeStyle.muted)
+                        .lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                    HStack(spacing: 9) {
+                        Button("Mostrar no Finder", systemImage: "folder") { IntegrationLog.revealInFinder() }
+                            .buttonStyle(.secondaryAction)
+                            .help("Seleciona o arquivo de registro no Finder")
+                        Button("Copiar registro", systemImage: "doc.on.doc") { copyLog() }
+                            .buttonStyle(.secondaryAction)
+                            .disabled(logText.isEmpty)
+                            .help("Copia as últimas linhas para colar numa mensagem")
+                        Button("Atualizar", systemImage: "arrow.clockwise") { logText = IntegrationLog.tail() }
+                            .buttonStyle(.secondaryAction)
+                        Spacer()
+                        Button("Limpar", systemImage: "trash", role: .destructive) {
+                            IntegrationLog.clear()
+                            logText = ""
+                        }
+                        .buttonStyle(.secondaryAction)
+                        .disabled(logText.isEmpty)
+                    }
+                }
+                .padding(.vertical, 9)
+            }
+            SectionLabel("Últimas linhas")
+                .padding(.bottom, -12)
+            ScrollView {
+                Text(logText.isEmpty ? "Nenhuma chamada registrada ainda." : logText)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(logText.isEmpty ? PrototypeStyle.muted : PrototypeStyle.ink)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+            .frame(minHeight: 280, maxHeight: 460)
+            .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(PrototypeStyle.line, lineWidth: 1))
+        }
+        .task(id: section) { logText = IntegrationLog.tail() }
+    }
+
+    private func copyLog() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(logText, forType: .string)
     }
 
     private var sourcesContent: some View {
@@ -776,6 +838,7 @@ struct APISettingsView: View {
         case .tablet: "Formato de leitura no tablet."
         case .library: "Comentários em PDF, pasta e backup."
         case .sources: "Sites e autores consultados por passagem."
+        case .logs: "Registro das chamadas externas, para diagnosticar erros."
         }
     }
 
@@ -787,6 +850,7 @@ struct APISettingsView: View {
         case .tablet: "Preferências locais de leitura no tablet."
         case .library: "Os arquivos PDF permanecem na pasta original."
         case .sources: "As fontes ficam neste Mac e aparecem na Mesa."
+        case .logs: "O registro fica neste Mac, sem chaves nem manuscrito."
         }
     }
 

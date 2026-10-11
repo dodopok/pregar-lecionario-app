@@ -82,7 +82,10 @@ struct AIResearchClient {
         guard !configuration.apiKey.isEmpty else { throw AIResearchError.noKey }
 
         let request = try Self.makeRequest(reference: reference, occasion: occasion, configuration: configuration)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await IntegrationLog.data(
+            for: request, using: session, integration: .ai,
+            operation: "pesquisa de materiais · \(configuration.provider.name) · \(configuration.model)"
+        )
         guard let response = response as? HTTPURLResponse else { throw AIResearchError.unreadableResponse }
         guard (200..<300).contains(response.statusCode) else {
             throw AIResearchError.provider(status: response.statusCode, detail: AIProviderResponseError.detail(in: data, redacting: configuration.apiKey))
