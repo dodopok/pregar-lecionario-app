@@ -35,6 +35,11 @@ struct PreparationWorkspace: View {
     @State private var isContextVisible = true
     @State private var focusMode = false
     @AppStorage("pregar.onboarding.dismissed.v1") private var onboardingDismissed = false
+    @AppStorage("pregar.layout.sidebarWidth") private var sidebarWidthValue = 236.0
+    @AppStorage("pregar.layout.readingsWidth") private var readingsWidthValue = 300.0
+    @AppStorage("pregar.layout.contextWidth") private var contextWidthValue = 320.0
+    @State private var showingRehearsal = false
+    @State private var preparationStates: [String: SermonPreparationState] = [:]
     @State private var selectedBible = "nvt"
     @State private var alternativeTexts: [String: [String: BiblePassageText]] = [:]
     @State private var loadingTranslations: Set<String> = []
@@ -72,99 +77,137 @@ struct PreparationWorkspace: View {
         displayedDay?.date != selectedDayKey
     }
 
+    private var draftsStamp: String {
+        drafts.map { "\(SermonDateKey.string(from: $0.liturgicalDate)):\($0.modifiedAt.timeIntervalSince1970)" }
+            .joined(separator: "|")
+    }
+
+    private func clamped(_ value: Double, _ range: ClosedRange<CGFloat>) -> CGFloat {
+        min(range.upperBound, max(range.lowerBound, CGFloat(value)))
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
-            if isSidebarVisible && !focusMode {
-                CalendarSidebarView(
-                    selectedDate: $selectedDate,
-                    calendarMonth: $calendarMonth,
-                    liturgicalDay: selectedDay,
-                    accent: accentColor,
-                    openArchive: { openWindow(id: "archive") },
-                    openLibrary: { openWindow(id: "library") }
-                )
-                .frame(width: 236)
-                Divider()
-            }
+        GeometryReader { geometry in
+            let showsSidebar = isSidebarVisible && !focusMode
+            let showsReadings = isReadingsVisible && !focusMode
+            let showsContext = isContextVisible && !focusMode
+            let sidebarRange: ClosedRange<CGFloat> = 200...320
+            let sidebarWidth = showsSidebar ? clamped(sidebarWidthValue, sidebarRange) : 0
+            // O editor precisa de 420 pt; o restante se divide entre leituras e materiais.
+            let remaining = geometry.size.width - sidebarWidth - (showsSidebar ? 9 : 0) - 420 - 18
+            let contextMinimum: CGFloat = 280
+            let readingsRange: ClosedRange<CGFloat> = 240...max(240, remaining - (showsContext ? contextMinimum : 0))
+            let readingsWidth = showsReadings ? clamped(readingsWidthValue, readingsRange) : 0
+            let contextRange: ClosedRange<CGFloat> = contextMinimum...max(contextMinimum, remaining - (showsReadings ? readingsWidth : 0))
+            let contextWidth = showsContext ? clamped(contextWidthValue, contextRange) : 0
 
-            VStack(spacing: 0) {
-                workspaceToolbar
-                if !focusMode { dayHeader }
-                Divider()
+            HStack(spacing: 0) {
+                if showsSidebar {
+                    CalendarSidebarView(
+                        selectedDate: $selectedDate,
+                        calendarMonth: $calendarMonth,
+                        liturgicalDay: selectedDay,
+                        accent: accentColor,
+                        openArchive: { openWindow(id: "archive") },
+                        openLibrary: { openWindow(id: "library") },
+                        preparationStates: preparationStates
+                    )
+                    .frame(width: sidebarWidth)
+                    PanelResizeHandle(
+                        width: Binding(get: { sidebarWidth }, set: { sidebarWidthValue = Double($0) }),
+                        range: sidebarRange,
+                        label: "Largura do calendário"
+                    )
+                }
 
-                HStack(spacing: 0) {
-                    if isReadingsVisible && !focusMode {
-                        readingsColumn(for: activeDraft)
-                            .frame(width: 300)
-                        Rectangle().fill(PrototypeStyle.line).frame(width: 1)
-                    } else if !focusMode {
-                        collapsedPanelRail(
-                            title: "Leituras",
-                            symbol: "sidebar.left",
-                            shortcut: "2",
-                            topPadding: 14,
-                            trailingPadding: 16,
-                            dividerOnLeadingEdge: false
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.16)) { isReadingsVisible = true }
+                VStack(spacing: 0) {
+                    workspaceToolbar
+                    if !focusMode { dayHeader }
+                    Divider()
+
+                    HStack(spacing: 0) {
+                        if showsReadings {
+                            readingsColumn(for: activeDraft)
+                                .frame(width: readingsWidth)
+                            PanelResizeHandle(
+                                width: Binding(get: { readingsWidth }, set: { readingsWidthValue = Double($0) }),
+                                range: readingsRange,
+                                label: "Largura das leituras"
+                            )
+                        } else if !focusMode {
+                            collapsedPanelRail(
+                                title: "Leituras",
+                                symbol: "sidebar.left",
+                                shortcut: "2",
+                                topPadding: 14,
+                                trailingPadding: 16,
+                                dividerOnLeadingEdge: false
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.16)) { isReadingsVisible = true }
+                            }
+                        }
+
+                        if let draft = activeDraft {
+                            sermonEditor(draft: draft)
+                                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            editorPlaceholder
+                        }
+
+                        if showsContext {
+                            PanelResizeHandle(
+                                width: Binding(get: { contextWidth }, set: { contextWidthValue = Double($0) }),
+                                range: contextRange,
+                                growsTowardTrailing: false,
+                                label: "Largura dos materiais"
+                            )
+                            ResourceContextPanel(
+                                selectedTab: $contextTab,
+                                reference: activeDraft?.mainReadingReference ?? "",
+                                occasion: selectedDay?.sundayName ?? selectedDay?.celebration?.name,
+                                liturgicalDate: selectedDate,
+                                isSunday: selectedDay?.isSunday == true,
+                                reviewReports: $reviewReports,
+                                manuscript: activeDraft.map { SermonReviewText.plainText(from: $0.rtfData) } ?? "",
+                                accent: accentColor,
+                                openSettings: openPreferences,
+                                openDriveConnection: { showingDriveConnection = true },
+                                openLibrary: { openWindow(id: "library") },
+                                newReview: { requestReview(criteria: Set(SermonReviewCriterion.allCases)) },
+                                checkStructure: { requestReview(criteria: [.structure]) },
+                                selectQuote: { editorCommands.selectQuote($0) },
+                                insertText: { editorCommands.insertText($0) },
+                                emergencyQuestions: { showingQuestions = true },
+                                collapse: { withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = false } }
+                            )
+                            .frame(width: contextWidth)
+                        } else if !focusMode {
+                            collapsedPanelRail(
+                                title: "Materiais",
+                                symbol: "sidebar.right",
+                                shortcut: "3",
+                                topPadding: 3,
+                                trailingPadding: 12,
+                                dividerOnLeadingEdge: true
+                            ) {
+                                withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = true }
+                            }
                         }
                     }
+                    .background(PrototypeStyle.canvas)
+                    .tint(accentColor)
 
                     if let draft = activeDraft {
-                        sermonEditor(draft: draft)
-                            .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        editorPlaceholder
-                    }
-
-                    if isContextVisible && !focusMode {
-                        Rectangle().fill(PrototypeStyle.line).frame(width: 1)
-                        ResourceContextPanel(
-                            selectedTab: $contextTab,
-                            reference: activeDraft?.mainReadingReference ?? "",
-                            occasion: selectedDay?.sundayName ?? selectedDay?.celebration?.name,
-                            liturgicalDate: selectedDate,
-                            isSunday: selectedDay?.isSunday == true,
-                            reviewReports: $reviewReports,
-                            manuscript: activeDraft.map { SermonReviewText.plainText(from: $0.rtfData) } ?? "",
-                            accent: accentColor,
-                            openSettings: openPreferences,
-                            openDriveConnection: { showingDriveConnection = true },
-                            openLibrary: { openWindow(id: "library") },
-                            newReview: { requestReview(criteria: Set(SermonReviewCriterion.allCases)) },
-                            checkStructure: { requestReview(criteria: [.structure]) },
-                            selectQuote: { editorCommands.selectQuote($0) },
-                            insertText: { editorCommands.insertText($0) },
-                            emergencyQuestions: { showingQuestions = true },
-                            collapse: { withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = false } }
-                        )
-                        .frame(width: 320)
-                    } else if !focusMode {
-                        collapsedPanelRail(
-                            title: "Materiais",
-                            symbol: "sidebar.right",
-                            shortcut: "3",
-                            topPadding: 3,
-                            trailingPadding: 12,
-                            dividerOnLeadingEdge: true
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = true }
-                        }
+                        statusBar(draft: draft)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(PrototypeStyle.canvas)
-                .tint(accentColor)
-
-                if let draft = activeDraft {
-                    statusBar(draft: draft)
-                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(PrototypeStyle.canvas)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(minWidth: 1220, minHeight: 740)
         .background(PrototypeStyle.canvas)
-        .preferredColorScheme(.light)
         .tint(accentColor)
         .sheet(isPresented: $showingReview) {
             if let draft = activeDraft {
@@ -214,6 +257,29 @@ struct PreparationWorkspace: View {
             if let draft = activeDraft {
                 SermonHistorySheet(draft: draft, accent: accentColor)
             }
+        }
+        .sheet(isPresented: $showingRehearsal) {
+            RehearsalSheet(draft: activeDraft, accent: accentColor)
+        }
+        .task(id: draftsStamp) {
+            // `modifiedAt` muda a cada tecla; o atraso evita decodificar todos os RTFs enquanto se digita.
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            let snapshots = drafts.map { draft in
+                (key: SermonDateKey.string(from: draft.liturgicalDate),
+                 data: draft.rtfData,
+                 exported: draft.tabletPDFPath != nil || draft.googleDriveSyncedAt != nil)
+            }
+            let states = await Task.detached(priority: .utility) { () -> [String: SermonPreparationState] in
+                var result: [String: SermonPreparationState] = [:]
+                for snapshot in snapshots {
+                    let words = SermonReviewText.plainText(from: snapshot.data).split(whereSeparator: \.isWhitespace).count
+                    result[snapshot.key] = words == 0 ? .empty : (snapshot.exported ? .exported : .inProgress)
+                }
+                return result
+            }.value
+            guard !Task.isCancelled else { return }
+            preparationStates = states
         }
         .alert(
             "Histórico de sermões",
@@ -310,6 +376,8 @@ struct PreparationWorkspace: View {
                 }
                 toolbarAction("ipad.landscape", title: "Tablet", help: "Preparar a cópia para pregar (⇧⌘T)") { showingTablet = true }
                     .keyboardShortcut("t", modifiers: [.command, .shift])
+                toolbarAction("timer", title: "Ensaio", help: "Ler em voz alta com cronômetro e tipo grande (⇧⌘E)") { showingRehearsal = true }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
             }
 
             toolbarDivider
@@ -397,6 +465,7 @@ struct PreparationWorkspace: View {
                     if let draft { chooseMainReading(reading, for: draft) }
                 },
                 chooseBible: loadTranslation,
+                insertCollect: { editorCommands.insertEpigraph($0) },
                 collapse: { withAnimation(.easeInOut(duration: 0.16)) { isReadingsVisible = false } }
             )
             .overlay {
@@ -703,6 +772,19 @@ struct PreparationWorkspace: View {
                         .padding(.top, 22)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if let anchor = editorCommands.selectionAnchor {
+                        GeometryReader { geometry in
+                            EditorSelectionToolbar(commands: editorCommands, accent: accentColor)
+                                .fixedSize()
+                                .position(
+                                    x: min(max(anchor.x, 130), max(130, geometry.size.width - 130)),
+                                    y: max(22, anchor.y - 24)
+                                )
+                        }
+                        .transition(.opacity)
                     }
                 }
                 .padding(.horizontal, 28)
@@ -1121,11 +1203,11 @@ private enum LiturgicalColor {
     static func resolve(_ value: String?) -> Color {
         switch value?.lowercased().folding(options: [.diacriticInsensitive], locale: .current) {
         case "verde", "green": return PrototypeStyle.green
-        case "roxo", "violeta", "purple", "violet": return Color(red: 0.47, green: 0.34, blue: 0.67)
-        case "vermelho", "red": return Color(red: 0.76, green: 0.25, blue: 0.23)
-        case "rosa", "rose", "pink": return Color(red: 0.83, green: 0.43, blue: 0.57)
+        case "roxo", "violeta", "purple", "violet": return PrototypeStyle.adaptive(light: (0.47, 0.34, 0.67), dark: (0.66, 0.55, 0.85))
+        case "vermelho", "red": return PrototypeStyle.adaptive(light: (0.76, 0.25, 0.23), dark: (0.90, 0.42, 0.40))
+        case "rosa", "rose", "pink": return PrototypeStyle.adaptive(light: (0.83, 0.43, 0.57), dark: (0.93, 0.58, 0.70))
         case "preto", "negro", "black": return Color(nsColor: .secondaryLabelColor)
-        case "branco", "white": return Color(red: 0.72, green: 0.59, blue: 0.28)
+        case "branco", "white": return PrototypeStyle.adaptive(light: (0.72, 0.59, 0.28), dark: (0.86, 0.74, 0.42))
         default: return PrototypeStyle.green
         }
     }

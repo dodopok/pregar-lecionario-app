@@ -125,7 +125,7 @@ struct BibleComparisonView: View {
                 }
                 .padding(.horizontal, 12)
                 .frame(width: 250, height: 30, alignment: .center)
-                .background(.white, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
+                .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
                 .help("Digite a referência e pressione Enter")
 
@@ -229,7 +229,7 @@ struct BibleComparisonView: View {
                                     .frame(maxWidth: 520)
                                 if !isLoading {
                                     Button("Tentar novamente") { Task { await loadPassages() } }
-                                        .buttonStyle(.bordered)
+                                        .buttonStyle(.secondaryAction)
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: 150)
@@ -291,7 +291,7 @@ struct BibleComparisonView: View {
                 .foregroundStyle(scope == value ? PrototypeStyle.ink : PrototypeStyle.muted)
                 .padding(.horizontal, 11)
                 .frame(height: 26)
-                .background(scope == value ? .white : .clear, in: RoundedRectangle(cornerRadius: 7))
+                .background(scope == value ? PrototypeStyle.surface : .clear, in: RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.hoverHighlight)
         .frame(minHeight: 34)
@@ -323,7 +323,7 @@ struct BibleComparisonView: View {
                 .foregroundStyle(PrototypeStyle.ink)
                 .padding(.horizontal, 12)
                 .frame(height: 26)
-                .background(.white, in: Capsule())
+                .background(PrototypeStyle.surface, in: Capsule())
                 .overlay(Capsule().stroke(PrototypeStyle.line, lineWidth: 1))
                 .padding(.vertical, 4)
                 .contentShape(Rectangle())
@@ -594,7 +594,7 @@ struct ReviewRequestSheet: View {
 
                 HStack {
                     Spacer()
-                    Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                    Button("Cancelar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                     Button {
                         Task { await sendReview() }
                     } label: {
@@ -604,8 +604,7 @@ struct ReviewRequestSheet: View {
                             Text("Enviar revisão")
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(accent)
+                    .buttonStyle(.primaryAction(accent))
                     .disabled(!canSend)
                     .help("O manuscrito e as fontes listadas serão enviados ao provedor selecionado")
                 }
@@ -726,7 +725,7 @@ struct ReviewRequestSheet: View {
                 Text("Relatório salvo neste Mac · \(report.createdAt.formatted(date: .omitted, time: .shortened))")
                     .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
                 Spacer()
-                Button("Concluído") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button("Concluído") { dismiss() }.buttonStyle(.primaryAction(accent)).keyboardShortcut(.defaultAction)
             }
         }
     }
@@ -856,7 +855,7 @@ struct EmergencyQuestionsSheet: View {
 
                 HStack {
                     Spacer()
-                    Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                    Button("Cancelar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                     Button {
                         Task { await requestQuestions() }
                     } label: {
@@ -866,8 +865,7 @@ struct EmergencyQuestionsSheet: View {
                             Text("Pedir perguntas")
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(accent)
+                    .buttonStyle(.primaryAction(accent))
                     .disabled(!canSend)
                     .help("O manuscrito e as fontes listadas serão enviados ao provedor selecionado")
                 }
@@ -932,7 +930,7 @@ struct EmergencyQuestionsSheet: View {
                 Text("Perguntas temporárias · nada foi acrescentado ao manuscrito")
                     .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
                 Spacer()
-                Button("Concluído") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button("Concluído") { dismiss() }.buttonStyle(.primaryAction(accent)).keyboardShortcut(.defaultAction)
             }
         }
     }
@@ -1025,7 +1023,7 @@ struct GoogleDriveConnectionSheet: View {
             Spacer(minLength: 0)
             HStack {
                 Spacer()
-                Button("Fechar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Fechar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                 if !googleDrive.isConnected {
                     Button {
                         Task {
@@ -1036,7 +1034,7 @@ struct GoogleDriveConnectionSheet: View {
                         if googleDrive.isConnecting { ProgressView().controlSize(.small) }
                         else { Label("Conectar", systemImage: "person.crop.circle.badge.checkmark") }
                     }
-                    .buttonStyle(.borderedProminent).tint(accent)
+                    .buttonStyle(.primaryAction(accent))
                     .disabled(!clientIDIsValid || googleDrive.isConnecting || googleDrive.isLoading)
                     .keyboardShortcut(.defaultAction)
                 }
@@ -1045,7 +1043,6 @@ struct GoogleDriveConnectionSheet: View {
         .padding(PrototypeStyle.Spacing.xxl)
         .frame(width: 560, height: 360)
         .background(PrototypeStyle.canvas)
-        .preferredColorScheme(.light)
     }
 }
 
@@ -1169,7 +1166,7 @@ struct TabletPreparationSheet: View {
                         .padding(PrototypeStyle.Spacing.lg)
                 }
                 .frame(height: 160)
-                .background(.white, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous))
+                .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
             }
 
@@ -1179,7 +1176,7 @@ struct TabletPreparationSheet: View {
                         .buttonStyle(.linkAction(accent))
                 }
                 Spacer()
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancelar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                 Button {
                     if format == "Google Doc" { saveGoogleDoc() }
                     else { exportPDF() }
@@ -1189,8 +1186,7 @@ struct TabletPreparationSheet: View {
                         Label(draft?.googleDriveDocumentID == nil ? "Criar Google Doc" : "Atualizar Google Doc", systemImage: "arrow.up.doc")
                     } else { Label("Exportar PDF", systemImage: "square.and.arrow.up") }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(accent)
+                .buttonStyle(.primaryAction(accent))
                 .disabled(isExporting || googleDrive.isSaving || manuscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (format == "Google Doc" && !googleDrive.isConnected))
                 .help(format == "PDF" ? "Salvar uma cópia paginada para leitura no tablet" : "Criar ou atualizar o manuscrito no Google Drive")
             }
@@ -1302,5 +1298,194 @@ struct TabletPreparationSheet: View {
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey]
         ))?.first { $0.lastPathComponent.hasPrefix("GoogleDrive-") }
+    }
+}
+
+/// Modo ensaio: o manuscrito em tipo grande com cronômetro, para comparar o tempo real de leitura
+/// com a estimativa e com a faixa habitual de 18 a 25 minutos lembrada no workshop.
+struct RehearsalSheet: View {
+    let draft: SermonDraft?
+    let accent: Color
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("pregar.rehearsal.fontSize") private var fontSize = 20.0
+    @State private var elapsed: TimeInterval = 0
+    @State private var startedAt: Date?
+    @State private var accumulated: TimeInterval = 0
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    static let wordsPerMinute = 96.0
+    static let targetMinutes: ClosedRange<Double> = 18...25
+
+    private var manuscript: String { SermonReviewText.plainText(from: draft?.rtfData) }
+    private var words: Int { manuscript.split(whereSeparator: \.isWhitespace).count }
+    private var estimatedMinutes: Double { Double(words) / Self.wordsPerMinute }
+    private var isRunning: Bool { startedAt != nil }
+    private var title: String {
+        guard let draft else { return "Ensaio" }
+        return draft.title.isEmpty ? (draft.mainReadingReference ?? "Ensaio") : draft.title
+    }
+
+    private var elapsedLabel: String {
+        let total = Int(elapsed.rounded())
+        return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+
+    private var paceNote: String {
+        let minutes = elapsed / 60
+        if minutes < 0.5 { return "Leia em voz alta, no ritmo do púlpito." }
+        if minutes > Self.targetMinutes.upperBound { return "Passou dos 25 minutos: o workshop lembra que não ser prolixo também é cuidado." }
+        if minutes >= Self.targetMinutes.lowerBound { return "Dentro da faixa habitual de 18 a 25 minutos." }
+        return "Sem pressa: caminhe pelo texto guiando as pessoas."
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            ScrollView {
+                Text(manuscript.isEmpty ? "O manuscrito está vazio." : manuscript)
+                    .font(PrototypeStyle.serif(CGFloat(fontSize)))
+                    .foregroundStyle(PrototypeStyle.ink)
+                    .lineSpacing(CGFloat(fontSize) * 0.45)
+                    .frame(maxWidth: 720, alignment: .leading)
+                    .padding(.horizontal, 48)
+                    .padding(.vertical, 36)
+                    .frame(maxWidth: .infinity)
+                    .textSelection(.enabled)
+            }
+            .background(PrototypeStyle.manuscript)
+            Divider()
+            footer
+        }
+        .frame(width: 980, height: 760)
+        .background(PrototypeStyle.canvas)
+        .onReceive(ticker) { now in
+            guard let startedAt else { return }
+            elapsed = now.timeIntervalSince(startedAt)
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: PrototypeStyle.Spacing.md) {
+            HStack(alignment: .top, spacing: PrototypeStyle.Spacing.md) {
+                SheetHeader(
+                    title: title,
+                    subtitle: "\(words.formatted()) palavras · estimativa ≈ \(Int(estimatedMinutes.rounded())) min · alvo 18 a 25 min",
+                    symbol: "timer",
+                    accent: accent
+                )
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(elapsedLabel)
+                        .font(.system(size: 34, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(elapsed / 60 > Self.targetMinutes.upperBound ? PrototypeStyle.warning : PrototypeStyle.ink)
+                        .accessibilityLabel("Tempo decorrido \(elapsedLabel)")
+                    HStack(spacing: PrototypeStyle.Spacing.sm) {
+                        Button {
+                            toggle()
+                        } label: {
+                            Label(isRunning ? "Pausar" : (elapsed > 0 ? "Continuar" : "Iniciar"), systemImage: isRunning ? "pause.fill" : "play.fill")
+                        }
+                        .buttonStyle(.primaryAction(accent))
+                        .keyboardShortcut(.space, modifiers: [])
+                        .disabled(manuscript.isEmpty)
+                        Button("Zerar", systemImage: "arrow.counterclockwise") { reset() }
+                            .buttonStyle(.secondaryAction)
+                            .disabled(elapsed == 0 && !isRunning)
+                    }
+                }
+            }
+            progressBar
+            HStack(spacing: PrototypeStyle.Spacing.md) {
+                Text(paceNote)
+                    .font(.system(size: 11))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                HStack(spacing: 2) {
+                    fontButton("textformat.size.smaller", help: "Diminuir o tipo") { fontSize = max(14, fontSize - 2) }
+                    Text("\(Int(fontSize)) pt")
+                        .font(.system(size: 11).monospacedDigit())
+                        .foregroundStyle(PrototypeStyle.muted)
+                        .frame(width: 40)
+                    fontButton("textformat.size.larger", help: "Aumentar o tipo") { fontSize = min(36, fontSize + 2) }
+                }
+            }
+        }
+        .padding(PrototypeStyle.Spacing.xxl)
+        .padding(.bottom, -PrototypeStyle.Spacing.sm)
+    }
+
+    /// Linha do tempo: o preenchimento é o tempo decorrido; as marcas, a faixa de 18 a 25 minutos.
+    private var progressBar: some View {
+        GeometryReader { geometry in
+            let scale = max(Self.targetMinutes.upperBound + 5, estimatedMinutes + 5)
+            let fraction = min(1, (elapsed / 60) / scale)
+            let lower = Self.targetMinutes.lowerBound / scale
+            let upper = Self.targetMinutes.upperBound / scale
+            ZStack(alignment: .leading) {
+                Capsule().fill(PrototypeStyle.ink.opacity(0.08))
+                Rectangle()
+                    .fill(PrototypeStyle.softAccent(accent))
+                    .frame(width: geometry.size.width * (upper - lower))
+                    .offset(x: geometry.size.width * lower)
+                Capsule()
+                    .fill(accent)
+                    .frame(width: max(6, geometry.size.width * fraction))
+                if estimatedMinutes > 0 {
+                    Rectangle()
+                        .fill(PrototypeStyle.ink.opacity(0.5))
+                        .frame(width: 2)
+                        .offset(x: geometry.size.width * min(1, estimatedMinutes / scale))
+                        .help("Estimativa pela contagem de palavras")
+                }
+            }
+        }
+        .frame(height: 10)
+        .accessibilityLabel("Progresso do ensaio")
+        .accessibilityValue(elapsedLabel)
+    }
+
+    private var footer: some View {
+        HStack {
+            Text("Dica do workshop: não tenha pressa, mas não seja prolixo. 18, 20, 25 minutos: tá tudo bem.")
+                .font(.system(size: 11))
+                .foregroundStyle(PrototypeStyle.muted)
+                .lineLimit(2)
+            Spacer()
+            Button("Encerrar ensaio") { dismiss() }
+                .buttonStyle(.secondaryAction)
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, PrototypeStyle.Spacing.xxl)
+        .padding(.vertical, PrototypeStyle.Spacing.md)
+    }
+
+    private func fontButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(PrototypeStyle.ink)
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverHighlight(cornerRadius: 5))
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
+    private func toggle() {
+        if let startedAt {
+            accumulated = Date.now.timeIntervalSince(startedAt)
+            elapsed = accumulated
+            self.startedAt = nil
+        } else {
+            startedAt = Date.now.addingTimeInterval(-accumulated)
+        }
+    }
+
+    private func reset() {
+        startedAt = nil
+        accumulated = 0
+        elapsed = 0
     }
 }

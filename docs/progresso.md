@@ -249,6 +249,25 @@ O editor continua um `NSTextView` com RTF como formato de gravação, Arial 10 c
 
 Limites: a barra flutuante sobre a seleção, estilo Substack, não foi implementada por não ser possível validar sem compilador. Build e testes seguem pendentes de uma máquina com Xcode; conferir especialmente Return em listas, os atalhos de início de linha e o ⌘F com o editor em foco.
 
+## Modo escuro, painéis redimensionáveis e ritmo de preparação (11/10/2026)
+
+Rodada que fecha os pontos apontados como abaixo do nível na avaliação anterior e acrescenta as funções pedidas em seguida. Tudo escrito sem Xcode: build, testes e conferência visual seguem pendentes.
+
+- **Modo escuro.** A paleta do `PrototypeStyle` passou a resolver por aparência com `NSColor(name:dynamicProvider:)`: papel, cartões, tinta, verde, cinza, aviso e as cores litúrgicas têm par claro/escuro, e `surface` substitui todos os fundos brancos literais. A aparência (automático, claro, escuro) é escolhida em Preferências › Aparência, salva neste Mac e aplicada ao app inteiro via `NSApplication.appearance`; os `preferredColorScheme(.light)` foram removidos. O bloco de citação do editor desenha cores escuras quando a aparência efetiva é escura; o RTF gravado não muda.
+- **Painéis redimensionáveis na Mesa.** Calendário (200 a 320 pt), leituras (mínimo 240 pt) e materiais (mínimo 280 pt) ganharam alças de arrasto com cursor de redimensionamento, ajuste por acessibilidade e larguras lembradas entre sessões. Um `GeometryReader` limita as larguras ao tamanho da janela para que o editor nunca fique abaixo de 420 pt.
+- **Um só vocabulário de botões.** Todos os `.bordered`/`.borderedProminent` das folhas, do Leitor, da Biblioteca, do Arquivo, do Histórico e das Preferências usam agora `.primaryAction`/`.secondaryAction`/`.linkAction`, com Cancelar sempre secundário e a ação principal com o acento litúrgico.
+- **Aba Materiais reorganizada.** Cabeçalho "Materiais para <passagem>", chips de filtro, uma única linha de ocupado, grupos "Sobre esta passagem", "Sobreposição parcial" e "A confirmar" com contagem e régua, o mesmo cartão para PDFs, artigos e fontes de pesquisa, mensagem de vazio explicando o motivo (sem PDFs, sem fontes, sem correspondência) e os dois botões de ação ("Biblioteca de PDFs", "Buscar outros materiais") juntos no rodapé.
+- **Preferências com barra lateral.** A navegação passou a uma coluna fixa à esquerda com seis seções: Estêvão API, Inteligência artificial, Aparência, Tablet, Biblioteca (pasta e backup) e Fontes (sites e autores favoritos). O conteúdo deixa de ser uma rolagem longa; a largura mínima subiu para 760 pt.
+- **Modo ensaio (⇧⌘E).** Folha com o manuscrito em tipo serifado grande (14 a 36 pt, lembrado), cronômetro com Iniciar/Pausar/Zerar (espaço inicia e pausa), uma linha do tempo com a faixa de 18 a 25 minutos do workshop e a marca da estimativa por palavras, e uma nota de ritmo que muda conforme o tempo decorrido.
+- **Ritmo da semana.** O calendário mostra, para cada domingo, um glifo com o estado da preparação (sem rascunho, em preparação, pronta para pregar), calculado fora do ator principal com um pequeno atraso para não decodificar os RTFs a cada tecla. Um cartão "Próximo domingo" traz a contagem regressiva, o estado e uma orientação alinhada ao workshop (semana de releitura, hora de escrever, véspera, dia de pregar) e abre a preparação daquele domingo.
+- **Coleta do dia em destaque.** A coleta subiu para o topo do painel de leituras, num cartão com o acento litúrgico, uma frase sobre o seu papel e o botão "Inserir como epígrafe", que coloca a oração no início do manuscrito como citação em bloco com atribuição.
+- **Barra flutuante sobre a seleção.** Ao selecionar texto no manuscrito aparece, acima da seleção, uma barra com negrito, itálico, título, citação, lista e nota, com o estado ativo marcado no acento. A âncora é recalculada na mudança de seleção, ao soltar o mouse e na rolagem (observador de `boundsDidChange` removido ao desmontar a view) e some sem seleção ou quando a seleção sai da área visível.
+- **Busca de texto completo no Arquivo.** O seletor ganhou o modo "Texto", que procura em título e manuscrito (sem distinguir acentos ou maiúsculas) e mostra na linha um trecho ao redor da primeira ocorrência. Os manuscritos são decodificados fora do ator principal e recalculados só quando algum rascunho muda.
+
+Deixado de fora de propósito: o catálogo de strings. Extrair as strings exige o fluxo de localização do Xcode e, num app pessoal em português, o ganho não justifica o risco de fazê-lo sem compilador.
+
+Conferir primeiro ao abrir no Xcode: o `GeometryReader` da Mesa com os três painéis e o modo foco; a troca de aparência com janelas abertas (Mesa, Leitor, Preferências); a posição da barra flutuante ao rolar e ao selecionar perto das bordas; o Return no modo ensaio (o espaço é atalho de Iniciar/Pausar); e a inserção da epígrafe num manuscrito que já começa com citação.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.

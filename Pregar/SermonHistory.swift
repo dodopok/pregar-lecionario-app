@@ -195,7 +195,7 @@ struct SermonHistorySheet: View {
                     accent: accent
                 )
                 Button("Fechar") { dismiss() }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.secondaryAction)
                     .keyboardShortcut(.cancelAction)
             }
             .padding(.bottom, PrototypeStyle.Spacing.lg)
@@ -278,9 +278,9 @@ struct SermonHistorySheet: View {
             }
             Spacer(minLength: 8)
             Button("Comparar", systemImage: "arrow.left.arrow.right") { comparison = revision }
-                .buttonStyle(.bordered)
+                .buttonStyle(.secondaryAction)
             Button("Restaurar", systemImage: "arrow.uturn.backward") { restore(revision) }
-                .buttonStyle(.bordered)
+                .buttonStyle(.secondaryAction)
         }
         .padding(.vertical, 14)
         .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }

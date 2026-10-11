@@ -9,6 +9,21 @@ enum ContextPaneTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Estado de uma preparação, para o calendário mostrar o ritmo da semana.
+enum SermonPreparationState: String, Sendable {
+    case empty
+    case inProgress
+    case exported
+
+    var title: String {
+        switch self {
+        case .empty: "sem rascunho"
+        case .inProgress: "em preparação"
+        case .exported: "pronta para pregar"
+        }
+    }
+}
+
 struct CalendarSidebarView: View {
     @EnvironmentObject private var apiSettingsStore: APISettingsStore
     @Binding var selectedDate: Date
@@ -17,6 +32,8 @@ struct CalendarSidebarView: View {
     let accent: Color
     let openArchive: () -> Void
     let openLibrary: () -> Void
+    /// Estado de cada preparação por data (yyyy-MM-dd), calculado pela Mesa.
+    var preparationStates: [String: SermonPreparationState] = [:]
     @State private var sundayNames: [String: String] = [:]
     @State private var dayLabelsByMonth: [String: [String: String]] = [:]
 
@@ -137,6 +154,8 @@ struct CalendarSidebarView: View {
 
             Spacer(minLength: 0)
 
+            weekRhythmCard
+
             VStack(alignment: .leading, spacing: 3) {
                 sidebarLink("Arquivo de sermões", symbol: "text.alignleft", action: openArchive)
                 sidebarLink("Biblioteca de PDFs", symbol: "book.closed", action: openLibrary)
@@ -236,7 +255,7 @@ struct CalendarSidebarView: View {
             selectedDate = calendar.startOfDay(for: date)
         } label: {
             HStack(spacing: 8) {
-                Circle().fill(selected ? accent : accent.opacity(0.75)).frame(width: 7, height: 7)
+                stateGlyph(for: date)
                 Text(date.formatted(.dateTime.day().month(.abbreviated).locale(Locale(identifier: "pt_BR"))))
                     .font(.system(size: 12, weight: selected ? .semibold : .regular))
                     .foregroundStyle(PrototypeStyle.ink)
@@ -252,6 +271,74 @@ struct CalendarSidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.hoverHighlight)
+        .help("\(name ?? "Domingo") · \((preparationStates[SermonDateKey.string(from: date)] ?? .empty).title)")
+    }
+
+    private func stateGlyph(for date: Date) -> some View {
+        let state = preparationStates[SermonDateKey.string(from: date)] ?? .empty
+        let symbol: String
+        switch state {
+        case .empty: symbol = "circle"
+        case .inProgress: symbol = "circle.lefthalf.filled"
+        case .exported: symbol = "checkmark.circle.fill"
+        }
+        return Image(systemName: symbol)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(state == .empty ? accent.opacity(0.55) : accent)
+            .frame(width: 12)
+            .accessibilityLabel(state.title)
+    }
+
+    private var nextSunday: Date {
+        let today = calendar.startOfDay(for: .now)
+        let weekday = calendar.component(.weekday, from: today)
+        let daysAhead = (8 - weekday) % 7
+        return calendar.date(byAdding: .day, value: daysAhead, to: today) ?? today
+    }
+
+    /// Ritmo da semana, como o workshop recomenda: uma semana com o texto antes de pregar.
+    private var weekRhythmCard: some View {
+        let sunday = nextSunday
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: .now), to: sunday).day ?? 0
+        let state = preparationStates[SermonDateKey.string(from: sunday)] ?? .empty
+        let countdown = days == 0 ? "É hoje" : (days == 1 ? "Falta 1 dia" : "Faltam \(days) dias")
+        let guidance: String
+        switch (days, state) {
+        case (_, .exported): guidance = "Cópia pronta. Releia com calma e descanse."
+        case (0, _): guidance = "Dia de pregar: caminhe tranquilamente pelo texto."
+        case (1, _): guidance = "Véspera: revise e prepare a cópia para o tablet."
+        case (2...4, _): guidance = "Hora de escrever, com o texto já ruminado."
+        default: guidance = "Semana de releitura: leia e releia os textos do domingo."
+        }
+        return Button {
+            selectedDate = sunday
+            calendarMonth = sunday
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    SectionLabel("Próximo domingo")
+                    Spacer(minLength: 0)
+                    Text(countdown)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(accent)
+                }
+                Text(sunday.formatted(.dateTime.day().month(.wide).locale(Locale(identifier: "pt_BR"))))
+                    .font(PrototypeStyle.serif(13, weight: .semibold))
+                    .foregroundStyle(PrototypeStyle.ink)
+                Text(state.title)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(state == .empty ? PrototypeStyle.muted : accent)
+                Text(guidance)
+                    .font(.system(size: 10))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .panelCard(padding: 10, background: PrototypeStyle.paper)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverHighlight(cornerRadius: PrototypeStyle.Radius.card))
+        .help("Abrir a preparação do próximo domingo")
     }
 
     @MainActor
@@ -313,6 +400,8 @@ struct ScripturePanelView: View {
     @Binding var expandedReadingIDs: Set<String>
     let chooseReading: (LiturgicalReading) -> Void
     let chooseBible: (String) -> Void
+    /// Insere o texto da coleta no manuscrito como epígrafe.
+    let insertCollect: (String) -> Void
     let collapse: () -> Void
 
     private let translations = [("nvt", "NVT"), ("nvi", "NVI"), ("naa", "NAA"), ("ara", "ARA")]
@@ -340,7 +429,7 @@ struct ScripturePanelView: View {
                     .foregroundStyle(PrototypeStyle.ink)
                     .padding(.horizontal, 10)
                     .frame(height: PrototypeStyle.Layout.compactControlHeight)
-                    .background(.white, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous))
+                    .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
                 }
                 .menuStyle(.borderlessButton)
@@ -363,36 +452,55 @@ struct ScripturePanelView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
+                    if let collects = day.collect, !collects.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "hands.sparkles")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(accent)
+                                    .accessibilityHidden(true)
+                                SectionLabel(collects.count == 1 ? "Coleta do dia" : "Coletas do dia", color: accent)
+                                Spacer(minLength: 0)
+                            }
+                            ForEach(collects) { collect in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if collects.count > 1, let title = collect.title ?? collect.subtitle,
+                                       !title.localizedCaseInsensitiveContains("do dia") {
+                                        Text(title)
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(PrototypeStyle.muted)
+                                    }
+                                    if let text = collect.text {
+                                        Text(text)
+                                            .font(PrototypeStyle.serif(13))
+                                            .foregroundStyle(PrototypeStyle.ink.opacity(0.9))
+                                            .lineSpacing(3)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .textSelection(.enabled)
+                                        Button("Inserir como epígrafe", systemImage: "text.quote") {
+                                            insertCollect(text)
+                                        }
+                                        .buttonStyle(.linkAction(accent, compact: true))
+                                        .help("Insere a coleta no início do manuscrito, como citação em bloco")
+                                    }
+                                }
+                            }
+                            Text("A coleta se liga às leituras e ao tempo litúrgico; lê-la antes ajuda a ver conexões.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(PrototypeStyle.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .panelCard(padding: 12, background: PrototypeStyle.softAccent(accent))
+                        .padding(.horizontal, 4)
+                        .padding(.bottom, 8)
+                    }
+
                     if let readings = day.readings, !readings.isEmpty {
                         ForEach(readings) { reading in
                             readingRow(reading)
                         }
                     } else {
                         ContentUnavailableView("Sem leituras", systemImage: "text.book.closed")
-                    }
-
-                    if let collects = day.collect, !collects.isEmpty {
-                        Divider().padding(.vertical, 11)
-                        sectionLabel(collects.count == 1 ? "COLETA DO DIA" : "COLETAS DO DIA")
-                        ForEach(collects) { collect in
-                            VStack(alignment: .leading, spacing: 4) {
-                                if collects.count > 1, let title = collect.title ?? collect.subtitle,
-                                   !title.localizedCaseInsensitiveContains("do dia") {
-                                    Text(title)
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(PrototypeStyle.muted)
-                                }
-                                if let text = collect.text {
-                                    Text(text)
-                                        .font(PrototypeStyle.serif(14))
-                                        .foregroundStyle(PrototypeStyle.ink.opacity(0.85))
-                                        .lineSpacing(4)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .textSelection(.enabled)
-                                }
-                            }
-                            .padding(.top, 8)
-                        }
                     }
 
                     if let celebrations = day.celebrations, !celebrations.isEmpty {
@@ -614,7 +722,7 @@ struct ResourceContextPanel: View {
                         .foregroundStyle(selectedTab == tab ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.75))
                         .frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30, alignment: .center)
                         .contentShape(Rectangle())
-                        .background(selectedTab == tab ? .white : .clear, in: RoundedRectangle(cornerRadius: 7))
+                        .background(selectedTab == tab ? PrototypeStyle.surface : .clear, in: RoundedRectangle(cornerRadius: 7))
                         .shadow(color: selectedTab == tab ? .black.opacity(0.10) : .clear, radius: 2, y: 1)
                     }
                     .buttonStyle(.hoverHighlight)
@@ -731,16 +839,23 @@ struct ResourceContextPanel: View {
         let exactSites = favoriteSiteArticles.filter { $0.match == .same || $0.match == .contains }
         let partialSites = favoriteSiteArticles.filter { $0.match == .partial }
         let contextSites = favoriteSiteArticles.filter { $0.match == .context }
-        let hasPDFMatches = !exactPDFs.isEmpty || !partialPDFs.isEmpty || !contextPDFs.isEmpty
-        let hasSiteMatches = !favoriteSiteArticles.isEmpty
+        let showsPDFs = filter != .sites
+        let showsSites = filter != .library
+        let exactCount = (showsPDFs ? exactPDFs.count : 0) + (showsSites ? exactSites.count : 0)
+        let partialCount = (showsPDFs ? partialPDFs.count : 0) + (showsSites ? partialSites.count : 0)
+        let contextCount = (showsPDFs ? contextPDFs.count : 0) + (showsSites ? contextSites.count : 0)
+        let isSearchingSites = showsSites && favoriteSiteSearchInProgressReference == favoriteSiteSearchKey
+        let isBusy = (showsPDFs && isMatchingPDFs) || isSearchingSites
+        let hasAnyMatch = exactCount + partialCount + contextCount > 0
 
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Sobre \(reference.isEmpty ? "esta passagem" : reference)")
+        return VStack(alignment: .leading, spacing: PrototypeStyle.Spacing.md) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(reference.isEmpty ? "Materiais" : "Materiais para \(reference)")
                     .font(PrototypeStyle.serif(15, weight: .semibold))
                     .foregroundStyle(PrototypeStyle.ink)
+                    .lineLimit(2)
                 Spacer(minLength: 4)
-                if filter != .library {
+                if showsSites {
                     Button {
                         Task { await refreshFavoriteSites(reference: reference, cacheKey: favoriteSiteSearchKey) }
                     } label: {
@@ -751,7 +866,8 @@ struct ResourceContextPanel: View {
                     }
                     .buttonStyle(.hoverHighlight)
                     .foregroundStyle(PrototypeStyle.muted)
-                    .help("Atualizar resultados das fontes favoritas")
+                    .help("Consultar as fontes favoritas de novo")
+                    .accessibilityLabel("Atualizar fontes favoritas")
                     .disabled(reference.isEmpty || !favoriteSiteSearchActiveReferences.isEmpty)
                 }
             }
@@ -763,7 +879,7 @@ struct ResourceContextPanel: View {
                     } label: {
                         Text(option.rawValue)
                             .font(.system(size: 11, weight: filter == option ? .semibold : .medium))
-                            .foregroundStyle(filter == option ? .white : PrototypeStyle.ink.opacity(0.78))
+                            .foregroundStyle(filter == option ? PrototypeStyle.canvas : PrototypeStyle.ink.opacity(0.78))
                             .padding(.horizontal, 11)
                             .frame(height: PrototypeStyle.Layout.compactControlHeight)
                             .background(filter == option ? PrototypeStyle.ink : PrototypeStyle.ink.opacity(0.06), in: Capsule())
@@ -775,83 +891,111 @@ struct ResourceContextPanel: View {
                 }
             }
 
-            if (!exactPDFs.isEmpty && filter != .sites) || (!exactSites.isEmpty && filter != .library) {
-                sectionHeading("SOBRE ESTA PASSAGEM", color: accent)
-                if filter != .sites {
-                    ForEach(exactPDFs) { pdfMatchRow($0) }
-                }
-                if filter != .library {
-                    ForEach(exactSites) { favoriteArticleRow($0) }
-                }
-            }
-            if (!partialPDFs.isEmpty && filter != .sites) || (!partialSites.isEmpty && filter != .library) {
-                sectionHeading("SOBREPOSIÇÃO PARCIAL", color: Color(red: 0.62, green: 0.43, blue: 0.04))
-                if filter != .sites {
-                    ForEach(partialPDFs) { pdfMatchRow($0) }
-                }
-                if filter != .library {
-                    ForEach(partialSites) { favoriteArticleRow($0) }
-                }
-            }
-            if (!contextPDFs.isEmpty && filter != .sites) || (!contextSites.isEmpty && filter != .library) {
-                sectionHeading("A CONFIRMAR", color: PrototypeStyle.muted)
-                if filter != .sites {
-                    ForEach(contextPDFs) { pdfMatchRow($0) }
-                }
-                if filter != .library {
-                    ForEach(contextSites) { favoriteArticleRow($0) }
-                }
-            }
-            if filter != .sites && !hasPDFMatches && (filter == .library || !hasSiteMatches) {
-                sectionHeading("BIBLIOTECA", color: accent)
-                Text(isMatchingPDFs
-                     ? "Comparando referências nos PDFs…"
-                     : (pdfRecords.isEmpty ? "Importe PDFs para encontrar comentários desta passagem." : "Nenhum PDF indexado corresponde a esta passagem."))
+            if reference.isEmpty {
+                Text("Escolha o texto principal nas leituras para reunir comentários e artigos desta passagem.")
                     .font(.system(size: 11))
                     .foregroundStyle(PrototypeStyle.muted)
-            }
-            if filter != .sites {
-                Button("Abrir biblioteca de PDFs", systemImage: "book.closed", action: openLibrary)
-                    .buttonStyle(.linkAction(accent, compact: true))
-                    .help("Importar e indexar comentários em PDF (⌘3)")
-            }
-
-            if filter != .library {
-                favoriteSourcesContent
-                researchContent
-            }
-        }
-    }
-
-    private var favoriteSourcesContent: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            if favoriteSiteSearchInProgressReference == favoriteSiteSearchKey {
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if isBusy {
                 HStack(spacing: 7) {
                     ProgressView().controlSize(.small)
-                    Text("Consultando as fontes…")
-                        .font(.system(size: 10))
+                    Text(isSearchingSites ? "Consultando as fontes favoritas…" : "Comparando referências nos PDFs…")
+                        .font(.system(size: 11))
                         .foregroundStyle(PrototypeStyle.muted)
                 }
             }
 
-            let groups = favoriteSiteReports[favoriteSiteSearchKey]?.groups ?? []
-            let unmatchedGroups = groups.filter { $0.articles.isEmpty }
+            if exactCount > 0 {
+                groupHeading("Sobre esta passagem", color: accent, count: exactCount)
+                if showsPDFs { ForEach(exactPDFs) { pdfMatchRow($0) } }
+                if showsSites { ForEach(exactSites) { favoriteArticleRow($0) } }
+            }
+            if partialCount > 0 {
+                groupHeading("Sobreposição parcial", color: PrototypeStyle.warning, count: partialCount)
+                if showsPDFs { ForEach(partialPDFs) { pdfMatchRow($0) } }
+                if showsSites { ForEach(partialSites) { favoriteArticleRow($0) } }
+            }
+            if contextCount > 0 {
+                groupHeading("A confirmar", color: PrototypeStyle.muted, count: contextCount)
+                if showsPDFs { ForEach(contextPDFs) { pdfMatchRow($0) } }
+                if showsSites { ForEach(contextSites) { favoriteArticleRow($0) } }
+            }
+            if !reference.isEmpty && !hasAnyMatch && !isBusy {
+                Text(materialsEmptyMessage(showsPDFs: showsPDFs, showsSites: showsSites))
+                    .font(.system(size: 11))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if showsSites {
+                favoriteSourcesContent
+                researchContent
+            }
+
+            HStack(spacing: PrototypeStyle.Spacing.sm) {
+                if showsPDFs {
+                    Button("Biblioteca de PDFs", systemImage: "book.closed", action: openLibrary)
+                        .buttonStyle(.secondaryAction(compact: true))
+                        .help("Importar e indexar comentários em PDF (⌘3)")
+                }
+                if showsSites {
+                    Button {
+                        searchForMaterials()
+                    } label: {
+                        Label(
+                            researchReports[reference] == nil ? "Buscar outros materiais" : "Atualizar pesquisa",
+                            systemImage: "sparkle.magnifyingglass"
+                        )
+                    }
+                    .buttonStyle(.secondaryAction(compact: true))
+                    .disabled(reference.isEmpty || researchInProgressReference != nil)
+                    .help("Usa o provedor de pesquisa escolhido. Envia somente passagem e ocasião; o manuscrito não é enviado. O provedor pode cobrar a busca.")
+                }
+            }
+            .padding(.top, PrototypeStyle.Spacing.xs)
+        }
+    }
+
+    private func materialsEmptyMessage(showsPDFs: Bool, showsSites: Bool) -> String {
+        var parts: [String] = []
+        if showsPDFs {
+            parts.append(pdfRecords.isEmpty
+                ? "Nenhum PDF importado ainda."
+                : "Nenhum PDF indexado trata desta passagem.")
+        }
+        if showsSites {
+            parts.append(favoriteSites.isEmpty
+                ? "Nenhuma fonte favorita cadastrada."
+                : "Nenhum artigo das fontes favoritas corresponde a esta passagem.")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func groupHeading(_ title: String, color: Color, count: Int) -> some View {
+        HStack(spacing: 7) {
+            SectionLabel(title, color: color)
+            Text("\(count)")
+                .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(PrototypeStyle.muted)
+            Rectangle().fill(PrototypeStyle.line).frame(height: 1)
+        }
+        .padding(.top, PrototypeStyle.Spacing.xs)
+    }
+
+    private var favoriteSourcesContent: some View {
+        let groups = favoriteSiteReports[favoriteSiteSearchKey]?.groups ?? []
+        let unmatchedGroups = groups.filter { $0.articles.isEmpty }
+        return VStack(alignment: .leading, spacing: 8) {
             if !unmatchedGroups.isEmpty {
-                sectionHeading("FONTES PARA CONSULTAR", color: PrototypeStyle.muted)
+                groupHeading("Fontes para consultar", color: PrototypeStyle.muted, count: unmatchedGroups.count)
                 ForEach(unmatchedGroups) { group in
                     favoriteSourceRow(group.site, group: group)
                 }
             }
-            if favoriteSites.isEmpty && favoriteSiteSearchInProgressReference != favoriteSiteSearchKey {
-                Text("Adicione fontes favoritas em Preferências · Biblioteca.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(PrototypeStyle.muted)
-            } else if groups.isEmpty && favoriteSiteSearchInProgressReference != favoriteSiteSearchKey {
-                Text(reference.isEmpty
-                    ? "Escolha o texto principal para buscar nas fontes favoritas."
-                    : "Nenhuma correspondência explícita nesta busca.")
-                    .font(.system(size: 10))
-                    .foregroundStyle(PrototypeStyle.muted)
+            if favoriteSites.isEmpty && !reference.isEmpty && favoriteSiteSearchInProgressReference != favoriteSiteSearchKey {
+                Button("Adicionar fontes favoritas", systemImage: "globe", action: openSettings)
+                    .buttonStyle(.linkAction(accent, compact: true))
+                    .help("Abre as Preferências na seção Fontes")
             }
         }
     }
@@ -923,8 +1067,7 @@ struct ResourceContextPanel: View {
                 }
             }
         }
-        .padding(.vertical, 8)
-        .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+        .materialCard()
     }
 
     private func favoriteArticleRow(_ article: FavoriteSiteArticle) -> some View {
@@ -981,9 +1124,7 @@ struct ResourceContextPanel: View {
             }
             .padding(.leading, 23)
         }
-        .padding(9)
-        .background(PrototypeStyle.manuscript.opacity(0.68), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PrototypeStyle.line, lineWidth: 1))
+        .materialCard()
     }
 
     private func readerTab(kind: ReaderTab.Kind, location: String) -> ReaderTab? {
@@ -1018,7 +1159,7 @@ struct ResourceContextPanel: View {
                 .lineLimit(1)
                 .padding(.horizontal, 10)
                 .frame(height: PrototypeStyle.Layout.compactControlHeight)
-                .background(isOpen ? PrototypeStyle.softAccent(accent) : .white, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous))
+                .background(isOpen ? PrototypeStyle.softAccent(accent) : PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.control, style: .continuous).stroke(isOpen ? .clear : PrototypeStyle.line, lineWidth: 1))
                 .foregroundStyle(isOpen ? accent : PrototypeStyle.ink)
                 .contentShape(Rectangle())
@@ -1135,54 +1276,52 @@ struct ResourceContextPanel: View {
 
     private var researchContent: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeading("OUTROS MATERIAIS", color: accent)
             if let report = researchReports[reference] {
-                Text("\(report.provider.name) · \(report.sources.count) fontes · \(report.createdAt.formatted(date: .numeric, time: .shortened))")
+                groupHeading("Outros materiais", color: accent, count: report.sources.count)
+                Text("\(report.provider.name) · \(report.createdAt.formatted(date: .numeric, time: .shortened)) · metadados da busca; confirme na página")
                     .font(.system(size: 10))
                     .foregroundStyle(PrototypeStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                 ForEach(report.sources) { source in
-                    Button {
-                        openResearchSource(source)
-                    } label: {
-                        HStack(alignment: .top, spacing: 9) {
+                    let existingTab = readerTab(kind: .web, location: source.url.absoluteString)
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "globe")
                                 .font(.system(size: 12))
                                 .foregroundStyle(PrototypeStyle.muted)
                                 .frame(width: 15)
                                 .padding(.top, 2)
-                            VStack(alignment: .leading, spacing: 3) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(source.title)
-                                    .font(PrototypeStyle.serif(13, weight: .semibold))
+                                    .font(PrototypeStyle.serif(14, weight: .semibold))
                                     .foregroundStyle(PrototypeStyle.ink)
-                                    .multilineTextAlignment(.leading)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Text(source.editorialContext)
                                     .font(.system(size: 10))
                                     .foregroundStyle(PrototypeStyle.muted)
                                     .fixedSize(horizontal: false, vertical: true)
-                                    .help("Metadados retornados pela busca; confirme na página original.")
                                 Text([source.domain, source.publishedDate].compactMap { $0 }.joined(separator: " · "))
                                     .font(.system(size: 10))
                                     .foregroundStyle(PrototypeStyle.muted)
                                     .fixedSize(horizontal: false, vertical: true)
-                                Text("Abrir no leitor")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(accent)
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            materialActionButton(title: readerActionTitle(for: existingTab, unopened: "Abrir"), isOpen: existingTab != nil) {
+                                openResearchSource(source)
                             }
                             Spacer(minLength: 0)
                         }
-                        .padding(.vertical, 7)
-                        .contentShape(Rectangle())
+                        .padding(.leading, 23)
                     }
-                    .buttonStyle(.plain)
-                    .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
+                    .materialCard()
                 }
             }
 
             if researchInProgressReference == reference {
                 HStack(spacing: 7) {
                     ProgressView().controlSize(.small)
-                    Text("Pesquisando fontes…")
+                    Text("Pesquisando outras fontes…")
                         .font(.system(size: 11))
                         .foregroundStyle(PrototypeStyle.muted)
                 }
@@ -1190,24 +1329,13 @@ struct ResourceContextPanel: View {
             if researchErrorReference == reference, let researchError {
                 Text(researchError)
                     .font(.system(size: 11))
-                    .foregroundStyle(PrototypeStyle.muted)
+                    .foregroundStyle(PrototypeStyle.warning)
+                    .fixedSize(horizontal: false, vertical: true)
                 if researchError.localizedCaseInsensitiveContains("chave") {
                     Button("Configurar IA", systemImage: "key", action: openSettings)
                         .buttonStyle(.linkAction(accent, compact: true))
                 }
             }
-
-            Button {
-                searchForMaterials()
-            } label: {
-                Label(
-                    researchReports[reference] == nil ? "Buscar outros materiais" : "Atualizar pesquisa",
-                    systemImage: "sparkle.magnifyingglass"
-                )
-            }
-            .buttonStyle(.secondaryAction(compact: true))
-            .disabled(reference.isEmpty || researchInProgressReference != nil)
-            .help("Usa o provedor de pesquisa escolhido. Envia somente passagem e ocasião; o manuscrito não é enviado. O provedor pode cobrar a busca.")
         }
     }
 
@@ -1324,9 +1452,7 @@ struct ResourceContextPanel: View {
             }
             .padding(.leading, 23)
         }
-        .padding(9)
-        .background(PrototypeStyle.manuscript.opacity(0.68), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(PrototypeStyle.line, lineWidth: 1))
+        .materialCard()
     }
 
     private func openPDFMatch(_ match: MatchedPDF) {
@@ -1429,7 +1555,7 @@ struct ResourceContextPanel: View {
                             }
                         }
                         .padding(10)
-                        .background(.white, in: RoundedRectangle(cornerRadius: 6))
+                        .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: 6))
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(PrototypeStyle.line.opacity(0.6), lineWidth: 1))
                     }
                 }
@@ -1933,5 +2059,53 @@ struct SermonStructureMapView: View {
         .foregroundStyle(accent)
         .help("Ir ao trecho no manuscrito")
         .accessibilityLabel("Ir ao trecho")
+    }
+}
+
+private extension View {
+    /// Cartão de material (PDF, artigo ou fonte): a mesma superfície para todos os itens do painel.
+    func materialCard() -> some View {
+        padding(9)
+            .background(PrototypeStyle.manuscript.opacity(0.68), in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
+    }
+}
+
+/// Barra flutuante que aparece sobre o texto selecionado no manuscrito, no espírito do Substack.
+struct EditorSelectionToolbar: View {
+    @ObservedObject var commands: EditorCommands
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 2) {
+            toolbarButton("bold", help: "Negrito (⌘B)", isActive: commands.isBoldActive, action: commands.bold)
+            toolbarButton("italic", help: "Itálico (⌘I)", isActive: commands.isItalicActive, action: commands.italic)
+            Rectangle().fill(PrototypeStyle.line).frame(width: 1, height: 16).padding(.horizontal, 2)
+            toolbarButton("textformat.size", help: "Título (⇧⌘1)", isActive: commands.isHeadingActive, action: commands.heading)
+            toolbarButton("text.quote", help: "Citação em bloco (⇧⌘.)", isActive: commands.isQuoteActive, action: commands.quotation)
+            toolbarButton("list.bullet", help: "Lista (⇧⌘8)", isActive: commands.isListActive, action: commands.bulletedList)
+            toolbarButton("text.badge.plus", help: "Nota de rodapé (⌥⌘N)", isActive: false, action: commands.footnote)
+        }
+        .padding(4)
+        .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Formatação da seleção")
+    }
+
+    private func toolbarButton(_ symbol: String, help: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isActive ? accent : PrototypeStyle.ink)
+                .frame(width: 26, height: 26)
+                .background(isActive ? PrototypeStyle.softAccent(accent) : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverHighlight(cornerRadius: 5))
+        .help(help)
+        .accessibilityLabel(help)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }

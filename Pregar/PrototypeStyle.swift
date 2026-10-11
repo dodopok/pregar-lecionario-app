@@ -1,22 +1,35 @@
+import AppKit
 import SwiftUI
 
-/// Sistema visual do Pregar: paleta de papel, tipografia serifada para títulos e
-/// escalas fixas de espaçamento, raio e altura de controle. Todas as telas usam
-/// estes valores para que botões, cartões e cabeçalhos se alinhem entre janelas.
+/// Sistema visual do Pregar: paleta de papel que vira tinta no modo escuro, tipografia serifada
+/// para títulos e escalas fixas de espaçamento, raio e altura de controle. Todas as telas usam
+/// estes valores para que botões, cartões e cabeçalhos se alinhem entre janelas e aparências.
 enum PrototypeStyle {
-    static let canvas = Color(red: 0.961, green: 0.953, blue: 0.933)
-    static let sidebar = Color(red: 0.925, green: 0.914, blue: 0.886)
-    static let paper = Color(red: 0.984, green: 0.980, blue: 0.969)
-    static let manuscript = Color(red: 1.000, green: 0.996, blue: 0.984)
-    static let editorSurface = Color(red: 0.922, green: 0.910, blue: 0.882)
-    static let ink = Color(red: 0.122, green: 0.114, blue: 0.098)
-    static let green = Color(red: 0.180, green: 0.478, blue: 0.318)
-    static let softGreen = Color(red: 0.890, green: 0.925, blue: 0.890)
-    /// Texto secundário. Escurecido para manter contraste ≥ 4,5:1 sobre papel e tela,
-    /// o mínimo WCAG AA para texto pequeno.
-    static let muted = Color(red: 0.440, green: 0.430, blue: 0.405)
-    static let line = Color(red: 0.122, green: 0.114, blue: 0.098).opacity(0.10)
-    static let warning = Color(red: 0.72, green: 0.44, blue: 0.08)
+    typealias RGB = (red: Double, green: Double, blue: Double)
+
+    /// Cor que resolve conforme a aparência efetiva da janela (clara ou escura).
+    static func adaptive(light: RGB, dark: RGB) -> Color {
+        Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let value = isDark ? dark : light
+            return NSColor(srgbRed: value.red, green: value.green, blue: value.blue, alpha: 1)
+        }))
+    }
+
+    static let canvas = adaptive(light: (0.961, 0.953, 0.933), dark: (0.118, 0.114, 0.106))
+    static let sidebar = adaptive(light: (0.925, 0.914, 0.886), dark: (0.098, 0.094, 0.088))
+    static let paper = adaptive(light: (0.984, 0.980, 0.969), dark: (0.145, 0.141, 0.131))
+    static let manuscript = adaptive(light: (1.000, 0.996, 0.984), dark: (0.165, 0.161, 0.150))
+    static let editorSurface = adaptive(light: (0.922, 0.910, 0.882), dark: (0.102, 0.098, 0.090))
+    /// Superfície de cartões e controles: branco sobre papel, tinta elevada no escuro.
+    static let surface = adaptive(light: (1.0, 1.0, 1.0), dark: (0.196, 0.190, 0.178))
+    static let ink = adaptive(light: (0.122, 0.114, 0.098), dark: (0.925, 0.914, 0.886))
+    static let green = adaptive(light: (0.180, 0.478, 0.318), dark: (0.360, 0.660, 0.480))
+    static let softGreen = adaptive(light: (0.890, 0.925, 0.890), dark: (0.170, 0.260, 0.200))
+    /// Texto secundário com contraste ≥ 4,5:1 sobre papel e sobre tinta (WCAG AA para texto pequeno).
+    static let muted = adaptive(light: (0.440, 0.430, 0.405), dark: (0.660, 0.650, 0.620))
+    static let line = ink.opacity(0.10)
+    static let warning = adaptive(light: (0.72, 0.44, 0.08), dark: (0.93, 0.66, 0.30))
 
     /// Fundo suave derivado do acento litúrgico, usado em estados selecionados/ativos.
     static func softAccent(_ accent: Color) -> Color {
@@ -57,9 +70,100 @@ enum PrototypeStyle {
     }
 }
 
+/// Aparência escolhida pelo usuário. "Automático" segue o sistema.
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "Automático"
+        case .light: "Claro"
+        case .dark: "Escuro"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .system: "circle.lefthalf.filled"
+        case .light: "sun.max"
+        case .dark: "moon"
+        }
+    }
+
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 @MainActor
 final class AppAppearanceStore: ObservableObject {
+    static let modeKey = "pregar.appearance.mode"
+
     @Published var accent = PrototypeStyle.green
+    /// Aplicada ao app inteiro (janelas, folhas e painéis do sistema) via `NSApplication.appearance`.
+    @Published var mode: AppearanceMode {
+        didSet {
+            defaults.set(mode.rawValue, forKey: Self.modeKey)
+            apply()
+        }
+    }
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = PregarRuntime.makeAppUserDefaults()) {
+        self.defaults = defaults
+        self.mode = AppearanceMode(rawValue: defaults.string(forKey: Self.modeKey) ?? "") ?? .system
+        apply()
+    }
+
+    private func apply() {
+        NSApplication.shared.appearance = mode.nsAppearance
+    }
+}
+
+/// Alça vertical entre painéis. Arrastar altera `width` dentro de `range`; `growsTowardTrailing`
+/// indica que o painel controlado está à esquerda da alça (cresce quando se arrasta para a direita).
+struct PanelResizeHandle: View {
+    @Binding var width: CGFloat
+    let range: ClosedRange<CGFloat>
+    var growsTowardTrailing = true
+    var label = "Divisor de painéis"
+    @State private var dragStart: CGFloat?
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 9)
+            .overlay { Rectangle().fill(PrototypeStyle.line).frame(width: 1) }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { value in
+                        let start = dragStart ?? width
+                        if dragStart == nil { dragStart = start }
+                        let delta = growsTowardTrailing ? value.translation.width : -value.translation.width
+                        width = min(range.upperBound, max(range.lowerBound, start + delta))
+                    }
+                    .onEnded { _ in dragStart = nil }
+            )
+            .onHover { hovering in
+                if hovering { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .accessibilityElement()
+            .accessibilityLabel(label)
+            .accessibilityValue("\(Int(width)) pontos")
+            .accessibilityAdjustableAction { direction in
+                let delta: CGFloat = direction == .increment ? 20 : -20
+                width = min(range.upperBound, max(range.lowerBound, width + delta))
+            }
+    }
 }
 
 // MARK: - Componentes de texto e superfície
@@ -136,7 +240,7 @@ private struct PanelCardModifier: ViewModifier {
 
 extension View {
     /// Cartão branco com contorno fino, a superfície padrão para grupos de conteúdo em folhas e painéis.
-    func panelCard(padding: CGFloat = 14, background: Color = .white) -> some View {
+    func panelCard(padding: CGFloat = 14, background: Color = PrototypeStyle.surface) -> some View {
         modifier(PanelCardModifier(padding: padding, background: background))
     }
 }
@@ -210,7 +314,7 @@ struct SecondaryActionButtonStyle: ButtonStyle {
                 .lineLimit(1)
                 .padding(.horizontal, compact ? 10 : 12)
                 .frame(height: compact ? PrototypeStyle.Layout.compactControlHeight : PrototypeStyle.Layout.controlHeight)
-                .background(.white, in: shape)
+                .background(PrototypeStyle.surface, in: shape)
                 .overlay(shape.fill(PrototypeStyle.ink.opacity(overlayOpacity)))
                 .overlay(shape.stroke(PrototypeStyle.line, lineWidth: 1))
                 .contentShape(shape)

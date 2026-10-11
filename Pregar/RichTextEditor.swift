@@ -15,6 +15,9 @@ final class EditorCommands: ObservableObject {
     @Published private(set) var isHeadingActive = false
     @Published private(set) var isQuoteActive = false
     @Published private(set) var isListActive = false
+    /// Ponto, nas coordenadas do editor (origem no canto superior esquerdo), acima do início da
+    /// seleção atual; nulo sem seleção. Alimenta a barra flutuante de formatação.
+    @Published private(set) var selectionAnchor: CGPoint?
     static let fontFamilies = ["Arial", "Georgia", "Times New Roman", "Helvetica", "Avenir"]
     static let fontSizes = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36]
     /// Corpo do texto em Arial 10, preferência registrada no plano de produto.
@@ -86,6 +89,38 @@ final class EditorCommands: ObservableObject {
         textView.window?.makeFirstResponder(textView)
         textView.insertText(text, replacementRange: textView.selectedRange())
         textView.didChangeText()
+    }
+
+    /// Recalcula a âncora da barra flutuante a partir da seleção e da rolagem atuais.
+    func updateSelectionAnchor() {
+        guard let textView,
+              let scrollView = textView.enclosingScrollView,
+              let window = textView.window,
+              window.firstResponder === textView else {
+            if selectionAnchor != nil { selectionAnchor = nil }
+            return
+        }
+        let selection = textView.selectedRange()
+        // Durante o arrasto do mouse a barra ficaria sob o cursor; ela aparece ao soltar.
+        guard selection.length > 0, NSEvent.pressedMouseButtons & 1 == 0 else {
+            if selectionAnchor != nil { selectionAnchor = nil }
+            return
+        }
+        let screenRect = textView.firstRect(forCharacterRange: selection, actualRange: nil)
+        guard screenRect.width > 0 || screenRect.height > 0 else {
+            if selectionAnchor != nil { selectionAnchor = nil }
+            return
+        }
+        let windowRect = window.convertFromScreen(screenRect)
+        let local = scrollView.convert(windowRect, from: nil)
+        let visibleHeight = scrollView.bounds.height
+        guard local.maxY > 0, local.minY < visibleHeight else {
+            if selectionAnchor != nil { selectionAnchor = nil }
+            return
+        }
+        let top = scrollView.isFlipped ? local.minY : visibleHeight - local.maxY
+        let anchor = CGPoint(x: local.midX, y: top)
+        if selectionAnchor != anchor { selectionAnchor = anchor }
     }
 
     // MARK: - Caracteres
@@ -233,6 +268,22 @@ final class EditorCommands: ObservableObject {
         textView.setSelectedRange(NSRange(location: storage.length, length: 0))
         textView.scrollRangeToVisible(textView.selectedRange())
         textView.didChangeText()
+    }
+
+    /// Insere um texto no início do manuscrito como epígrafe: citação em bloco com atribuição.
+    func insertEpigraph(_ text: String, attribution: String = "Coleta do dia") {
+        guard let textView else { return }
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        focusTextView()
+        let block = "“\(body)”\n— \(attribution)\n\n"
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        textView.insertText(block, replacementRange: NSRange(location: 0, length: 0))
+        let quoteLength = (block as NSString).length - 1
+        textView.setSelectedRange(NSRange(location: 0, length: quoteLength))
+        quotation()
+        textView.setSelectedRange(NSRange(location: quoteLength, length: 0))
+        textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
     }
 
     // MARK: - Conveniências de digitação (chamadas pelo QuotationTextView)
@@ -562,6 +613,12 @@ final class QuotationTextView: NSTextView {
         super.insertNewline(sender)
     }
 
+    /// O `NSTextView` acompanha o arrasto dentro de `mouseDown`; ao voltar, a seleção está pronta.
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+        commands?.updateSelectionAnchor()
+    }
+
     override func deleteBackward(_ sender: Any?) {
         if let commands, commands.handleDeleteBackward() { return }
         super.deleteBackward(sender)
@@ -610,9 +667,14 @@ final class QuotationTextView: NSTextView {
                 height: bottom - top + 10
             )
             guard block.intersects(dirtyRect) else { return }
-            NSColor(calibratedRed: 0.94, green: 0.96, blue: 0.94, alpha: 1).setFill()
+            let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            (isDark
+                ? NSColor(calibratedRed: 0.16, green: 0.23, blue: 0.19, alpha: 1)
+                : NSColor(calibratedRed: 0.94, green: 0.96, blue: 0.94, alpha: 1)).setFill()
             NSBezierPath(roundedRect: block, xRadius: 6, yRadius: 6).fill()
-            NSColor(calibratedRed: 0.20, green: 0.48, blue: 0.34, alpha: 1).setFill()
+            (isDark
+                ? NSColor(calibratedRed: 0.36, green: 0.66, blue: 0.48, alpha: 1)
+                : NSColor(calibratedRed: 0.20, green: 0.48, blue: 0.34, alpha: 1)).setFill()
             NSBezierPath(roundedRect: NSRect(x: block.minX + 8, y: block.minY + 8, width: 3, height: max(0, block.height - 16)), xRadius: 1.5, yRadius: 1.5).fill()
         }
     }
@@ -657,9 +719,24 @@ struct RichTextEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.commands = commands
         scrollView.documentView = textView
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        context.coordinator.scrollObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak commands] _ in
+            Task { @MainActor in commands?.updateSelectionAnchor() }
+        }
         commands.textView = textView
         context.coordinator.apply(rtfData, to: textView)
         return scrollView
+    }
+
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        if let observer = coordinator.scrollObserver {
+            NotificationCenter.default.removeObserver(observer)
+            coordinator.scrollObserver = nil
+        }
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
@@ -673,6 +750,7 @@ struct RichTextEditor: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
+        var scrollObserver: NSObjectProtocol?
         private var lastAppliedData: Data?
         private var isApplyingProgrammaticChange = false
 
@@ -724,12 +802,14 @@ struct RichTextEditor: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             guard !isApplyingProgrammaticChange else { return }
             parent.commands.updateSelectionFormatting()
+            parent.commands.updateSelectionAnchor()
         }
 
         func textDidChange(_ notification: Notification) {
             guard !isApplyingProgrammaticChange else { return }
             guard let textView = notification.object as? NSTextView else { return }
             parent.commands.updateWordCount(from: textView.string)
+            parent.commands.updateSelectionAnchor()
             let range = NSRange(location: 0, length: textView.textStorage?.length ?? 0)
             guard let data = try? textView.attributedString().data(
                 from: range,

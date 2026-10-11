@@ -6,16 +6,20 @@ import SwiftData
 private enum PreferencesSection: String, CaseIterable, Identifiable {
     case api = "Estêvão API"
     case intelligence = "Inteligência artificial"
+    case appearance = "Aparência"
     case tablet = "Tablet"
     case library = "Biblioteca"
+    case sources = "Fontes"
 
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .api: "network"
         case .intelligence: "sparkle"
+        case .appearance: "circle.lefthalf.filled"
         case .tablet: "ipad.landscape"
         case .library: "book.closed"
+        case .sources: "globe"
         }
     }
 }
@@ -28,6 +32,7 @@ struct APISettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var readerSession: ReaderSessionStore
+    @EnvironmentObject private var appearance: AppAppearanceStore
     @State private var section: PreferencesSection = .api
     @State private var settings: APISettings
     @State private var enteredKey = ""
@@ -76,26 +81,28 @@ struct APISettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        HStack(spacing: 0) {
             navigation
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    pageHeading
-                    sectionContent
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        pageHeading
+                        sectionContent
+                    }
+                    .frame(maxWidth: 820, alignment: .leading)
+                    .padding(.horizontal, PrototypeStyle.Spacing.xxl)
+                    .padding(.top, PrototypeStyle.Spacing.xxl)
+                    .padding(.bottom, PrototypeStyle.Spacing.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: 980, alignment: .leading)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 20)
-                .frame(maxWidth: .infinity, alignment: .center)
+                .background(PrototypeStyle.canvas)
+                Divider()
+                footer
             }
-            .background(PrototypeStyle.canvas)
-            Divider()
-            footer
         }
-        .frame(minWidth: 620, minHeight: 640)
+        .frame(minWidth: 760, minHeight: 640)
         .background(PrototypeStyle.canvas)
-        .preferredColorScheme(.light)
         .tint(accent)
         .fileImporter(isPresented: $selectingPDFFolder, allowedContentTypes: [.folder], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first { pdfFolder = url.path }
@@ -152,31 +159,41 @@ struct APISettingsView: View {
     }
 
     private var navigation: some View {
-        HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 2) {
+            Spacer().frame(height: 44)
+            SectionLabel("Preferências")
+                .padding(.horizontal, 12)
+                .padding(.bottom, 6)
             ForEach(PreferencesSection.allCases) { item in
                 Button {
                     section = item
                     resultMessage = nil
                 } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: item.symbol).font(.system(size: 18, weight: .regular))
-                        Text(item.rawValue).font(.system(size: 12, weight: section == item ? .semibold : .regular))
-                            .lineLimit(1).minimumScaleFactor(0.85)
+                    HStack(spacing: 10) {
+                        Image(systemName: item.symbol)
+                            .font(.system(size: 13, weight: .medium))
+                            .frame(width: 20)
+                        Text(item.rawValue)
+                            .font(.system(size: 12, weight: section == item ? .semibold : .regular))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
                     }
-                    .foregroundStyle(section == item ? accent : PrototypeStyle.muted)
-                    .padding(.horizontal, 12)
-                    .frame(height: 48)
-                    .background(section == item ? accent.opacity(0.11) : .clear, in: RoundedRectangle(cornerRadius: 10))
-                    .contentShape(RoundedRectangle(cornerRadius: 10))
+                    .foregroundStyle(section == item ? accent : PrototypeStyle.ink)
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(section == item ? PrototypeStyle.softAccent(accent) : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.hoverHighlight(cornerRadius: 10))
+                .buttonStyle(.hoverHighlight)
                 .accessibilityAddTraits(section == item ? .isSelected : [])
             }
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.leading, PrototypeStyle.Layout.windowControlsInset)
-        .padding(.trailing, 22)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 14)
+        .frame(width: 210)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(PrototypeStyle.sidebar)
     }
 
     private var pageHeading: some View {
@@ -191,8 +208,10 @@ struct APISettingsView: View {
         switch section {
         case .api: apiContent
         case .intelligence: intelligenceContent
+        case .appearance: appearanceContent
         case .tablet: tabletContent
         case .library: libraryContent
+        case .sources: sourcesContent
         }
     }
 
@@ -330,6 +349,7 @@ struct APISettingsView: View {
                     if aiStore.isLoadingClaudeModels { ProgressView().controlSize(.small) }
                     Spacer()
                     Button("Atualizar modelos", systemImage: "arrow.clockwise") { aiStore.refreshClaudeModels() }
+                        .buttonStyle(.secondaryAction(compact: true))
                         .disabled(!aiStore.hasKey(for: .anthropic) || aiStore.isLoadingClaudeModels)
                 }
                 if let error = aiStore.claudeModelsError {
@@ -348,6 +368,48 @@ struct APISettingsView: View {
         .onChange(of: reviewProvider) { _, provider in reviewModel = provider.suggestedModel }
         .onChange(of: researchProvider) { _, provider in researchModel = provider.suggestedModel }
         .onAppear { aiStore.refreshClaudeModels() }
+    }
+
+    private var appearanceContent: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            PreferenceGroup {
+                PreferenceRow(label: "Aparência") {
+                    HStack(spacing: 6) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            Button {
+                                appearance.mode = mode
+                            } label: {
+                                Label(mode.title, systemImage: mode.symbol)
+                                    .font(.system(size: 12, weight: appearance.mode == mode ? .semibold : .medium))
+                                    .foregroundStyle(appearance.mode == mode ? accent : PrototypeStyle.ink)
+                                    .padding(.horizontal, 12)
+                                    .frame(height: PrototypeStyle.Layout.controlHeight)
+                                    .background(
+                                        appearance.mode == mode ? PrototypeStyle.softAccent(accent) : PrototypeStyle.surface,
+                                        in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous)
+                                            .stroke(appearance.mode == mode ? accent.opacity(0.5) : PrototypeStyle.line, lineWidth: 1)
+                                    )
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.hoverHighlight(cornerRadius: PrototypeStyle.Radius.button))
+                            .accessibilityAddTraits(appearance.mode == mode ? .isSelected : [])
+                        }
+                    }
+                }
+                PreferenceRow(label: "Cor de acento") {
+                    HStack(spacing: 8) {
+                        Circle().fill(accent).frame(width: 14, height: 14)
+                        Text("Segue a cor litúrgica do dia selecionado na Mesa.")
+                            .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                    }
+                }
+            }
+            Text("A aparência vale para todas as janelas e folhas. “Automático” acompanha o ajuste do macOS.")
+                .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+        }
     }
 
     private var tabletContent: some View {
@@ -389,9 +451,9 @@ struct APISettingsView: View {
                         .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                     HStack(spacing: 9) {
                         Button("Criar backup…", systemImage: "externaldrive.badge.plus", action: chooseBackupDestination)
-                            .buttonStyle(.borderedProminent).tint(accent).disabled(isBackupBusy)
+                            .buttonStyle(.primaryAction(accent)).disabled(isBackupBusy)
                         Button("Restaurar…", systemImage: "arrow.uturn.backward", action: chooseBackupToRestore)
-                            .buttonStyle(.bordered).disabled(isBackupBusy)
+                            .buttonStyle(.secondaryAction).disabled(isBackupBusy)
                         Spacer()
                         if isCreatingBackup || isValidatingBackup || isRestoringBackup {
                             ProgressView().controlSize(.small)
@@ -414,6 +476,7 @@ struct APISettingsView: View {
                             .font(.system(size: 12, design: .monospaced)).foregroundStyle(pdfFolder.isEmpty ? PrototypeStyle.muted : PrototypeStyle.ink)
                             .lineLimit(1).truncationMode(.middle)
                         Button("Escolher…", systemImage: "folder", action: { selectingPDFFolder = true })
+                            .buttonStyle(.secondaryAction(compact: true))
                     }
                 }
                 HStack(spacing: 9) {
@@ -423,6 +486,11 @@ struct APISettingsView: View {
                 }
                 .padding(.top, 4)
             }
+        }
+    }
+
+    private var sourcesContent: some View {
+        VStack(alignment: .leading, spacing: 22) {
             SectionLabel("Fontes favoritas")
                 .padding(.bottom, -12)
             PreferenceGroup {
@@ -435,6 +503,7 @@ struct APISettingsView: View {
                         .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                     Spacer()
                     Button("Adicionar site", systemImage: "plus") { editingSite = .newSite() }
+                        .buttonStyle(.secondaryAction(compact: true))
                 }
                 .frame(minHeight: 46)
             }
@@ -451,6 +520,7 @@ struct APISettingsView: View {
                         .font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
                     Spacer()
                     Button("Adicionar autor", systemImage: "plus") { editingAuthor = .newAuthor() }
+                        .buttonStyle(.secondaryAction(compact: true))
                 }
                 .frame(minHeight: 46)
             }
@@ -687,12 +757,12 @@ struct APISettingsView: View {
                     if isTesting { ProgressView().controlSize(.small) }
                     else { Label("Salvar e testar", systemImage: "checkmark.arrow.trianglehead.counterclockwise") }
                 }
-                .buttonStyle(.borderedProminent).tint(accent).disabled(isTesting)
+                .buttonStyle(.primaryAction(accent)).disabled(isTesting)
                 .keyboardShortcut(.defaultAction)
             } else if section == .intelligence {
-                Button("Salvar") { saveAISettings() }.buttonStyle(.borderedProminent).tint(accent)
+                Button("Salvar") { saveAISettings() }.buttonStyle(.primaryAction(accent))
             }
-            Button("Concluído") { dismiss() }.keyboardShortcut(.cancelAction)
+            Button("Concluído") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, 22).padding(.vertical, 12)
         .background(PrototypeStyle.canvas)
@@ -702,8 +772,10 @@ struct APISettingsView: View {
         switch section {
         case .api: "A conexão usa sempre a Estêvão API v2."
         case .intelligence: "Provedores externos com suas próprias chaves."
+        case .appearance: "Claro, escuro ou automático."
         case .tablet: "Formato de leitura no tablet."
-        case .library: "Comentários em PDF e fontes de pesquisa."
+        case .library: "Comentários em PDF, pasta e backup."
+        case .sources: "Sites e autores consultados por passagem."
         }
     }
 
@@ -711,8 +783,10 @@ struct APISettingsView: View {
         switch section {
         case .api: "A chave fica salva no Acesso às Chaves deste Mac."
         case .intelligence: "Credenciais no Acesso às Chaves; preferências neste Mac."
+        case .appearance: "Preferência salva neste Mac."
         case .tablet: "Preferências locais de leitura no tablet."
         case .library: "Os arquivos PDF permanecem na pasta original."
+        case .sources: "As fontes ficam neste Mac e aparecem na Mesa."
         }
     }
 
@@ -846,6 +920,7 @@ private struct PrayerBookPickerSheet: View {
                     accent: accent
                 )
                 Button("Fechar") { dismiss() }
+                    .buttonStyle(.secondaryAction)
                     .keyboardShortcut(.cancelAction)
             }
             .padding(.horizontal, 22)
@@ -860,7 +935,7 @@ private struct PrayerBookPickerSheet: View {
             }
             .padding(.horizontal, 11)
             .frame(height: 36)
-            .background(.white, in: RoundedRectangle(cornerRadius: 8))
+            .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(PrototypeStyle.line, lineWidth: 1))
             .padding(.horizontal, 22)
             .padding(.bottom, 10)
@@ -870,7 +945,7 @@ private struct PrayerBookPickerSheet: View {
                     Label(loadError, systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 12)).foregroundStyle(.orange)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Button("Tentar novamente", action: onRetry)
+                    Button("Tentar novamente", action: onRetry).buttonStyle(.secondaryAction(compact: true))
                         .disabled(isLoading)
                 }
                 .padding(.horizontal, 22)
@@ -906,7 +981,6 @@ private struct PrayerBookPickerSheet: View {
         }
         .frame(width: 720, height: 630)
         .background(PrototypeStyle.canvas)
-        .preferredColorScheme(.light)
         .tint(accent)
     }
 
@@ -923,7 +997,7 @@ private struct PrayerBookPickerSheet: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 390)
             if hasAPIKey {
-                Button("Tentar novamente", action: onRetry).disabled(isLoading)
+                Button("Tentar novamente", action: onRetry).buttonStyle(.secondaryAction(compact: true)).disabled(isLoading)
                     .padding(.top, 3)
             }
         }
@@ -1063,10 +1137,14 @@ private struct AIProviderKeyRow: View {
             .frame(width: 185, alignment: .leading)
             SecureField("Cole a chave da API", text: $key)
                 .textFieldStyle(.roundedBorder)
-            Button("Salvar") { Task { await saveKey() } }.disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Salvar") { Task { await saveKey() } }
+                .buttonStyle(.primaryAction(accent, compact: true))
+                .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if !store.isLoadingKeys && store.hasKey(for: provider) {
                 Button("Remover", systemImage: "trash", role: .destructive) { Task { await removeKey() } }
-                    .labelStyle(.iconOnly).help("Remover chave de \(provider.name)")
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.secondaryAction(compact: true))
+                    .help("Remover chave de \(provider.name)")
             }
         }
         .frame(minHeight: 54)
@@ -1169,9 +1247,9 @@ private struct FavoriteSiteEditor: View {
             Spacer(minLength: 0)
             HStack {
                 Spacer()
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancelar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                 Button("Salvar") { save() }
-                    .buttonStyle(.borderedProminent).tint(accent)
+                    .buttonStyle(.primaryAction(accent))
                     .disabled(site.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .keyboardShortcut(.defaultAction)
             }
@@ -1179,7 +1257,6 @@ private struct FavoriteSiteEditor: View {
         .padding(PrototypeStyle.Spacing.xxl)
         .frame(width: 600, height: 580)
         .background(PrototypeStyle.canvas)
-        .preferredColorScheme(.light)
     }
 
     private func save() {
@@ -1260,9 +1337,9 @@ private struct FavoriteAuthorEditor: View {
             Spacer(minLength: 0)
             HStack {
                 Spacer()
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancelar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                 Button("Salvar") { save() }
-                    .buttonStyle(.borderedProminent).tint(accent)
+                    .buttonStyle(.primaryAction(accent))
                     .disabled(author.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .keyboardShortcut(.defaultAction)
             }
@@ -1270,7 +1347,6 @@ private struct FavoriteAuthorEditor: View {
         .padding(PrototypeStyle.Spacing.xxl)
         .frame(width: 520, height: 300)
         .background(PrototypeStyle.canvas)
-        .preferredColorScheme(.light)
     }
 
     private func save() {
@@ -1296,7 +1372,7 @@ private struct PreferenceGroup<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) { content }
             .padding(.horizontal, 14).padding(.vertical, 4)
-            .background(.white, in: RoundedRectangle(cornerRadius: 10))
+            .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(PrototypeStyle.line, lineWidth: 1))
     }
 }

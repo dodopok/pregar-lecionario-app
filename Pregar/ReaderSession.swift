@@ -560,7 +560,6 @@ struct ReaderWindowView: View {
         }
         .frame(minWidth: 1020, minHeight: 640)
         .background(PrototypeStyle.paper)
-        .preferredColorScheme(.light)
         .onChange(of: reader.selectedID) { _, _ in
             selectedText = ""
             pageField = String(tab?.physicalPage ?? 1)
@@ -660,7 +659,7 @@ struct ReaderWindowView: View {
                             .padding(.trailing, 6)
                             .help("Fechar aba")
                         }
-                        .background(item.id == reader.selectedID ? .white : .clear, in: RoundedRectangle(cornerRadius: 8))
+                        .background(item.id == reader.selectedID ? PrototypeStyle.surface : .clear, in: RoundedRectangle(cornerRadius: 8))
                         .shadow(color: item.id == reader.selectedID ? .black.opacity(0.12) : .clear, radius: 3, y: 1)
                     }
                 }
@@ -677,7 +676,7 @@ struct ReaderWindowView: View {
                 Label("Copiar com origem", systemImage: "doc.on.doc")
                     .font(.system(size: 12, weight: .medium))
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.secondaryAction)
             .disabled(tab == nil)
         }
         .padding(.leading, PrototypeStyle.Layout.windowControlsInset)
@@ -776,7 +775,7 @@ struct ReaderWindowView: View {
                     Text("O arquivo não pôde ser aberto. Confira se ele ainda está disponível neste Mac.")
                 } actions: {
                     Button("Tentar novamente", systemImage: "arrow.clockwise") { pdfLoadRevision += 1 }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.secondaryAction)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -830,12 +829,12 @@ struct ReaderWindowView: View {
                     correctionPage = activeSection?.startPage ?? tab.physicalPage
                     showingPageCorrection = true
                 }
-                .buttonStyle(.bordered).font(.system(size: 12))
+                .buttonStyle(.secondaryAction)
                 .disabled(document == nil)
                 Button("Lembrar este vínculo", systemImage: "bookmark") {
                     reader.rememberLink(for: tab, section: activeSection)
                 }
-                .buttonStyle(.bordered).font(.system(size: 12))
+                .buttonStyle(.secondaryAction)
             } else {
                 HStack {
                     SectionLabel("Onde está")
@@ -846,7 +845,7 @@ struct ReaderWindowView: View {
                 Button("Lembrar este vínculo", systemImage: "bookmark") {
                     reader.rememberLink(for: tab)
                 }
-                .buttonStyle(.bordered).font(.system(size: 12))
+                .buttonStyle(.secondaryAction)
             }
 
             Divider().overlay(PrototypeStyle.line)
@@ -881,9 +880,9 @@ struct ReaderWindowView: View {
         } actions: {
             HStack {
                 Button("Nova aba", systemImage: "plus") { showingNewTab = true }
-                    .buttonStyle(.borderedProminent).tint(appearance.accent)
+                    .buttonStyle(.primaryAction(appearance.accent))
                 Button("Biblioteca de PDFs", systemImage: "books.vertical") { openWindow(id: "library") }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.secondaryAction)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1047,9 +1046,9 @@ private struct ReaderNewTabSheet: View {
             if let errorMessage { Text(errorMessage).font(.system(size: 12)).foregroundStyle(.red) }
             HStack {
                 Spacer()
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancelar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                 Button("Abrir", systemImage: "arrow.right", action: add)
-                    .buttonStyle(.borderedProminent).tint(accent)
+                    .buttonStyle(.primaryAction(accent))
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -1091,9 +1090,9 @@ private struct PageCorrectionSheet: View {
             }
             HStack {
                 Spacer()
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancelar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                 Button("Salvar") { save(page); dismiss() }
-                    .buttonStyle(.borderedProminent).tint(accent)
+                    .buttonStyle(.primaryAction(accent))
                     .keyboardShortcut(.defaultAction)
             }
         }

@@ -74,16 +74,15 @@ struct PDFLibraryView: View {
                         Label("Reindexar", systemImage: "arrow.clockwise")
                     }
                 }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.secondaryAction)
                     .disabled(isIndexing)
                 Button("Drive público…", systemImage: "arrow.down.doc") {
                     isImportingPublicDriveFolder = true
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.secondaryAction)
                 .disabled(isIndexing)
                 Button("Importar PDF…", systemImage: "plus", action: { isImporting = true })
-                    .buttonStyle(.borderedProminent)
-                    .tint(appearance.accent)
+                    .buttonStyle(.primaryAction(appearance.accent))
             }
             .padding(.leading, PrototypeStyle.Layout.windowControlsInset)
             .padding(.trailing, 18)
@@ -156,7 +155,6 @@ struct PDFLibraryView: View {
         }
         .frame(minWidth: 1040, minHeight: 640)
         .background(PrototypeStyle.paper)
-        .preferredColorScheme(.light)
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.pdf], allowsMultipleSelection: true, onCompletion: importFiles)
         .sheet(item: $metadataRecord) { record in
             PDFLibraryMetadataEditor(record: record, accent: appearance.accent) { metadata in
@@ -208,12 +206,12 @@ struct PDFLibraryView: View {
                         Button("Corrigir metadados", systemImage: "pencil") {
                             metadataRecord = selectedRecord
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.secondaryAction)
                         if selectedRecord.metadataOverrides != nil {
                             Button("Usar dados do PDF", systemImage: "arrow.uturn.backward") {
                                 resetMetadata(for: selectedRecord)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.secondaryAction)
                             .help("Descartar as correções e voltar aos metadados do arquivo")
                         }
                         Button {
@@ -225,7 +223,7 @@ struct PDFLibraryView: View {
                                 Label("Abrir no leitor", systemImage: "book")
                             }
                         }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.secondaryAction)
                             .disabled(openingPDFRecordID != nil)
                         if let ocrProgress, ocrTargetID == selectedRecord.id {
                             HStack(spacing: 7) {
@@ -238,13 +236,13 @@ struct PDFLibraryView: View {
                             Button("Cancelar OCR", systemImage: "xmark") {
                                 ocrTask?.cancel()
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.secondaryAction)
                             .help("Interrompe o reconhecimento depois da página atual")
                         } else {
                             Button("OCR…", systemImage: "text.viewfinder") {
                                 recognizeScannedPages(selectedRecord)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.secondaryAction)
                             .disabled(isIndexing)
                             .help("Procura referências em páginas sem texto selecionável; o PDF original não é alterado.")
                         }
@@ -287,8 +285,7 @@ struct PDFLibraryView: View {
                 Text("Importe os comentários em PDF que usa na preparação.")
             } actions: {
                 Button("Importar PDF…") { isImporting = true }
-                    .buttonStyle(.borderedProminent)
-                    .tint(appearance.accent)
+                    .buttonStyle(.primaryAction(appearance.accent))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -627,14 +624,14 @@ private struct GoogleDrivePublicFolderImportSheet: View {
             Spacer(minLength: 0)
             HStack {
                 Spacer()
-                Button("Fechar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Fechar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                 Button {
                     Task { await importFolder() }
                 } label: {
                     if importer.isImporting { ProgressView().controlSize(.small) }
                     else { Label(importedCount == nil ? "Importar PDFs" : "Importar novamente", systemImage: "arrow.down.doc") }
                 }
-                .buttonStyle(.borderedProminent).tint(accent)
+                .buttonStyle(.primaryAction(accent))
                 .disabled(importer.isImporting || importer.isLoadingKey || isLibraryIndexing || folderLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .keyboardShortcut(.defaultAction)
             }
@@ -642,7 +639,6 @@ private struct GoogleDrivePublicFolderImportSheet: View {
         .padding(PrototypeStyle.Spacing.xxl)
         .frame(width: 590, height: 470)
         .background(PrototypeStyle.canvas)
-        .preferredColorScheme(.light)
     }
 
     @MainActor
@@ -721,12 +717,12 @@ private struct PDFLibraryMetadataEditor: View {
                     .truncationMode(.middle)
                 Spacer(minLength: 12)
                 Button("Cancelar") { dismiss() }
+                    .buttonStyle(.secondaryAction)
                     .keyboardShortcut(.cancelAction)
                 Button("Salvar metadados") {
                     onSave(cleanedMetadata)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(accent)
+                .buttonStyle(.primaryAction(accent))
                 .keyboardShortcut(.defaultAction)
                 .disabled(!hasTitle)
             }
@@ -766,16 +762,19 @@ enum ArchiveSearchMode: String, CaseIterable {
     case passage = "Passagem"
     case occasion = "Ocasião"
     case date = "Data"
+    case text = "Texto"
 
     var placeholder: String {
         switch self {
         case .passage: "Mateus 21"
         case .occasion: "Próprio 22"
         case .date: "04/10/2026"
+        case .text: "palavra ou frase do manuscrito"
         }
     }
 
-    func matches(_ draft: SermonDraft, query: String) -> Bool {
+    /// `text` é o manuscrito em texto simples, usado apenas no modo Texto; quem chama pode omiti-lo.
+    func matches(_ draft: SermonDraft, query: String, text: String? = nil) -> Bool {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return true }
         let values: [String]
@@ -784,6 +783,10 @@ enum ArchiveSearchMode: String, CaseIterable {
             values = [draft.mainReadingReference, draft.title].compactMap { $0 }
         case .occasion:
             values = [draft.liturgicalOccasion, draft.liturgicalCelebration, draft.liturgicalSeason].compactMap { $0 }
+        case .text:
+            return [draft.title, text ?? ""].contains {
+                $0.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            }
         case .date:
             let formatter = DateFormatter()
             formatter.calendar = Calendar(identifier: .gregorian)
@@ -814,9 +817,15 @@ struct SermonArchiveView: View {
     @State private var searchMode: ArchiveSearchMode = .passage
     @State private var searchText = ""
     @State private var pdfMatchCounts: [String: Int] = [:]
+    /// Manuscritos em texto simples por data, decodificados fora do ator principal para a busca de texto.
+    @State private var plainTexts: [String: String] = [:]
 
     private var results: [SermonDraft] {
-        drafts.filter { searchMode.matches($0, query: searchText) }
+        drafts.filter { searchMode.matches($0, query: searchText, text: plainTexts[archiveKey(for: $0)]) }
+    }
+
+    private var manuscriptStamp: String {
+        drafts.map { "\(archiveKey(for: $0)):\($0.modifiedAt.timeIntervalSince1970)" }.joined(separator: "|")
     }
 
     private var materialCountTaskID: String {
@@ -842,7 +851,8 @@ struct SermonArchiveView: View {
                     ForEach(ArchiveSearchMode.allCases, id: \.self) { mode in Text(mode.rawValue).tag(mode) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 185)
+                .frame(width: 250)
+                .help("Passagem, ocasião litúrgica, data ou qualquer trecho do manuscrito")
                 TextField(searchMode.placeholder, text: $searchText)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 250)
@@ -887,7 +897,6 @@ struct SermonArchiveView: View {
         }
         .frame(minWidth: 1000, minHeight: 600)
         .background(PrototypeStyle.paper)
-        .preferredColorScheme(.light)
         .task(id: materialCountTaskID) {
             let data = savedPDFRecords
             let requests = drafts.map { ArchiveMaterialCountRequest(key: archiveKey(for: $0), reference: $0.mainReadingReference) }
@@ -900,6 +909,28 @@ struct SermonArchiveView: View {
             guard !Task.isCancelled else { return }
             pdfMatchCounts = counts
         }
+        .task(id: manuscriptStamp) {
+            let sources = drafts.map { (key: archiveKey(for: $0), data: $0.rtfData) }
+            let decoded = await Task.detached(priority: .utility) {
+                Dictionary(sources.map { ($0.key, SermonReviewText.plainText(from: $0.data)) }, uniquingKeysWith: { first, _ in first })
+            }.value
+            guard !Task.isCancelled else { return }
+            plainTexts = decoded
+        }
+    }
+
+    /// Trecho do manuscrito ao redor da primeira ocorrência da busca, no modo Texto.
+    private func snippet(for draft: SermonDraft) -> String? {
+        guard searchMode == .text else { return nil }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, let text = plainTexts[archiveKey(for: draft)] else { return nil }
+        let collapsed = text.replacingOccurrences(of: "\n", with: " ")
+        guard let collapsedRange = collapsed.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else { return nil }
+        let start = collapsed.index(collapsedRange.lowerBound, offsetBy: -70, limitedBy: collapsed.startIndex) ?? collapsed.startIndex
+        let end = collapsed.index(collapsedRange.upperBound, offsetBy: 90, limitedBy: collapsed.endIndex) ?? collapsed.endIndex
+        let prefix = start == collapsed.startIndex ? "" : "…"
+        let suffix = end == collapsed.endIndex ? "" : "…"
+        return prefix + collapsed[start..<end].trimmingCharacters(in: .whitespaces) + suffix
     }
 
     private func archiveRow(_ draft: SermonDraft) -> some View {
@@ -922,6 +953,13 @@ struct SermonArchiveView: View {
                     .font(PrototypeStyle.serif(15, weight: .semibold)).foregroundStyle(PrototypeStyle.ink)
                 if let reference = draft.mainReadingReference {
                     Text(reference).font(.system(size: 11)).foregroundStyle(PrototypeStyle.muted)
+                }
+                if let snippet = snippet(for: draft) {
+                    Text(snippet)
+                        .font(.system(size: 11))
+                        .foregroundStyle(PrototypeStyle.muted)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
