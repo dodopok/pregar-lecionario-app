@@ -22,51 +22,54 @@ struct ManuscriptEditorView: View {
     @State private var customSpaceAfter: Double = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            documentHeader
-            menuBar
-            DocumentFormattingToolbar(commands: commands, state: DocumentToolbarState(commands))
-                .equatable()
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
-            if commands.showsRuler {
-                DocumentRuler(zoom: commands.zoomPercent)
-                    .frame(height: 23)
-                    .frame(maxWidth: 816)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 16)
-                    .accessibilityLabel("Régua horizontal do documento")
-            }
-            GeometryReader { geometry in
-                RichTextEditor(
-                    rtfData: $draft.rtfData,
-                    modifiedAt: $draft.modifiedAt,
-                    commands: commands,
-                    onCommit: onCommit
-                )
-                .id(draft.persistentModelID)
-                .background(PrototypeStyle.documentPaper)
-                .overlay(alignment: .topLeading) {
-                    if commands.isEmpty {
-                        Text("Comece a escrever…")
-                            .font(.custom("Arial", size: 14.67))
-                            .foregroundStyle(PrototypeStyle.documentMuted.opacity(0.65))
-                            .padding(.leading, max(32, min(96, geometry.size.width * 0.12)))
-                            .padding(.top, 48)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
+        GeometryReader { workspace in
+            VStack(spacing: 0) {
+                documentHeader
+                menuBar(compact: workspace.size.width < 560)
+                DocumentFormattingToolbar(commands: commands, state: DocumentToolbarState(commands), compact: workspace.size.width < 850)
+                    .equatable()
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+                if commands.showsRuler {
+                    DocumentRuler(zoom: commands.zoomPercent)
+                        .frame(height: 23)
+                        .frame(maxWidth: 816)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 16)
+                        .accessibilityLabel("Régua horizontal do documento")
                 }
-                .overlay(Rectangle().stroke(PrototypeStyle.documentBorder, lineWidth: 1))
-                .shadow(color: .black.opacity(0.035), radius: 2, y: 1)
-                .frame(maxWidth: 816, maxHeight: .infinity)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                GeometryReader { geometry in
+                    RichTextEditor(
+                        rtfData: $draft.rtfData,
+                        modifiedAt: $draft.modifiedAt,
+                        commands: commands,
+                        onCommit: onCommit
+                    )
+                    .id(draft.persistentModelID)
+                    .background(PrototypeStyle.documentPaper)
+                    .overlay(alignment: .topLeading) {
+                        if commands.isEmpty {
+                            Text("Comece a escrever…")
+                                .font(.custom("Arial", size: 14.67))
+                                .foregroundStyle(PrototypeStyle.documentMuted.opacity(0.65))
+                                .padding(.leading, max(32, min(96, geometry.size.width * 0.12)))
+                                .padding(.top, 48)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .overlay(Rectangle().stroke(PrototypeStyle.documentBorder, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.035), radius: 2, y: 1)
+                    .frame(maxWidth: 816, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 16)
         }
         .foregroundStyle(PrototypeStyle.documentInk)
+        .tint(PrototypeStyle.documentInk)
         .background(PrototypeStyle.documentCanvas)
         .onAppear {
             commands.linkHandler = { [binding = $showingLink] in binding.wrappedValue = true }
@@ -130,14 +133,18 @@ struct ManuscriptEditorView: View {
         }
     }
 
-    private var menuBar: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 1) { fileMenu; editMenu; viewMenu; insertMenu; formatMenu; toolsMenu; helpMenu }.fixedSize()
-            HStack(spacing: 1) {
-                fileMenu; editMenu; insertMenu; formatMenu
+    private func menuBar(compact: Bool) -> some View {
+        HStack(spacing: 1) {
+            fileMenu; editMenu
+            if !compact { viewMenu }
+            insertMenu; formatMenu
+            if compact {
                 documentMenu("Mais") { viewMenu; toolsMenu; helpMenu }
-            }.fixedSize()
+            } else {
+                toolsMenu; helpMenu
+            }
         }
+        .fixedSize()
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 13)
         .padding(.bottom, 8)
@@ -401,18 +408,22 @@ private struct DocumentToolbarState: Equatable {
 private struct DocumentFormattingToolbar: View, Equatable {
     let commands: EditorCommands
     let state: DocumentToolbarState
+    let compact: Bool
     @State private var sizeText = "11"
     @State private var showingTextColors = false
     @State private var showingHighlightColors = false
     @FocusState private var editingSize: Bool
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.state == rhs.state }
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.state == rhs.state && lhs.compact == rhs.compact }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 3) { primaryTools; separator; secondaryTools(compact: false) }.fixedSize()
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 2) { primaryTools }
-                HStack(spacing: 2) { secondaryTools(compact: true); Spacer(minLength: 0) }
+        Group {
+            if compact {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 2) { primaryTools }
+                    HStack(spacing: 2) { secondaryTools(compact: true); Spacer(minLength: 0) }
+                }
+            } else {
+                HStack(spacing: 3) { primaryTools; separator; secondaryTools(compact: false) }.fixedSize()
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 6)

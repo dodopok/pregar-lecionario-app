@@ -44,9 +44,16 @@ struct PreparationWorkspace: View {
     @State private var loadingTranslations: Set<String> = []
     @State private var expandedReadingIDs: Set<String> = []
     @State private var contextTab: ContextPaneTab = .materials
-    @StateObject private var editorCommands = EditorCommands()
-    private let revisionStore = SermonRevisionStore.shared
-    private let reviewReportStore = SermonReviewReportStore.shared
+    // A seleção e o indicador de salvamento pertencem ao editor. Observá-los aqui
+    // reconstruía também calendário, leituras e materiais no caminho da digitação.
+    @State private var editorCommands = EditorCommands()
+    private let revisionStore: SermonRevisionStore
+    private let reviewReportStore: SermonReviewReportStore
+
+    init(revisionStore: SermonRevisionStore = .shared, reviewReportStore: SermonReviewReportStore = .shared) {
+        self.revisionStore = revisionStore
+        self.reviewReportStore = reviewReportStore
+    }
 
     private var dateSelection: Binding<Date> {
         Binding(get: { selectedDate }, set: { date in
@@ -167,25 +174,27 @@ struct PreparationWorkspace: View {
                                 growsTowardTrailing: false,
                                 label: "Largura dos materiais"
                             )
-                            ResourceContextPanel(
-                                selectedTab: $contextTab,
-                                reference: activeDraft?.mainReadingReference ?? "",
-                                occasion: selectedDay?.sundayName ?? selectedDay?.celebration?.name,
-                                liturgicalDate: selectedDate,
-                                isSunday: selectedDay?.isSunday == true,
-                                reviewReports: $reviewReports,
-                                manuscript: editorCommands.plainText,
-                                accent: accentColor,
-                                openSettings: openPreferences,
-                                openDriveConnection: { showingDriveConnection = true },
-                                openLibrary: { openWindow(id: "library") },
-                                newReview: { requestReview(criteria: Set(SermonReviewCriterion.allCases)) },
-                                checkStructure: { requestReview(criteria: [.structure]) },
-                                selectQuote: { editorCommands.selectQuote($0) },
-                                insertText: { editorCommands.insertText($0) },
-                                emergencyQuestions: { editorCommands.flushPendingEdits(); showingQuestions = true },
-                                collapse: { withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = false } }
-                            )
+                            EditorStateContent(commands: editorCommands) { commands in
+                                ResourceContextPanel(
+                                    selectedTab: $contextTab,
+                                    reference: activeDraft?.mainReadingReference ?? "",
+                                    occasion: selectedDay?.sundayName ?? selectedDay?.celebration?.name,
+                                    liturgicalDate: selectedDate,
+                                    isSunday: selectedDay?.isSunday == true,
+                                    reviewReports: $reviewReports,
+                                    manuscript: commands.plainText,
+                                    accent: accentColor,
+                                    openSettings: openPreferences,
+                                    openDriveConnection: { showingDriveConnection = true },
+                                    openLibrary: { openWindow(id: "library") },
+                                    newReview: { requestReview(criteria: Set(SermonReviewCriterion.allCases)) },
+                                    checkStructure: { requestReview(criteria: [.structure]) },
+                                    selectQuote: { editorCommands.selectQuote($0) },
+                                    insertText: { editorCommands.insertText($0) },
+                                    emergencyQuestions: { editorCommands.flushPendingEdits(); showingQuestions = true },
+                                    collapse: { withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = false } }
+                                )
+                            }
                             .frame(width: contextWidth)
                         } else if !focusMode {
                             collapsedPanelRail(
@@ -204,7 +213,7 @@ struct PreparationWorkspace: View {
                     .tint(accentColor)
 
                     if let draft = activeDraft {
-                        statusBar(draft: draft)
+                        EditorStateContent(commands: editorCommands) { _ in statusBar(draft: draft) }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -309,7 +318,11 @@ struct PreparationWorkspace: View {
             appearanceStore.accent = accentColor
             if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
-        .onDisappear { editorCommands.flushPendingEdits() }
+        .onDisappear {
+            editorCommands.flushPendingEdits()
+            historySaveTask?.cancel()
+            driveSyncTask?.cancel()
+        }
         .onChange(of: day?.color) { _, _ in appearanceStore.accent = accentColor }
         .onChange(of: navigation.dateRequest) { _, _ in consumeNavigationRequest() }
         .onChange(of: settingsStore.isLoadingCredential) { _, loading in
@@ -772,12 +785,15 @@ struct PreparationWorkspace: View {
         guard let draft = activeDraft else { return }
         historyDirty = true
         let date = draft.liturgicalDate
+        // A janela ou seu ModelContext podem desaparecer durante o atraso.
+        // A tarefa conserva valores, sem acessar um modelo SwiftData já invalidado.
+        let snapshot = SermonRevisionSnapshot(draft: draft)
         historySaveTask = Task { @MainActor in
             do {
                 try await Task.sleep(for: .seconds(12))
                 try Task.checkCancellation()
                 let revisions = try await revisionStore.capture(
-                    SermonRevisionSnapshot(draft: draft),
+                    snapshot,
                     for: date
                 )
                 guard Calendar.current.isDate(date, inSameDayAs: selectedDate) else { return }
@@ -1008,4 +1024,12 @@ private enum LiturgicalColor {
         default: return PrototypeStyle.green
         }
     }
+}
+
+/// Restringe a observação do estado de edição aos trechos que realmente o exibem.
+private struct EditorStateContent<Content: View>: View {
+    @ObservedObject var commands: EditorCommands
+    @ViewBuilder let content: (EditorCommands) -> Content
+
+    var body: some View { content(commands) }
 }

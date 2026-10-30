@@ -7,6 +7,159 @@ import XCTest
 
 @MainActor
 final class DocumentEditorTests: XCTestCase {
+    func testTypingThroughTheWorkspaceStaysResponsiveWithAnImportedManuscript() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let container = try ModelContainer(for: SermonDraft.self, configurations: ModelConfiguration(url: directory.appendingPathComponent("test.store")))
+        let draft = SermonDraft(liturgicalDate: .now)
+        draft.title = "Manuscrito de teste"
+        if let path = ProcessInfo.processInfo.environment["PREGAR_EDITOR_REPRODUCTION_RTF"] {
+            draft.rtfData = try Data(contentsOf: URL(fileURLWithPath: path))
+        } else {
+            draft.rtfData = try rtf(String(repeating: "A escrita acompanha a leitura, com frases de tamanho variado e atenção aos detalhes. Este parágrafo ocupa mais de uma linha na página e mantém o texto dentro das margens.\n\n", count: 50))
+        }
+        container.mainContext.insert(draft)
+        try container.mainContext.save()
+        let defaults = PregarRuntime.makeAppUserDefaults()
+        let root = PreparationWorkspace(revisionStore: SermonRevisionStore(directory: directory.appendingPathComponent("history")), reviewReportStore: SermonReviewReportStore(directory: directory.appendingPathComponent("review")))
+            .modelContainer(container)
+            .environmentObject(APISettingsStore())
+            .environmentObject(AISettingsStore())
+            .environmentObject(AppAppearanceStore())
+            .environmentObject(BibleWindowSession())
+            .environmentObject(GoogleDriveStore())
+            .environmentObject(WorkspaceNavigationStore())
+            .environmentObject(ReaderSessionStore(userDefaults: defaults))
+            .defaultAppStorage(defaults)
+        let hosting = NSHostingView(rootView: AnyView(root))
+        let window = NSWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 1786, height: 960), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        hosting.layoutSubtreeIfNeeded()
+        hosting.displayIfNeeded()
+        try await Task.sleep(for: .milliseconds(800))
+        hosting.layoutSubtreeIfNeeded()
+        hosting.displayIfNeeded()
+        func findEditor(in view: NSView) -> QuotationTextView? {
+            if let editor = view as? QuotationTextView { return editor }
+            for child in view.subviews { if let editor = findEditor(in: child) { return editor } }
+            return nil
+        }
+        let editor = try XCTUnwrap(findEditor(in: hosting))
+        let commands = try XCTUnwrap(editor.commands)
+        window.makeFirstResponder(editor)
+        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length / 2, length: 0))
+        hosting.layoutSubtreeIfNeeded()
+        hosting.displayIfNeeded()
+        try await Task.sleep(for: .milliseconds(150))
+        var inputTimes: [Double] = []
+        var frameTimes: [Double] = []
+        var resumeTimes: [Double] = []
+        for character in " Uma frase nova para testar a resposta do editor enquanto escrevo no meio de um documento existente." {
+            let value = String(character)
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: value, charactersIgnoringModifiers: value, isARepeat: false, keyCode: 0))
+            let start = Date.timeIntervalSinceReferenceDate
+            window.sendEvent(event)
+            inputTimes.append(Date.timeIntervalSinceReferenceDate - start)
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+            frameTimes.append(Date.timeIntervalSinceReferenceDate - start)
+            let suspended = Date.timeIntervalSinceReferenceDate
+            try await Task.sleep(for: .milliseconds(100))
+            resumeTimes.append(max(0, Date.timeIntervalSinceReferenceDate - suspended - 0.1))
+        }
+        let saveStart = Date.timeIntervalSinceReferenceDate
+        commands.flushPendingEdits()
+        let saveDuration = Date.timeIntervalSinceReferenceDate - saveStart
+        let inputs = inputTimes.sorted()
+        let frames = frameTimes.sorted()
+        let p95 = Int(Double(inputs.count - 1) * 0.95)
+        let metrics = ["inputMedian": inputs[inputs.count / 2], "inputP95": inputs[p95], "inputMax": inputs.last!, "frameP95": frames[p95], "frameMax": frames.last!, "frameMaxIndex": Double(frameTimes.firstIndex(of: frames.last!)!), "mainActorDelayMax": resumeTimes.max()!, "saveDuration": saveDuration]
+        print("Workspace typing timings: \(metrics)")
+        if let output = ProcessInfo.processInfo.environment["PREGAR_EDITOR_CAPTURE_PATH"] {
+            try JSONSerialization.data(withJSONObject: metrics, options: [.prettyPrinted, .sortedKeys]).write(to: URL(fileURLWithPath: output).appendingPathComponent("workspace-typing.json"))
+        }
+        XCTAssertLessThan(inputs[p95], 0.05, "Native key events must not stall while the complete workspace is mounted.")
+        XCTAssertLessThan(frames[p95], 0.05, "Typing and drawing the frame must fit within 50 ms.")
+        XCTAssertLessThan(frames.last!, 0.1, "The first keystroke and autosave must not introduce a visible hitch.")
+        XCTAssertLessThan(resumeTimes.max()!, 0.1, "Autosave and sidebar updates must not block the next key event.")
+        XCTAssertTrue(editor.string.contains("Uma frase nova para testar"))
+        // Desmonta o @Query enquanto seu ModelContainer ainda existe, inclusive
+        // as tarefas de janela, antes de a próxima suíte salvar em outro contexto.
+        hosting.rootView = AnyView(EmptyView())
+        hosting.layoutSubtreeIfNeeded()
+        window.contentView = nil
+        window.close()
+        try await Task.sleep(for: .milliseconds(100))
+    }
+
+    func testLongImportedDocumentWrapsInsideThePageAndRespondsWhileTyping() async throws {
+        let container = try ModelContainer(for: SermonDraft.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let draft = SermonDraft(liturgicalDate: .now)
+        draft.title = "Teste de manuscrito longo"
+        if let path = ProcessInfo.processInfo.environment["PREGAR_EDITOR_REPRODUCTION_RTF"] {
+            draft.rtfData = try Data(contentsOf: URL(fileURLWithPath: path))
+        } else {
+            let text = String(repeating: "Um parágrafo longo, com palavras suficientes para ocupar várias linhas e conferir a quebra dentro do papel. A edição precisa acompanhar a digitação, inclusive quando há trechos em itálico no meio do texto.\n\n", count: 40)
+            let content = NSMutableAttributedString(string: text, attributes: [.font: NSFont(name: "Times New Roman", size: 12)!, .paragraphStyle: EditorCommands.bodyParagraphStyle()])
+            let italic = NSFontManager.shared.convert(NSFont(name: "Times New Roman", size: 12)!, toHaveTrait: .italicFontMask)
+            content.addAttribute(.font, value: italic, range: NSRange(location: 100, length: 60))
+            draft.rtfData = try DocumentRTF.encode(content)
+        }
+        container.mainContext.insert(draft)
+        let commands = EditorCommands()
+        let root = ManuscriptEditorView(draft: draft, commands: commands, onCommit: { try container.mainContext.save() }, exportPDF: {}, showHistory: {}, toggleFocus: {}).tint(.orange)
+        let hosting = NSHostingView(rootView: root)
+        let window = NSWindow(contentRect: NSRect(x: -10_000, y: -10_000, width: 900, height: 780), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        window.orderFront(nil)
+        defer { window.close() }
+        hosting.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(200))
+        let textView = try XCTUnwrap(commands.textView)
+        let scroll = try XCTUnwrap(textView.enclosingScrollView)
+        let original = textView.string
+        for width in [900, 560, 1000] {
+            window.setContentSize(NSSize(width: width, height: 780))
+            for zoom in [100, 125, 75] {
+                commands.zoomPercent = zoom
+                hosting.layoutSubtreeIfNeeded()
+                try await Task.sleep(for: .milliseconds(60))
+                XCTAssertLessThanOrEqual(textView.frame.width, scroll.documentVisibleRect.width + 1, "Text must wrap inside the visible page at \(width) points and \(zoom)% zoom.")
+            }
+        }
+        commands.zoomPercent = 100
+        hosting.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(100))
+        window.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: (original as NSString).length / 2, length: 0))
+        let insertion = textView.selectedRange().location
+        var durations: [Double] = []
+        let suffix = " Uma nova frase, com ação e atenção ao escrever."
+        for character in suffix {
+            let started = Date.timeIntervalSinceReferenceDate
+            textView.insertText(String(character), replacementRange: textView.selectedRange())
+            textView.displayIfNeeded()
+            durations.append(Date.timeIntervalSinceReferenceDate - started)
+            try await Task.sleep(for: .milliseconds(15))
+        }
+        let sorted = durations.sorted()
+        print("Hosted editor input: median=\(sorted[sorted.count / 2])s, p95=\(sorted[Int(Double(sorted.count - 1) * 0.95)])s, max=\(sorted.last!)s")
+        XCTAssertLessThan(sorted[Int(Double(sorted.count - 1) * 0.95)], 0.05)
+        commands.flushPendingEdits()
+        let expected = NSMutableString(string: original)
+        expected.insert(suffix, at: insertion)
+        XCTAssertEqual(try plainText(draft.rtfData), expected as String)
+        if let directory = ProcessInfo.processInfo.environment["PREGAR_EDITOR_CAPTURE_PATH"], let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
+            hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: directory).appendingPathComponent("editor-long-document.png"))
+        }
+    }
+
     func testTypingIsImmediateAndDoesNotSerializeRTFForEveryKeystroke() async throws {
         let harness = try EditorHarness(text: String(repeating: "Um texto para testar a edição.\n", count: 350))
         defer { harness.close() }

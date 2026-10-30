@@ -792,7 +792,9 @@ struct RichTextEditor: NSViewRepresentable {
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
-        textView.autoresizingMask = [.width]
+        // O clip view muda de escala com o zoom. Autoresizing usa a largura física
+        // anterior e deixa linhas fora da página; o scroll view controla a largura lógica.
+        textView.autoresizingMask = []
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 0
         textView.layoutManager?.allowsNonContiguousLayout = true
@@ -986,12 +988,35 @@ struct RichTextEditor: NSViewRepresentable {
 }
 
 private final class DocumentScrollView: NSScrollView {
+    private var isSizingDocument = false
+
+    override var magnification: CGFloat {
+        didSet { sizeDocumentToViewport() }
+    }
+
+    override func setMagnification(_ magnification: CGFloat, centeredAt point: NSPoint) {
+        super.setMagnification(magnification, centeredAt: point)
+        sizeDocumentToViewport()
+    }
+
     override func tile() {
         super.tile()
-        guard let textView = documentView as? NSTextView else { return }
-        let inset = max(24, min(72, contentView.bounds.width * 0.12))
+        sizeDocumentToViewport()
+    }
+
+    private func sizeDocumentToViewport() {
+        guard !isSizingDocument, let textView = documentView as? NSTextView else { return }
+        let viewport = contentView.bounds.size
+        guard viewport.width > 0, viewport.height > 0 else { return }
+        isSizingDocument = true
+        defer { isSizingDocument = false }
+        let inset = max(24, min(72, viewport.width * 0.12))
         if abs(textView.textContainerInset.width - inset) > 0.5 {
             textView.textContainerInset = NSSize(width: inset, height: 36)
+        }
+        textView.minSize = NSSize(width: 0, height: viewport.height)
+        if abs(textView.frame.width - viewport.width) > 0.5 || textView.frame.height < viewport.height {
+            textView.setFrameSize(NSSize(width: viewport.width, height: max(viewport.height, textView.frame.height)))
         }
     }
 }

@@ -103,7 +103,7 @@ Para ver ou enviar um erro:
 
 ## Editor e atalhos
 
-O manuscrito usa um editor local no estilo Google Docs: menus de documento, barra fixa de formatação, régua em centímetros, zoom e página centralizada. Novos textos começam em Arial 11 com entrelinha de 1,15; fontes e formatação de manuscritos antigos são preservadas. A escrita funciona sem login Google.
+O manuscrito usa um editor local no estilo Google Docs: menus de documento, barra fixa de formatação, régua em centímetros, zoom e página centralizada. Novos textos começam em Arial 11 com entrelinha de 1,15; fontes e formatação de manuscritos antigos são preservadas. A escrita funciona sem login Google. Os menus do editor usam cores neutras, independentemente da cor litúrgica. A largura do texto se ajusta à página visível em cada nível de zoom.
 
 Digitação, cursor e desfazer/refazer ficam no `NSTextView`. A conversão para RTF e o salvamento ocorrem após uma pausa curta, com um limite de dois segundos durante a digitação contínua. Mudar de documento ou janela, abrir revisão/exportação e fechar o app força o salvamento. O cabeçalho distingue “Salvando…” de “Salvo neste Mac” e oferece nova tentativa se houver erro.
 

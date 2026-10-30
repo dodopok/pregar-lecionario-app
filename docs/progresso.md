@@ -303,6 +303,17 @@ Pedido do usuário: substituir a sensação de atraso e a aparência anterior po
 
 Validação final: 129 testes passaram, nenhum falhou e três verificações opcionais de serviços externos ficaram desativadas. As renderizações nativas confirmaram a disposição em 420, 560 e 1000 pontos e a leitura no modo escuro, incluindo citações sem alterar a tinta persistida. A revisão 3 do instalador usa a compilação `2026103003`, para Apple Silicon e Intel.
 
+## Estabilidade de digitação e quebra de linha (30/10/2026, revisão 4)
+
+- A largura lógica do `NSTextView` acompanha os limites do clip view depois de redimensionar ou mudar o zoom. O texto deixa de ficar maior que a página visível; as fontes, itálicos e espaçamento do RTF existente são conservados.
+- Menus e controles do editor usam tinta neutra, com destaque azul apenas nos comandos ativos; o editor não herda o acento litúrgico da Mesa.
+- A barra e os menus escolhem uma disposição pela largura disponível, sem construir alternativas com `ViewThatFits` a cada medição. O perfil de execução identificou a criação e destruição de menus nativos nesse caminho como fonte de pausas na digitação.
+- O histórico captura um snapshot imutável antes do atraso de 12 segundos. Fechar a Mesa cancela tarefas de histórico e sincronização; a tarefa não lê um modelo SwiftData cujo contexto já foi liberado. As janelas de teste desmontam o `@Query` antes de liberar o banco temporário.
+- A Mesa mantém a instância de comandos sem observar todas as mudanças de seleção e salvamento. Materiais e contagem observam o estado nos próprios subcomponentes. Os armazenamentos de histórico e revisão podem ser injetados para validar o workspace completo sem tocar em dados reais.
+- Novas regressões exercitam um manuscrito longo com fontes e itálicos misturados em várias larguras e níveis de zoom, e enviam eventos nativos de teclado com o workspace completo e um banco SwiftData temporário em disco. Uma cópia isolada do RTF de 1.165 palavras também foi usada na reprodução, sem editar o banco em uso.
+
+Validação final: 131 testes passaram, nenhum falhou e três testes opcionais de serviços externos ficaram desativados. A reprodução com RTF de 1.165 palavras e a medição com banco temporário em disco confirmaram a digitação responsiva; as capturas em 420, 560 e 1000 pontos e nos modos claro/escuro confirmaram a quebra de linha e os controles neutros. A revisão 4 usa a compilação `2026103004`, para Apple Silicon e Intel.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.
