@@ -322,6 +322,15 @@ Validação final: 131 testes passaram, nenhum falhou e três testes opcionais d
 
 Validação: 25 testes da revisão e pesquisa passaram, sem falhas; um teste externo opcional ficou desativado. O teste real usou Claude Opus 5.5 com texto e fonte sintéticos, retornou HTTP 200 e confirmou a correção ortográfica e o mapa do sermão após a validação local. A revisão 5 do instalador usa a compilação `2026103005` para Apple Silicon e Intel.
 
+## Revisões longas e limite de saída do Claude (30/10/2026, revisão 6)
+
+- Uma reprodução autorizada com o manuscrito anexado (1.272 palavras) e Salmo 34:1-10,22 na NVT confirmou HTTP 200 com `stop_reason=max_tokens`: o limite anterior de 4.000 tokens incluía 1.232 tokens de análise, e o JSON da revisão terminava incompleto. No [Opus 5.5, o pensamento adaptativo é obrigatório e compartilha `max_tokens` com o texto final](https://platform.claude.com/docs/en/models/opus-5-5/migration-guide).
+- A revisão Claude reserva 16.000 tokens e permite uma única nova tentativa com 32.000 se o provedor informar explicitamente `max_tokens`. O tempo de espera dessa revisão é de cinco minutos. Respostas cortadas são descartadas mesmo quando o trecho recebido forma um JSON válido. Recusas, contexto excedido e erros de leitura não entram nesse ciclo de repetição.
+- A extração da resposta considera só blocos `text`; blocos de pensamento não são conteúdo de revisão. Falhas de leitura registram motivo de término, tokens, tipos de bloco e tamanho do texto, sem copiar texto da revisão ou pensamento para o registro. A interface informa especificamente quando o limite continua impedindo a conclusão.
+- Com o mesmo arquivo autorizado e a mesma passagem bíblica, a resposta corrigida terminou com `end_turn` e 4.450 tokens. O cliente leu o JSON completo e validou o mapa do sermão. O arquivo de usuário e as respostas não são fixtures do repositório; o teste real só roda com o caminho fornecido explicitamente por variável de ambiente.
+
+Validação final: 29 testes locais de revisão e pesquisa passaram, sem falhas; três testes externos optativos ficaram desativados nessa rodada. Separadamente, a revisão real do arquivo autorizado com Claude Opus 5.5 e a NVT passou após receber `end_turn`. A reprodução de falha e a correção registram apenas metadados, sem incluir o sermão no repositório. A revisão 6 usa a compilação `2026103006`, para Apple Silicon e Intel.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.

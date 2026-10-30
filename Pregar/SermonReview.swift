@@ -437,6 +437,8 @@ enum SermonReviewError: LocalizedError {
     case invalidModel
     case contextTooLarge
     case provider(status: Int, detail: String? = nil)
+    case incompleteResponse
+    case refusedResponse
     case unreadableResponse
 
     var errorDescription: String? {
@@ -447,6 +449,8 @@ enum SermonReviewError: LocalizedError {
         case .invalidModel: "O modelo escolhido não pertence ao provedor selecionado."
         case .contextTooLarge: "O conjunto selecionado excede o limite desta revisão. Desmarque alguns materiais e tente novamente."
         case let .provider(status, detail): "O provedor recusou a revisão (HTTP \(status)). \(detail ?? "Verifique a chave, o modelo e os limites da conta.")"
+        case .incompleteResponse: "A revisão foi interrompida pelo limite de saída do modelo. Tente revisar menos critérios por vez."
+        case .refusedResponse: "O modelo recusou a solicitação de revisão."
         case .unreadableResponse: "A resposta do provedor não pôde ser validada. Nenhuma observação foi exibida."
         }
     }
@@ -491,6 +495,7 @@ enum ClaudeStructuredOutputSchema {
 
 struct SermonAIReviewClient {
     static let maximumInputBytes = 120_000
+    static let claudeOutputTokenBudgets = [16_000, 32_000]
     var session: URLSession = .shared
 
     func review(
@@ -513,17 +518,16 @@ struct SermonAIReviewClient {
             return SermonAIReviewResult(findings: [], rejectedFindingCount: 0, rejectionReasons: [])
         }
 
-        let request = try Self.makeRequest(context: context, sources: sources, configuration: configuration)
         let operation = "revisão · \(configuration.provider.name) · \(configuration.model)"
-        let (data, response) = try await IntegrationLog.data(for: request, using: session, integration: .ai, operation: operation)
-        guard let response = response as? HTTPURLResponse else { throw SermonReviewError.unreadableResponse }
-        guard (200..<300).contains(response.statusCode) else {
-            throw SermonReviewError.provider(status: response.statusCode, detail: AIProviderResponseError.detail(in: data, redacting: configuration.apiKey))
-        }
-        guard let output = Self.outputText(in: data, from: configuration.provider),
-              let outputData = output.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(AIReviewPayload.self, from: outputData) else {
-            IntegrationLog.record(.error, .ai, operation, status: response.statusCode, body: data, note: "resposta sem JSON válido para o esquema")
+        let (data, response) = try await completedResponse(context: context, sources: sources, configuration: configuration, operation: operation)
+        let payload: AIReviewPayload
+        do {
+            guard let output = Self.outputText(in: data, from: configuration.provider),
+                  let outputData = output.data(using: .utf8) else { throw SermonReviewError.unreadableResponse }
+            payload = try JSONDecoder().decode(AIReviewPayload.self, from: outputData)
+        } catch {
+            IntegrationLog.record(.error, .ai, operation, status: response.statusCode,
+                                  note: Self.responseDiagnostics(in: data, from: configuration.provider) + " · JSON incompatível com o contrato")
             throw SermonReviewError.unreadableResponse
         }
 
@@ -561,10 +565,56 @@ struct SermonAIReviewClient {
         )
     }
 
+    private func completedResponse(
+        context: SermonReviewContext,
+        sources: [SermonReviewSource],
+        configuration: SermonReviewConfiguration,
+        operation: String
+    ) async throws -> (Data, HTTPURLResponse) {
+        let budgets = configuration.provider == .anthropic ? Self.claudeOutputTokenBudgets : [4_000]
+        for (attempt, budget) in budgets.enumerated() {
+            try Task.checkCancellation()
+            let request = try Self.makeRequest(context: context, sources: sources, configuration: configuration, maxOutputTokens: budget)
+            let (data, response) = try await IntegrationLog.data(for: request, using: session, integration: .ai, operation: operation)
+            guard let response = response as? HTTPURLResponse else { throw SermonReviewError.unreadableResponse }
+            guard (200..<300).contains(response.statusCode) else {
+                throw SermonReviewError.provider(status: response.statusCode, detail: AIProviderResponseError.detail(in: data, redacting: configuration.apiKey))
+            }
+            if configuration.provider == .anthropic,
+               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let reason = root["stop_reason"] as? String
+                if reason == "max_tokens" {
+                    IntegrationLog.record(.warning, .ai, operation, status: response.statusCode,
+                                          note: Self.responseDiagnostics(in: data, from: configuration.provider) + " · resposta interrompida · tentativa \(attempt + 1)/\(budgets.count)")
+                    guard attempt + 1 < budgets.count else { throw SermonReviewError.incompleteResponse }
+                    continue
+                }
+                if reason == "refusal" { throw SermonReviewError.refusedResponse }
+                if reason == "model_context_window_exceeded" { throw SermonReviewError.contextTooLarge }
+                if let reason, !["end_turn", "stop_sequence"].contains(reason) { throw SermonReviewError.unreadableResponse }
+            }
+            return (data, response)
+        }
+        throw SermonReviewError.incompleteResponse
+    }
+
+    /// Diagnóstico de transporte sem manuscrito, resposta textual ou blocos de pensamento.
+    static func responseDiagnostics(in data: Data, from provider: AIProvider) -> String {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return "resposta não JSON · \(data.count) bytes"
+        }
+        let reason = root["stop_reason"] as? String ?? root["status"] as? String ?? "ausente"
+        let usage = root["usage"] as? [String: Any]
+        let outputTokens = (usage?["output_tokens"] as? Int).map(String.init) ?? "ausente"
+        let types = (root["content"] as? [[String: Any]] ?? []).compactMap { $0["type"] as? String }.joined(separator: ",")
+        return "stop_reason=\(reason.prefix(60)) · output_tokens=\(outputTokens) · blocos=\(types.prefix(120)) · texto=\(outputText(in: data, from: provider)?.utf8.count ?? 0) bytes"
+    }
+
     static func makeRequest(
         context: SermonReviewContext,
         sources: [SermonReviewSource],
-        configuration: SermonReviewConfiguration
+        configuration: SermonReviewConfiguration,
+        maxOutputTokens: Int? = nil
     ) throws -> URLRequest {
         let input = AIReviewInput(
             context: AIReviewProviderContext(
@@ -576,14 +626,16 @@ struct SermonAIReviewClient {
         )
         let userData = try JSONEncoder().encode(input)
         guard let userText = String(data: userData, encoding: .utf8) else { throw SermonReviewError.unreadableResponse }
-        return try makeStructuredRequest(
+        var request = try makeStructuredRequest(
             userText: userText,
             systemPrompt: AIReviewPrompt.system,
             formatName: "sermonreview",
             schema: Self.schema(criteria: context.criteria, sources: sources, compactFindings: configuration.provider == .anthropic),
-            maxOutputTokens: 4000,
+            maxOutputTokens: maxOutputTokens ?? (configuration.provider == .anthropic ? claudeOutputTokenBudgets[0] : 4_000),
             configuration: configuration
         )
+        if configuration.provider == .anthropic { request.timeoutInterval = 300 }
+        return request
     }
 
     static func makeStructuredRequest(
@@ -671,7 +723,8 @@ struct SermonAIReviewClient {
         if let outputText = root["output_text"] as? String { return outputText }
         if provider == .anthropic,
            let content = root["content"] as? [[String: Any]] {
-            return content.compactMap { $0["text"] as? String }.joined()
+            let texts = content.filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }
+            return texts.isEmpty ? nil : texts.joined()
         }
         if let output = root["output"] as? [[String: Any]] {
             let strings = output.flatMap { item -> [String] in

@@ -3,6 +3,136 @@ import XCTest
 @testable import Pregar
 
 final class SermonReviewTests: XCTestCase {
+    func testClaudeReviewReservesOutputForThinkingAndTheStructuredReport() throws {
+        let request = try SermonAIReviewClient.makeRequest(context: reviewContext(criteria: SermonReviewCriterion.allCases), sources: [bibleSource()], configuration: configuration(for: .anthropic))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+        XCTAssertEqual(body["max_tokens"] as? Int, 16_000)
+        XCTAssertNil(body["thinking"], "Opus 5.5 does not support disabling adaptive thinking.")
+        XCTAssertGreaterThanOrEqual(request.timeoutInterval, 300)
+    }
+
+    func testClaudeTruncationRetriesOnceWithMoreRoomWithoutUsingPartialJSON() async throws {
+        var budgets: [Int] = []
+        ReviewStubURLProtocol.setHandler { request in
+            var data = request.httpBody ?? Data()
+            if data.isEmpty, let stream = request.httpBodyStream {
+                stream.open()
+                defer { stream.close() }
+                var buffer = [UInt8](repeating: 0, count: 2048)
+                while true {
+                    let read = stream.read(&buffer, maxLength: buffer.count)
+                    if read <= 0 { break }
+                    data.append(contentsOf: buffer.prefix(read))
+                }
+            }
+            guard let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let budget = body["max_tokens"] as? Int else {
+                XCTFail("The request must contain its output budget.")
+                return (500, Data())
+            }
+            budgets.append(budget)
+            let reason = budgets.count == 1 ? "max_tokens" : "end_turn"
+            // Even a syntactically valid JSON response must not be accepted if the provider says it was cut short.
+            return (200, try! JSONSerialization.data(withJSONObject: ["stop_reason": reason, "usage": ["output_tokens": 16_000], "content": [["type": "text", "text": "{\"findings\":[]}"]]]))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIReviewClient(session: session).review(context: reviewContext(criteria: [.spelling]), sources: [], configuration: configuration(for: .anthropic))
+        XCTAssertTrue(result.findings.isEmpty)
+        XCTAssertEqual(budgets, [16_000, 32_000])
+    }
+
+    func testRepeatedClaudeTruncationStopsAfterTwoRequestsWithASpecificError() async throws {
+        var requests = 0
+        ReviewStubURLProtocol.setHandler { _ in
+            requests += 1
+            return (200, try! JSONSerialization.data(withJSONObject: ["stop_reason": "max_tokens", "content": [["type": "text", "text": "{\"findings\":["]]]))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        do {
+            _ = try await SermonAIReviewClient(session: session).review(context: reviewContext(criteria: [.spelling]), sources: [], configuration: configuration(for: .anthropic))
+            XCTFail("A partial report must never be presented as complete.")
+        } catch let error as SermonReviewError {
+            guard case .incompleteResponse = error else { return XCTFail("Unexpected error: \(error)") }
+        }
+        XCTAssertEqual(requests, 2)
+    }
+
+    func testClaudeRefusalsAndMalformedCompletedResponsesAreNotRetried() async throws {
+        for reason in ["refusal", "end_turn"] {
+            var requests = 0
+            ReviewStubURLProtocol.setHandler { _ in
+                requests += 1
+                return (200, try! JSONSerialization.data(withJSONObject: ["stop_reason": reason, "content": [["type": "text", "text": "not JSON"]]]))
+            }
+            let session = stubSession()
+            defer { session.invalidateAndCancel() }
+            do {
+                _ = try await SermonAIReviewClient(session: session).review(context: reviewContext(criteria: [.spelling]), sources: [], configuration: configuration(for: .anthropic))
+                XCTFail("An invalid response must not become a review.")
+            } catch let error as SermonReviewError {
+                if reason == "refusal" {
+                    guard case .refusedResponse = error else { return XCTFail("Unexpected error: \(error)") }
+                } else {
+                    guard case .unreadableResponse = error else { return XCTFail("Unexpected error: \(error)") }
+                }
+            }
+            XCTAssertEqual(requests, 1)
+        }
+    }
+
+    func testClaudeTextExtractionAndDiagnosticsExcludeThinkingAndPrivateContent() throws {
+        let blocks = [["type": "thinking", "thinking": "PRIVATE_THINKING", "text": "PRIVATE_FAKE_TEXT"], ["type": "text", "text": "PRIVATE_REPORT"]]
+        let data = try JSONSerialization.data(withJSONObject: ["stop_reason": "max_tokens", "usage": ["output_tokens": 4_000], "content": blocks])
+        XCTAssertEqual(SermonAIReviewClient.outputText(in: data, from: .anthropic), "PRIVATE_REPORT")
+        let diagnostics = SermonAIReviewClient.responseDiagnostics(in: data, from: .anthropic)
+        XCTAssertTrue(diagnostics.contains("stop_reason=max_tokens"))
+        XCTAssertTrue(diagnostics.contains("output_tokens=4000"))
+        XCTAssertFalse(diagnostics.contains("PRIVATE"))
+        let onlyThinking = try JSONSerialization.data(withJSONObject: ["content": [blocks[0]]])
+        XCTAssertNil(SermonAIReviewClient.outputText(in: onlyThinking, from: .anthropic))
+    }
+
+    @MainActor
+    func testLiveAttachedManuscriptReviewWhenOptedIn() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let path = environment["PREGAR_LIVE_REVIEW_MANUSCRIPT"] else {
+            throw XCTSkip("Informe PREGAR_LIVE_REVIEW_MANUSCRIPT para autorizar a revisão real de um arquivo local.")
+        }
+        guard let key = await AISettingsStore().key(for: .anthropic),
+              let bibleKey = await Task.detached(priority: .utility, operation: { APIKeychain.read() }).value else {
+            throw XCTSkip("As chaves de Claude e da API bíblica devem estar disponíveis.")
+        }
+        let manuscript = try String(contentsOfFile: path, encoding: .utf8)
+        let reference = "Salmo 34:1-10,22"
+        let passage = try await LiturgicalAPIClient(settings: APISettings.load(), apiKey: bibleKey).fetchPassage(reference: reference, bible: "nvt")
+        let sourceText = passage.verses?.map { "\($0.number) \($0.text)" }.joined(separator: "\n") ?? passage.content ?? ""
+        XCTAssertFalse(sourceText.isEmpty)
+        let sources = [SermonReviewSource(id: "bible:nvt", title: "NVT", citation: reference, text: sourceText)]
+        let context = SermonReviewContext(dateKey: "2026-11-01", title: "Reprodução local", mainReference: reference, manuscript: manuscript, criteria: SermonReviewCriterion.allCases)
+        let configuration = SermonReviewConfiguration(provider: .anthropic, model: "claude-opus-5-5", apiKey: key)
+        let request = try SermonAIReviewClient.makeRequest(context: context, sources: sources, configuration: configuration)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = try XCTUnwrap(response as? HTTPURLResponse).statusCode
+        guard status == 200 else {
+            throw SermonReviewError.provider(status: status, detail: AIProviderResponseError.detail(in: data, redacting: key))
+        }
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let types = (root["content"] as? [[String: Any]] ?? []).compactMap { $0["type"] as? String }
+        let receipt: [String: Any] = ["model": configuration.model, "status": status, "stopReason": root["stop_reason"] ?? NSNull(), "usage": root["usage"] ?? [:], "contentTypes": types, "outputCharacters": SermonAIReviewClient.outputText(in: data, from: .anthropic)?.count ?? 0, "manuscriptWords": manuscript.split(whereSeparator: \.isWhitespace).count]
+        if let output = environment["PREGAR_LIVE_REVIEW_RECEIPT"] {
+            try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys]).write(to: URL(fileURLWithPath: output))
+        }
+        print("Reprodução Claude: status=\(status), stop=\(root["stop_reason"] ?? "ausente"), blocos=\(types). Conteúdo e chaves omitidos.")
+        ReviewStubURLProtocol.setHandler { _ in (status, data) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIReviewClient(session: session).review(context: context, sources: sources, configuration: configuration)
+        XCTAssertNotNil(result.structure)
+        print("Revisão validada: \(result.findings.count) apontamentos, mapa presente, \(result.rejectedFindingCount) rejeitados localmente.")
+    }
+
     @MainActor
     func testLiveClaudeCatalogAndStructuredReviewWhenOptedIn() async throws {
         #if PREGAR_LIVE_ANTHROPIC_TEST
