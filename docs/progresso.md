@@ -314,6 +314,14 @@ Validação final: 129 testes passaram, nenhum falhou e três verificações opc
 
 Validação final: 131 testes passaram, nenhum falhou e três testes opcionais de serviços externos ficaram desativados. A reprodução com RTF de 1.165 palavras e a medição com banco temporário em disco confirmaram a digitação responsiva; as capturas em 420, 560 e 1000 pontos e nos modos claro/escuro confirmaram a quebra de linha e os controles neutros. A revisão 4 usa a compilação `2026103004`, para Apple Silicon e Intel.
 
+## Revisão com esquema compacto para Claude (30/10/2026, revisão 5)
+
+- A revisão envia ao Claude um único objeto de apontamento com os oito campos obrigatórios, substituindo a união de objetos repetidos por critério. O contrato conserva critérios selecionados, classificações e IDs das fontes disponíveis, e mantém o mapa do sermão. Isso reduz a gramática compilada pelo provedor, conforme as [orientações de complexidade da Anthropic](https://platform.claude.com/docs/en/build-with-claude/structured-outputs#schema-complexity-limits).
+- A validação local continua responsável pelas relações entre campos: só ortografia admite uma palavra de correção; fidelidade exige uma fonte fornecida e evidência literal; critérios não selecionados, classificações incompatíveis e referências de fonte fora do critério são rejeitados.
+- As outras integrações conservam seus esquemas existentes. Os testes cobrem vários critérios e vinte fontes, rejeição de combinações inválidas e preservação do mapa do sermão. O teste real optativo aceita `PREGAR_LIVE_ANTHROPIC_MODEL` para validar um modelo específico, e falha quando nenhum dos modelos solicitados está disponível.
+
+Validação: 25 testes da revisão e pesquisa passaram, sem falhas; um teste externo opcional ficou desativado. O teste real usou Claude Opus 5.5 com texto e fonte sintéticos, retornou HTTP 200 e confirmou a correção ortográfica e o mapa do sermão após a validação local. A revisão 5 do instalador usa a compilação `2026103005` para Apple Silicon e Intel.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.

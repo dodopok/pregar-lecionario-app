@@ -15,7 +15,11 @@ final class SermonReviewTests: XCTestCase {
             throw XCTSkip("Nenhuma chave Claude está disponível neste contexto de assinatura.")
         }
         let models = try await AIModelCatalogClient().claudeModels(apiKey: key)
-        for model in ["claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-5-5"] where models.contains(where: { $0.id == model }) {
+        let requestedModels = ProcessInfo.processInfo.environment["PREGAR_LIVE_ANTHROPIC_MODEL"].map { [$0] }
+            ?? ["claude-sonnet-5", "claude-sonnet-5-5", "claude-opus-5-5"]
+        let availableModels = requestedModels.filter { model in models.contains(where: { $0.id == model }) }
+        XCTAssertFalse(availableModels.isEmpty, "O teste deve executar ao menos um modelo disponível.")
+        for model in availableModels {
             let context = reviewContext(criteria: SermonReviewCriterion.allCases, manuscript: "A excessão confirma a regra.")
             let sources = [SermonReviewSource(id: "synthetic", title: "Fonte sintética", citation: "Teste", text: "A regra admite exceções.")]
             let configuration = SermonReviewConfiguration(provider: .anthropic, model: model, apiKey: key)
@@ -36,40 +40,61 @@ final class SermonReviewTests: XCTestCase {
                 result.findings.contains { $0.criterion == .spelling && $0.correction == "exceção" },
                 "\(model): \(SermonAIReviewClient.outputText(in: data, from: .anthropic) ?? "sem saída") · rejeitados: \(result.rejectionReasons)"
             )
+            XCTAssertNotNil(result.structure, "O mapa do sermão precisa continuar disponível com o esquema compacto.")
             print("Claude · \(model) · HTTP 200 com resposta estruturada · chave não exibida")
         }
         XCTAssertFalse(models.isEmpty)
     }
 
-    func testClaudeReviewSchemaUsesSupportedUnionsAndPreservesCriterionAndSourceConstraints() throws {
-        let request = try SermonAIReviewClient.makeRequest(
-            context: reviewContext(criteria: SermonReviewCriterion.allCases),
-            sources: [bibleSource()],
-            configuration: SermonReviewConfiguration(provider: .anthropic, model: "claude-opus-5-5", apiKey: "secret-key")
-        )
-        let body = try XCTUnwrap(request.httpBody)
-        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        let config = try XCTUnwrap(root["output_config"] as? [String: Any])
-        let format = try XCTUnwrap(config["format"] as? [String: Any])
-        let schema = try XCTUnwrap(format["schema"] as? [String: Any])
-        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
-        let findings = try XCTUnwrap(properties["findings"] as? [String: Any])
-        let items = try XCTUnwrap(findings["items"] as? [String: Any])
-        let alternatives = try XCTUnwrap(items["anyOf"] as? [[String: Any]])
-        XCTAssertNil(items["oneOf"])
-        XCTAssertEqual(alternatives.count, SermonReviewCriterion.allCases.count)
-        for (criterion, alternative) in zip(SermonReviewCriterion.allCases, alternatives) {
-            let fields = try XCTUnwrap(alternative["properties"] as? [String: Any])
-            XCTAssertEqual((fields["criterion"] as? [String: Any])?["enum"] as? [String], [criterion.rawValue])
+    func testClaudeReviewUsesOneFindingShapeWithRequiredFieldsAndAllowedCriteriaAndSources() throws {
+        let sources = (0..<20).map { SermonReviewSource(id: "source-\($0)", title: "Fonte", citation: "Teste", text: "Uma fonte de teste.") }
+        for criteria in [SermonReviewCriterion.allCases, [.spelling], [.fidelity, .clarity]] {
+            let request = try SermonAIReviewClient.makeRequest(
+                context: reviewContext(criteria: criteria), sources: sources,
+                configuration: configuration(for: .anthropic)
+            )
+            let root = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+            let format = try XCTUnwrap((root["output_config"] as? [String: Any])?["format"] as? [String: Any])
+            let schema = try XCTUnwrap(format["schema"] as? [String: Any])
+            let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+            let findings = try XCTUnwrap(properties["findings"] as? [String: Any])
+            let item = try XCTUnwrap(findings["items"] as? [String: Any])
+            let fields = try XCTUnwrap(item["properties"] as? [String: Any])
+            XCTAssertEqual(item["type"] as? String, "object")
+            XCTAssertNil(item["oneOf"])
+            XCTAssertNil(item["anyOf"], "Repeated finding objects exceed Claude's grammar compilation budget.")
+            XCTAssertEqual(Set(try XCTUnwrap(item["required"] as? [String])), Set(fields.keys))
+            XCTAssertEqual(item["additionalProperties"] as? Bool, false)
+            XCTAssertEqual((fields["criterion"] as? [String: Any])?["enum"] as? [String], criteria.map(\.rawValue))
+            let expectedSources = [""] + (criteria.contains(.fidelity) ? sources.map(\.id) : [])
+            XCTAssertEqual((fields["evidence_source_id"] as? [String: Any])?["enum"] as? [String], expectedSources)
             let observation = try XCTUnwrap(fields["observation"] as? [String: Any])
-            XCTAssertNil(observation["minLength"])
             XCTAssertNil(observation["maxLength"])
             XCTAssertTrue((observation["description"] as? String)?.contains("800") == true)
-            XCTAssertEqual(alternative["additionalProperties"] as? Bool, false)
-            if criterion == .fidelity {
-                XCTAssertEqual((fields["evidence_source_id"] as? [String: Any])?["enum"] as? [String], [bibleSource().id])
-            }
+            XCTAssertNotNil(properties["structure"], "Compaction must preserve the sermon map.")
         }
+    }
+
+    func testClaudeCompactFindingsStillRejectMismatchedCriteriaCorrectionsAndEvidence() async throws {
+        let json = #"""
+        {"findings":[
+          {"criterion":"spelling","severity":"note","manuscript_quote":"excessão","observation":"Grafia incorreta da palavra.","correction":"exceção","classification":"spelling","evidence_source_id":"","evidence_quote":""},
+          {"criterion":"fidelity","severity":"attention","manuscript_quote":"Jesus chorou.","observation":"Afirmação em tensão com a fonte.","correction":"exceção","classification":"tension","evidence_source_id":"bible:nvt","evidence_quote":"Jesus chorou."},
+          {"criterion":"clarity","severity":"note","manuscript_quote":"Jesus chorou.","observation":"Termo sem explicação.","correction":"","classification":"contradiction","evidence_source_id":"","evidence_quote":""},
+          {"criterion":"fidelity","severity":"attention","manuscript_quote":"Jesus chorou.","observation":"Afirmação em tensão com a fonte.","correction":"","classification":"tension","evidence_source_id":"","evidence_quote":"Jesus chorou."},
+          {"criterion":"spelling","severity":"note","manuscript_quote":"excessão","observation":"Grafia incorreta da palavra.","correction":"exceção","classification":"spelling","evidence_source_id":"bible:nvt","evidence_quote":""}
+        ]}
+        """#
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .anthropic)) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIReviewClient(session: session).review(
+            context: reviewContext(criteria: SermonReviewCriterion.allCases, manuscript: "A excessão aparece aqui. Jesus chorou."),
+            sources: [bibleSource()], configuration: configuration(for: .anthropic)
+        )
+        XCTAssertEqual(result.findings.count, 1)
+        XCTAssertEqual(result.findings.first?.correction, "exceção")
+        XCTAssertEqual(result.rejectedFindingCount, 4)
     }
 
     func testClaudeSchemaAdaptationDoesNotTreatPropertyNamesAsSchemaKeywords() throws {

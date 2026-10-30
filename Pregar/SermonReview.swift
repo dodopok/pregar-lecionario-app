@@ -473,7 +473,7 @@ enum ClaudeStructuredOutputSchema {
             }
         }
         if let items = result["items"] as? [String: Any] { result["items"] = adapted(items) }
-        // Each finding alternative has a different criterion enum, so anyOf remains unambiguous.
+        // O Claude aceita anyOf para uniões que outros provedores recebem como oneOf.
         if let alternatives = result.removeValue(forKey: "oneOf") as? [[String: Any]] {
             result["anyOf"] = alternatives
         }
@@ -580,7 +580,7 @@ struct SermonAIReviewClient {
             userText: userText,
             systemPrompt: AIReviewPrompt.system,
             formatName: "sermonreview",
-            schema: Self.schema(criteria: context.criteria, sources: sources),
+            schema: Self.schema(criteria: context.criteria, sources: sources, compactFindings: configuration.provider == .anthropic),
             maxOutputTokens: 4000,
             configuration: configuration
         )
@@ -776,12 +776,15 @@ struct SermonAIReviewClient {
 
     private static func schema(
         criteria: [SermonReviewCriterion],
-        sources: [SermonReviewSource]
+        sources: [SermonReviewSource],
+        compactFindings: Bool = false
     ) -> [String: Any] {
         let availableCriteria = criteria.filter { $0 != .fidelity || !sources.isEmpty }
         var findings: [String: Any] = ["type": "array"]
         if availableCriteria.isEmpty {
             findings["maxItems"] = 0
+        } else if compactFindings {
+            findings["items"] = compactFindingSchema(criteria: availableCriteria, sources: sources)
         } else {
             findings["items"] = [
                 "oneOf": availableCriteria.map { findingSchema(for: $0, sources: sources) }
@@ -793,6 +796,35 @@ struct SermonAIReviewClient {
             "properties": ["findings": findings, "structure": structureSchema],
             "required": ["findings", "structure"]
         ]
+    }
+
+    /// Um único formato evita compilar cinco objetos quase idênticos em uma união.
+    /// As relações entre critério, correção e evidência continuam em `validate`.
+    private static func compactFindingSchema(
+        criteria: [SermonReviewCriterion],
+        sources: [SermonReviewSource]
+    ) -> [String: Any] {
+        let hasFidelity = criteria.contains(.fidelity)
+        let classifications: [String] = criteria.flatMap { criterion in
+            criterion == .fidelity ? ["contradiction", "tension", "unsupported", "interpretive"] : [criterion.rawValue]
+        }
+        let correction: [String: Any] = criteria.contains(.spelling)
+            ? ["type": "string", "maxLength": 64, "description": "Somente em spelling: uma palavra corrigida, sem reescrever a frase. Nos demais critérios, string vazia."]
+            : ["type": "string", "enum": [""]]
+        let evidence: [String: Any] = hasFidelity
+            ? ["type": "string", "description": "Em fidelity, evidência literal da fonte identificada. Nos demais critérios, string vazia."]
+            : ["type": "string", "enum": [""]]
+        let fields: [String: Any] = [
+            "criterion": ["type": "string", "enum": criteria.map(\.rawValue)],
+            "severity": ["type": "string", "enum": SermonReviewSeverity.allCases.map(\.rawValue)],
+            "manuscript_quote": ["type": "string", "maxLength": 420, "description": "Trecho literal do manuscrito; obrigatório para spelling e fidelity."],
+            "observation": ["type": "string", "minLength": 1, "maxLength": 800],
+            "correction": correction,
+            "classification": ["type": "string", "enum": classifications],
+            "evidence_source_id": ["type": "string", "enum": [""] + (hasFidelity ? sources.map(\.id) : []), "description": "Somente fidelity usa o ID de uma fonte fornecida. Nos demais critérios, string vazia."],
+            "evidence_quote": evidence
+        ]
+        return ["type": "object", "additionalProperties": false, "properties": fields, "required": fields.keys.sorted()]
     }
 
     /// Esquema do mapa do sermão. Todos os trechos são literais do manuscrito e são conferidos localmente.
