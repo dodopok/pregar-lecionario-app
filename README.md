@@ -101,25 +101,46 @@ Para ver ou enviar um erro:
 2. Ou use Ajuda › Registro de integrações no Finder.
 3. As mesmas linhas também vão para o Console do macOS, no subsistema `br.caminhoanglicano.pregar`, categoria `integracoes`.
 
-## Atalhos
+## Editor e atalhos
+
+O manuscrito usa um editor local no estilo Google Docs: menus de documento, barra fixa de formatação, régua em centímetros, zoom e página centralizada. Novos textos começam em Arial 11 com entrelinha de 1,15; fontes e formatação de manuscritos antigos são preservadas. A escrita funciona sem login Google.
+
+Digitação, cursor e desfazer/refazer ficam no `NSTextView`. A conversão para RTF e o salvamento ocorrem após uma pausa curta, com um limite de dois segundos durante a digitação contínua. Mudar de documento ou janela, abrir revisão/exportação e fechar o app força o salvamento. O cabeçalho distingue “Salvando…” de “Salvo neste Mac” e oferece nova tentativa se houver erro.
+
+Os atalhos de texto seguem a [referência do Google Docs para Mac](https://support.google.com/docs/answer/179738?hl=pt-BR) enquanto o manuscrito tem foco.
+
+| Atalho | Ação |
+| --- | --- |
+| ⌘B · ⌘I · ⌘U · ⇧⌘X | Negrito · Itálico · Sublinhado · Tachado |
+| ⌘Z · ⇧⌘Z | Desfazer · Refazer |
+| ⌥⌘0 · ⌥⌘1…6 | Texto normal · Título 1 a 6 |
+| ⇧⌘L · ⇧⌘E · ⇧⌘R · ⇧⌘J | Alinhar à esquerda · Centralizar · À direita · Justificar |
+| ⇧⌘7 · ⇧⌘8 · ⇧⌘9 | Lista numerada · Marcadores · Verificação |
+| ⌘[ · ⌘] | Diminuir · Aumentar recuo |
+| ⌘K · ⌥⌘F | Link · Nota de rodapé |
+| ⌘. · ⌘, | Sobrescrito · Subscrito |
+| ⌥⌘C · ⌥⌘V · ⌘\ | Copiar formatação · Colar formatação · Limpar formatação |
+| ⇧⌘V | Colar sem formatação |
+| ⌘F · ⇧⌘H | Localizar · Localizar e substituir |
+| ⌘S · ⌘P | Salvar agora · Imprimir |
+| ⌥/ · ⌘/ | Pesquisar comandos · Ver atalhos |
+| ⌘+ · ⌘− · ⌘0 | Aumentar zoom · Diminuir zoom · Zoom 100% |
+
+Atalhos da preparação:
 
 | Atalho | Ação |
 | --- | --- |
 | ⌘0 · ⌘1 · ⌘2 · ⌘3 · ⌘4 | Mesa · Bíblia · Leitor · Biblioteca · Arquivo |
 | ⌘, | Preferências |
-| ⌥⌘1 · ⌥⌘2 · ⌥⌘3 | Mostrar ou ocultar calendário, leituras e materiais |
-| ⇧⌘F | Modo de escrita (só o manuscrito) |
-| ⇧⌘R · ⇧⌘E · ⇧⌘T · ⇧⌘H | Revisar · Ensaio · Tablet · Histórico de versões |
-| ⌘B · ⌘I | Negrito · Itálico |
-| ⇧⌘1 · ⇧⌘. · ⇧⌘8 · ⌥⌘N | Título · Citação em bloco · Lista · Nota de rodapé |
-| `# `, `> `, `- ` no início da linha | Título, citação e lista enquanto digita |
-| ⌘F | Localizar no manuscrito |
+| ⇧⌥⌘1 · ⇧⌥⌘2 · ⇧⌥⌘3 | Mostrar ou ocultar calendário, leituras e materiais |
+| ⇧⌘F | Modo de escrita |
+| ⇧⌥⌘R · ⇧⌥⌘E · ⇧⌘T · ⇧⌥⌘H | Revisar · Ensaio · Tablet · Histórico de versões |
 
-Os painéis da Mesa são redimensionáveis pelas alças entre eles; as larguras ficam guardadas entre sessões.
+Os atalhos que antes conflitavam com alinhamento e estilos de parágrafo foram movidos. Os painéis da Mesa continuam redimensionáveis e lembram suas larguras entre sessões.
 
 ## Onde os dados ficam
 
-- **Manuscritos** em SwiftData, no armazenamento padrão do app, em RTF. Esse RTF é a fonte das exportações: título em negrito ≥ 13 pt, citação com recuo de 34 pt, lista com marcador "• " e nota em sobrescrito.
+- **Manuscritos** em SwiftData, no armazenamento padrão do app, em RTF. Esse RTF é a fonte das exportações: estilos de título em metadados do próprio RTF, citação com recuo de 34 pt, listas com marcadores explícitos e notas em sobrescrito. RTFs anteriores continuam compatíveis.
 - **Biblioteca, índices de PDF, histórico de versões, relatórios de revisão, sessão do Leitor e registro de integrações** em `~/Library/Application Support/br.caminhoanglicano.pregar`. Os PDFs importados continuam nos caminhos originais; os baixados de pasta pública do Drive ficam numa subpasta própria.
 - **Chaves** (Estêvão API, provedores de IA, refresh token do Google, chave da Drive API) no Acesso às Chaves do macOS.
 - **Preferências** em UserDefaults.

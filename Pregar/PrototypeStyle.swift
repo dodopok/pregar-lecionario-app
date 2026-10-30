@@ -31,6 +31,16 @@ enum PrototypeStyle {
     static let line = ink.opacity(0.10)
     static let warning = adaptive(light: (0.72, 0.44, 0.08), dark: (0.93, 0.66, 0.30))
 
+    // Superfícies do editor de documentos, próximas do Docs e adaptadas à aparência do app.
+    static let documentCanvas = adaptive(light: (0.973, 0.976, 0.980), dark: (0.106, 0.118, 0.133))
+    static let documentToolbar = adaptive(light: (0.929, 0.949, 0.980), dark: (0.173, 0.196, 0.231))
+    static let documentPaper = adaptive(light: (1, 1, 1), dark: (0.157, 0.173, 0.192))
+    static let documentInk = adaptive(light: (0.125, 0.129, 0.141), dark: (0.906, 0.918, 0.937))
+    static let documentMuted = adaptive(light: (0.373, 0.388, 0.408), dark: (0.663, 0.694, 0.733))
+    static let documentBlue = adaptive(light: (0.102, 0.451, 0.910), dark: (0.541, 0.706, 0.969))
+    static let documentSelection = adaptive(light: (0.827, 0.890, 0.992), dark: (0.220, 0.333, 0.510))
+    static let documentBorder = documentInk.opacity(0.14)
+
     /// Fundo suave derivado do acento litúrgico, usado em estados selecionados/ativos.
     static func softAccent(_ accent: Color) -> Color {
         accent.opacity(0.14)

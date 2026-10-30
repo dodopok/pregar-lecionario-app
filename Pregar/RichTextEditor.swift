@@ -8,21 +8,44 @@ import SwiftUI
 final class EditorCommands: ObservableObject {
     @Published private(set) var wordCount = 0
     @Published private(set) var isEmpty = true
+    @Published private(set) var plainText = ""
+    @Published private(set) var hasPendingChanges = false
+    @Published private(set) var saveError: String?
+    @Published var zoomPercent = 100
+    @Published var showsRuler = true
     @Published private(set) var selectedFontFamily = "Arial"
-    @Published private(set) var selectedFontSize = 10
+    @Published private(set) var selectedFontSize = 11
+    @Published private(set) var selectedFontPointSize: Double = 11
     @Published private(set) var isBoldActive = false
     @Published private(set) var isItalicActive = false
-    @Published private(set) var isHeadingActive = false
+    @Published var isHeadingActive = false
     @Published private(set) var isQuoteActive = false
     @Published private(set) var isListActive = false
-    /// Ponto, nas coordenadas do editor (origem no canto superior esquerdo), acima do início da
-    /// seleção atual; nulo sem seleção. Alimenta a barra flutuante de formatação.
-    @Published private(set) var selectionAnchor: CGPoint?
-    static let fontFamilies = ["Arial", "Georgia", "Times New Roman", "Helvetica", "Avenir"]
-    static let fontSizes = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36]
-    /// Corpo do texto em Arial 10, preferência registrada no plano de produto.
-    static let bodyPointSize: CGFloat = 10
-    /// Títulos: negrito com 14 pt. O exportador do Drive reconhece título por "≥ 13 pt e negrito".
+    @Published var isUnderlineActive = false
+    @Published var isStrikethroughActive = false
+    @Published var selectedParagraphStyle = DocumentParagraphStyle.normal
+    @Published var selectedAlignment = NSTextAlignment.left
+    @Published var selectedLineSpacing: Double = 1.15
+    @Published var selectedSpaceBefore: Double = 0
+    @Published var selectedSpaceAfter: Double = 0
+    @Published var selectedList = DocumentListStyle.none
+    @Published var isSuperscriptActive = false
+    @Published var isSubscriptActive = false
+    var flushHandler: (() -> Void)?
+    var linkHandler: (() -> Void)?
+    var shortcutsHandler: (() -> Void)?
+    var toolFinderHandler: (() -> Void)?
+    var spacingHandler: (() -> Void)?
+    var copiedFormatting: [NSAttributedString.Key: Any]?
+    static let fontFamilies: [String] = {
+        let preferred = ["Arial", "Calibri", "Cambria", "Courier New", "Georgia", "Helvetica", "Times New Roman", "Trebuchet MS", "Verdana"]
+        let installed = NSFontManager.shared.availableFontFamilies
+        return preferred.filter { installed.contains($0) } + installed.filter { !preferred.contains($0) }.sorted()
+    }()
+    static let fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72, 96]
+    /// Texto normal: Arial 11, com a entrelinha padrão de 1,15 do editor de documentos.
+    static let bodyPointSize: CGFloat = 11
+    /// Título legado: 14 pt em negrito. Os novos estilos conservam o nível em metadados RTF.
     static let headingPointSize: CGFloat = 14
     /// Marcador literal das listas; exportações e testes dependem desta representação.
     static let listMarker = "• "
@@ -70,7 +93,19 @@ final class EditorCommands: ObservableObject {
         let updatedWordCount = text.split(whereSeparator: \.isWhitespace).count
         if wordCount != updatedWordCount { wordCount = updatedWordCount }
         if isEmpty != text.isEmpty { isEmpty = text.isEmpty }
+        if plainText != text { plainText = text }
         updateSelectionFormatting()
+    }
+
+    func setPendingChanges(_ pending: Bool, error: String? = nil) {
+        if hasPendingChanges != pending { hasPendingChanges = pending }
+        if saveError != error { saveError = error }
+    }
+
+    func flushPendingEdits() { flushHandler?() }
+
+    func updateEmptyState(_ empty: Bool) {
+        if isEmpty != empty { isEmpty = empty }
     }
 
     @discardableResult
@@ -91,38 +126,6 @@ final class EditorCommands: ObservableObject {
         textView.didChangeText()
     }
 
-    /// Recalcula a âncora da barra flutuante a partir da seleção e da rolagem atuais.
-    func updateSelectionAnchor() {
-        guard let textView,
-              let scrollView = textView.enclosingScrollView,
-              let window = textView.window,
-              window.firstResponder === textView else {
-            if selectionAnchor != nil { selectionAnchor = nil }
-            return
-        }
-        let selection = textView.selectedRange()
-        // Durante o arrasto do mouse a barra ficaria sob o cursor; ela aparece ao soltar.
-        guard selection.length > 0, NSEvent.pressedMouseButtons & 1 == 0 else {
-            if selectionAnchor != nil { selectionAnchor = nil }
-            return
-        }
-        let screenRect = textView.firstRect(forCharacterRange: selection, actualRange: nil)
-        guard screenRect.width > 0 || screenRect.height > 0 else {
-            if selectionAnchor != nil { selectionAnchor = nil }
-            return
-        }
-        let windowRect = window.convertFromScreen(screenRect)
-        let local = scrollView.convert(windowRect, from: nil)
-        let visibleHeight = scrollView.bounds.height
-        guard local.maxY > 0, local.minY < visibleHeight else {
-            if selectionAnchor != nil { selectionAnchor = nil }
-            return
-        }
-        let top = scrollView.isFlipped ? local.minY : visibleHeight - local.maxY
-        let anchor = CGPoint(x: local.midX, y: top)
-        if selectionAnchor != anchor { selectionAnchor = anchor }
-    }
-
     // MARK: - Caracteres
 
     func bold() { toggleFontTrait(.boldFontMask) }
@@ -131,7 +134,8 @@ final class EditorCommands: ObservableObject {
     func setFontFamily(_ family: String) {
         applyFontChange { font in
             let manager = NSFontManager.shared
-            var updated = NSFont(name: family, size: font.pointSize) ?? font
+            var updated = NSFontManager.shared.font(withFamily: family, traits: [], weight: 5, size: font.pointSize)
+                ?? NSFont(name: family, size: font.pointSize) ?? font
             for trait in [NSFontTraitMask.boldFontMask, .italicFontMask] where manager.traits(of: font).contains(trait) {
                 updated = manager.convert(updated, toHaveTrait: trait)
             }
@@ -140,7 +144,12 @@ final class EditorCommands: ObservableObject {
     }
 
     func setFontSize(_ size: Int) {
-        applyFontChange { $0.withSize(CGFloat(size)) }
+        setFontSize(Double(size))
+    }
+
+    func setFontSize(_ size: Double) {
+        guard size.isFinite else { return }
+        applyFontChange { $0.withSize(CGFloat(min(max(size, 1), 400))) }
     }
 
     // MARK: - Blocos
@@ -150,6 +159,7 @@ final class EditorCommands: ObservableObject {
     func heading() {
         guard let textView, let storage = textView.textStorage else { return }
         focusTextView()
+        registerFormattingUndo("Título")
         let range = currentParagraphRange(in: textView)
         let hasText = range.length > 0 && range.location < storage.length
         let referenceFont = (hasText ? storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont : nil)
@@ -189,6 +199,7 @@ final class EditorCommands: ObservableObject {
     func quotation() {
         guard let textView, let storage = textView.textStorage else { return }
         focusTextView()
+        registerFormattingUndo("Citação")
         let ranges = paragraphRanges(in: textView)
         let selection = textView.selectedRange()
         guard !ranges.isEmpty, storage.length > 0 else {
@@ -223,35 +234,13 @@ final class EditorCommands: ObservableObject {
 
     /// Alterna o marcador "• " nos parágrafos da seleção. Num parágrafo vazio, insere o marcador.
     func bulletedList() {
-        guard let textView, let storage = textView.textStorage else { return }
-        focusTextView()
-        let range = currentParagraphRange(in: textView)
-        guard range.length > 0 else {
-            textView.insertText(Self.listMarker, replacementRange: NSRange(location: range.location, length: 0))
-            updateSelectionFormatting()
-            return
-        }
-        let source = textView.string as NSString
-        var lineStart = range.location
-        let end = NSMaxRange(range)
-        storage.beginEditing()
-        while lineStart < end {
-            let lineRange = source.paragraphRange(for: NSRange(location: lineStart, length: 0))
-            let hasMarker = source.substring(with: NSRange(location: lineRange.location, length: min(2, lineRange.length))) == Self.listMarker
-            if hasMarker {
-                storage.deleteCharacters(in: NSRange(location: lineRange.location, length: 2))
-            } else {
-                storage.insert(NSAttributedString(string: Self.listMarker), at: lineRange.location)
-            }
-            lineStart = NSMaxRange(lineRange)
-        }
-        storage.endEditing()
-        textView.didChangeText()
+        setListStyle(.bullet)
     }
 
     func footnote() {
         guard let textView, let storage = textView.textStorage else { return }
         focusTextView()
+        registerFormattingUndo("Nota de rodapé")
         let occupied = footnoteNumbers(in: textView.string)
         let maximumCandidate = occupied.count + 1
         let number = (1...maximumCandidate).first { !occupied.contains($0) } ?? maximumCandidate
@@ -298,14 +287,12 @@ final class EditorCommands: ObservableObject {
         let source = textView.string as NSString
         let paragraph = currentParagraphRange(in: textView)
         let paragraphText = source.substring(with: paragraph).trimmingCharacters(in: .newlines)
-        let markerLength = (Self.listMarker as NSString).length
-
-        if paragraphText.hasPrefix(Self.listMarker) {
-            let content = paragraphText.dropFirst(Self.listMarker.count).trimmingCharacters(in: .whitespaces)
+        if let prefix = DocumentListStyle.prefix(in: paragraphText) {
+            let content = paragraphText.dropFirst(prefix.length).trimmingCharacters(in: .whitespaces)
             if content.isEmpty {
-                textView.insertText("", replacementRange: NSRange(location: paragraph.location, length: markerLength))
+                textView.insertText("", replacementRange: NSRange(location: paragraph.location, length: prefix.length))
             } else {
-                textView.insertText("\n" + Self.listMarker, replacementRange: selection)
+                textView.insertText("\n" + prefix.kind.marker(number: prefix.number + 1), replacementRange: selection)
             }
             return true
         }
@@ -314,13 +301,17 @@ final class EditorCommands: ObservableObject {
             && source.substring(with: NSRange(location: NSMaxRange(paragraph) - 1, length: 1)) == "\n"
         let textEnd = NSMaxRange(paragraph) - (endsWithNewline ? 1 : 0)
         if let font = textView.typingAttributes[.font] as? NSFont,
-           Self.isHeadingFont(font),
+           (Self.isHeadingFont(font)
+            || ((textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle)?.headerLevel ?? 0) > 0
+            || (textView.typingAttributes[.pregarParagraphStyle] as? String).flatMap(DocumentParagraphStyle.init(rawValue:)).map { $0 != .normal } == true),
            !paragraphText.isEmpty,
            selection.location >= textEnd {
             textView.insertText("\n", replacementRange: selection)
             var typing = textView.typingAttributes
             typing[.font] = Self.bodyFont(family: font.familyName ?? "Arial")
             typing[.paragraphStyle] = textView.defaultParagraphStyle ?? NSParagraphStyle.default
+            typing[.pregarParagraphStyle] = DocumentParagraphStyle.normal.rawValue
+            typing[.foregroundColor] = NSColor.black
             textView.typingAttributes = typing
             return true
         }
@@ -351,13 +342,11 @@ final class EditorCommands: ObservableObject {
         guard selection.length == 0 else { return false }
         let source = textView.string as NSString
         let paragraph = currentParagraphRange(in: textView)
-        let markerLength = (Self.listMarker as NSString).length
-        guard paragraph.length >= markerLength,
-              selection.location == paragraph.location + markerLength,
-              source.substring(with: NSRange(location: paragraph.location, length: markerLength)) == Self.listMarker else {
+        guard let prefix = DocumentListStyle.prefix(in: source.substring(with: paragraph)),
+              selection.location == paragraph.location + prefix.length else {
             return false
         }
-        textView.insertText("", replacementRange: NSRange(location: paragraph.location, length: markerLength))
+        textView.insertText("", replacementRange: NSRange(location: paragraph.location, length: prefix.length))
         return true
     }
 
@@ -376,9 +365,12 @@ final class EditorCommands: ObservableObject {
             .trimmingCharacters(in: .newlines)
         guard remainder.isEmpty else { return false }
         switch source.substring(with: prefixRange) {
-        case "#", "##":
+        case "#":
             textView.insertText("", replacementRange: prefixRange)
-            heading()
+            setParagraphStyle(.heading1)
+        case "##":
+            textView.insertText("", replacementRange: prefixRange)
+            setParagraphStyle(.heading2)
         case ">":
             textView.insertText("", replacementRange: prefixRange)
             quotation()
@@ -419,7 +411,7 @@ final class EditorCommands: ObservableObject {
     }
 
     private func typingAttributesAreQuoted(in textView: NSTextView) -> Bool {
-        ((textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle)?.headIndent ?? 0) >= 20
+        abs(((textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle)?.headIndent ?? 0) - 34) < 0.5
     }
 
     private func setQuoteTypingAttributes(enabled: Bool, in textView: NSTextView) {
@@ -460,8 +452,11 @@ final class EditorCommands: ObservableObject {
 
         guard selection.length > 0 else {
             textView.typingAttributes[.font] = convert(current)
+            updateSelectionFormatting()
             return
         }
+
+        registerFormattingUndo(trait == .boldFontMask ? "Negrito" : "Itálico")
 
         let selectedText = storage.attributedSubstring(from: selection)
         var replacements: [(NSRange, NSFont)] = []
@@ -492,6 +487,7 @@ final class EditorCommands: ObservableObject {
         }
 
         let safeRange = NSIntersectionRange(selection, NSRange(location: 0, length: storage.length))
+        registerFormattingUndo("Fonte")
         var replacements: [(NSRange, NSFont)] = []
         storage.enumerateAttribute(.font, in: safeRange) { value, range, _ in
             replacements.append((range, transform(value as? NSFont ?? current)))
@@ -520,29 +516,34 @@ final class EditorCommands: ObservableObject {
             let size = Int(font.pointSize.rounded())
             if selectedFontFamily != family { selectedFontFamily = family }
             if selectedFontSize != size { selectedFontSize = size }
-            isBoldActive = hasTrait(.boldFontMask, in: safeSelection, textView: textView, storage: storage, fallback: font)
-            isItalicActive = hasTrait(.italicFontMask, in: safeSelection, textView: textView, storage: storage, fallback: font)
-            isHeadingActive = Self.isHeadingFont(font)
+            if selectedFontPointSize != Double(font.pointSize) { selectedFontPointSize = Double(font.pointSize) }
+            let bold = hasTrait(.boldFontMask, in: safeSelection, textView: textView, storage: storage, fallback: font)
+            let italic = hasTrait(.italicFontMask, in: safeSelection, textView: textView, storage: storage, fallback: font)
+            if isBoldActive != bold { isBoldActive = bold }
+            if isItalicActive != italic { isItalicActive = italic }
         } else {
-            isBoldActive = false
-            isItalicActive = false
-            isHeadingActive = false
+            if isBoldActive { isBoldActive = false }
+            if isItalicActive { isItalicActive = false }
         }
         let paragraphRanges = paragraphRanges(in: textView)
         if paragraphRanges.isEmpty {
-            isQuoteActive = typingAttributesAreQuoted(in: textView)
-            isListActive = false
+            let quoted = typingAttributesAreQuoted(in: textView)
+            if isQuoteActive != quoted { isQuoteActive = quoted }
+            if isListActive { isListActive = false }
         } else {
-            isQuoteActive = paragraphRanges.allSatisfy { range in
+            let quoted = paragraphRanges.allSatisfy { range in
                 guard let storage, storage.length > 0 else { return false }
                 return isQuoted(range, in: storage)
             }
-            isListActive = paragraphRanges.allSatisfy { range in
+            let listed = paragraphRanges.allSatisfy { range in
                 guard let storage, range.location < storage.length else { return false }
                 let prefixLength = min(2, range.length)
                 return (storage.string as NSString).substring(with: NSRange(location: range.location, length: prefixLength)) == Self.listMarker
             }
+            if isQuoteActive != quoted { isQuoteActive = quoted }
+            if isListActive != listed { isListActive = listed }
         }
+        updateDocumentFormatting()
     }
 
     private func hasTrait(
@@ -568,7 +569,7 @@ final class EditorCommands: ObservableObject {
     private func isQuoted(_ range: NSRange, in storage: NSTextStorage) -> Bool {
         guard range.location < storage.length,
               let style = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle else { return false }
-        return style.headIndent >= 20
+        return abs(style.headIndent - 34) < 0.5
     }
 
     private func focusTextView() {
@@ -608,15 +609,81 @@ final class EditorCommands: ObservableObject {
 final class QuotationTextView: NSTextView {
     weak var commands: EditorCommands?
 
+    private static let darkQuoteInk = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0.74, green: 0.86, blue: 0.77, alpha: 1)
+            : EditorCommands.quoteForegroundColor
+    }
+    private static let quotePaper = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0.16, green: 0.23, blue: 0.19, alpha: 1)
+            : EditorCommands.quoteBackgroundColor
+    }
+
+    /// Cores temporárias pertencem só ao desenho: o RTF conserva preto e as cores escolhidas
+    /// pelo autor, mesmo quando o papel é escuro. Durante a digitação, atualiza só o trecho editado.
+    func refreshDisplayColors(in requestedRange: NSRange? = nil) {
+        guard let storage = textStorage, let layoutManager, storage.length > 0 else { return }
+        let range = NSIntersectionRange(requestedRange ?? NSRange(location: 0, length: storage.length), NSRange(location: 0, length: storage.length))
+        guard range.length > 0 else { return }
+        layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: range)
+        layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: range)
+        storage.enumerateAttributes(in: range) { attributes, range, _ in
+            let color = (attributes[.foregroundColor] as? NSColor)?.usingColorSpace(.deviceRGB)
+            let isQuote = abs(((attributes[.paragraphStyle] as? NSParagraphStyle)?.headIndent ?? 0) - 34) < 0.5
+            if isQuote, Self.matches(color, EditorCommands.quoteForegroundColor) {
+                layoutManager.addTemporaryAttribute(.foregroundColor, value: Self.darkQuoteInk, forCharacterRange: range)
+            } else if attributes[.link] == nil, color == nil || Self.matches(color, .black) {
+                layoutManager.addTemporaryAttribute(.foregroundColor, value: NSColor.textColor, forCharacterRange: range)
+            } else if attributes[.pregarParagraphStyle] as? String == DocumentParagraphStyle.subtitle.rawValue {
+                layoutManager.addTemporaryAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, forCharacterRange: range)
+            }
+            if isQuote, Self.matches(attributes[.backgroundColor] as? NSColor, EditorCommands.quoteBackgroundColor) {
+                layoutManager.addTemporaryAttribute(.backgroundColor, value: Self.quotePaper, forCharacterRange: range)
+            }
+        }
+    }
+
+    private static func matches(_ color: NSColor?, _ reference: NSColor) -> Bool {
+        guard let color = color?.usingColorSpace(.deviceRGB),
+              let reference = reference.usingColorSpace(.deviceRGB) else { return false }
+        return abs(color.redComponent - reference.redComponent) < 0.02
+            && abs(color.greenComponent - reference.greenComponent) < 0.02
+            && abs(color.blueComponent - reference.blueComponent) < 0.02
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func copy(_ sender: Any?) {
+        super.copy(sender)
+        try? DocumentRTF.copySelection(from: self, to: .general)
+    }
+
+    override func cut(_ sender: Any?) {
+        guard isEditable, selectedRange().length > 0 else { return }
+        copy(sender)
+        insertText("", replacementRange: selectedRange())
+    }
+
+    override func paste(_ sender: Any?) {
+        if let data = NSPasteboard.general.data(forType: .rtf), let text = try? DocumentRTF.decode(data) {
+            insertText(text, replacementRange: selectedRange())
+        } else {
+            super.paste(sender)
+        }
+    }
+
     override func insertNewline(_ sender: Any?) {
         if let commands, commands.handleNewline() { return }
         super.insertNewline(sender)
     }
 
-    /// O `NSTextView` acompanha o arrasto dentro de `mouseDown`; ao voltar, a seleção está pronta.
-    override func mouseDown(with event: NSEvent) {
-        super.mouseDown(with: event)
-        commands?.updateSelectionAnchor()
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if window?.firstResponder === self, commands?.handleDocumentShortcut(event) == true { return true }
+        return super.performKeyEquivalent(with: event)
     }
 
     override func deleteBackward(_ sender: Any?) {
@@ -648,8 +715,11 @@ final class QuotationTextView: NSTextView {
 
         let origin = textContainerOrigin
         let containerWidth = textContainer.size.width
-        storage.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
-            guard let style = value as? NSParagraphStyle, style.headIndent >= 20 else { return }
+        let visibleGlyphs = layoutManager.glyphRange(forBoundingRect: dirtyRect.offsetBy(dx: -origin.x, dy: -origin.y), in: textContainer)
+        let visibleCharacters = layoutManager.characterRange(forGlyphRange: visibleGlyphs, actualGlyphRange: nil)
+        guard visibleCharacters.length > 0 else { return }
+        storage.enumerateAttribute(.paragraphStyle, in: visibleCharacters) { value, range, _ in
+            guard let style = value as? NSParagraphStyle, abs(style.headIndent - 34) < 0.5 else { return }
             let glyphRange = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
             guard glyphRange.length > 0 else { return }
             var top = CGFloat.greatestFiniteMagnitude
@@ -684,22 +754,28 @@ struct RichTextEditor: NSViewRepresentable {
     @Binding var rtfData: Data?
     @Binding var modifiedAt: Date
     @ObservedObject var commands: EditorCommands
+    var onCommit: (() throws -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = DocumentScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
+        scrollView.allowsMagnification = true
+        scrollView.minMagnification = 0.5
+        scrollView.maxMagnification = 3
 
         let textView = QuotationTextView()
         textView.isRichText = true
         textView.allowsUndo = true
         textView.drawsBackground = false
+        textView.textColor = .black
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
         textView.isContinuousSpellCheckingEnabled = true
         textView.isGrammarCheckingEnabled = false
+        textView.isAutomaticLinkDetectionEnabled = true
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
         let bodyFont = NSFont(name: "Arial", size: EditorCommands.bodyPointSize)
@@ -708,35 +784,43 @@ struct RichTextEditor: NSViewRepresentable {
         var typing = textView.typingAttributes
         if let bodyFont { typing[.font] = bodyFont }
         typing[.paragraphStyle] = EditorCommands.bodyParagraphStyle()
+        typing[.pregarParagraphStyle] = DocumentParagraphStyle.normal.rawValue
+        typing[.foregroundColor] = NSColor.black
         textView.typingAttributes = typing
-        textView.textContainerInset = NSSize(width: 24, height: 22)
+        textView.textContainerInset = NSSize(width: 36, height: 36)
         textView.minSize = NSSize(width: 0, height: 0)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.layoutManager?.allowsNonContiguousLayout = true
         textView.delegate = context.coordinator
         textView.commands = commands
         scrollView.documentView = textView
-        scrollView.contentView.postsBoundsChangedNotifications = true
-        context.coordinator.scrollObserver = NotificationCenter.default.addObserver(
-            forName: NSView.boundsDidChangeNotification,
-            object: scrollView.contentView,
-            queue: .main
-        ) { [weak commands] _ in
-            Task { @MainActor in commands?.updateSelectionAnchor() }
-        }
         commands.textView = textView
+        commands.flushHandler = { [weak coordinator = context.coordinator, weak textView] in
+            guard let textView else { return }
+            textView.unmarkText()
+            coordinator?.flush(to: textView)
+        }
+        context.coordinator.installLifecycleObservers(for: textView)
         context.coordinator.apply(rtfData, to: textView)
+        scrollView.magnification = CGFloat(commands.zoomPercent) / 75
         return scrollView
     }
 
     static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
-        if let observer = coordinator.scrollObserver {
-            NotificationCenter.default.removeObserver(observer)
-            coordinator.scrollObserver = nil
+        if let textView = scrollView.documentView as? NSTextView {
+            textView.unmarkText()
+            coordinator.flush(to: textView)
+            if coordinator.parent.commands.textView === textView {
+                coordinator.parent.commands.flushHandler = nil
+                coordinator.parent.commands.textView = nil
+            }
         }
+        coordinator.observers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
@@ -745,40 +829,55 @@ struct RichTextEditor: NSViewRepresentable {
         (textView as? QuotationTextView)?.commands = commands
         context.coordinator.parent = self
         context.coordinator.apply(rtfData, to: textView)
+        let magnification = CGFloat(commands.zoomPercent) / 75
+        if abs(scrollView.magnification - magnification) > 0.001 {
+            let visible = scrollView.documentVisibleRect
+            scrollView.setMagnification(magnification, centeredAt: NSPoint(x: visible.midX, y: visible.midY))
+        }
     }
 
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
-        var scrollObserver: NSObjectProtocol?
+        var observers: [NSObjectProtocol] = []
         private var lastAppliedData: Data?
         private var isApplyingProgrammaticChange = false
+        private var hasAppliedDocument = false
+        private var pendingSave: Task<Void, Never>?
+        private var maximumSaveDelay: Task<Void, Never>?
+        private var hasPendingEdits = false
+        private var displayEditRange: NSRange?
 
         init(_ parent: RichTextEditor) {
             self.parent = parent
         }
 
         func apply(_ data: Data?, to textView: NSTextView) {
-            guard data != lastAppliedData else { return }
+            guard !hasAppliedDocument || data != lastAppliedData else { return }
+            // Uma restauração explícita substitui a edição atual; o eco do próprio salvamento
+            // nunca reatribui o texto, preservando cursor, composição e histórico de desfazer.
+            pendingSave?.cancel()
+            maximumSaveDelay?.cancel()
+            hasPendingEdits = false
+            hasAppliedDocument = true
             lastAppliedData = data
             isApplyingProgrammaticChange = true
             defer { isApplyingProgrammaticChange = false }
 
-            if let data, let content = try? NSAttributedString(
-                data: data,
-                options: [.documentType: NSAttributedString.DocumentType.rtf],
-                documentAttributes: nil
-            ) {
+            if let data, let content = try? DocumentRTF.decode(data) {
                 textView.textStorage?.setAttributedString(content)
                 Self.applyBodyRhythm(in: textView)
             } else if data == nil {
                 textView.string = ""
             }
+            (textView as? QuotationTextView)?.refreshDisplayColors()
 
             let commands = parent.commands
             Task { @MainActor [weak commands, weak textView] in
                 guard let commands, let textView else { return }
+                guard commands.textView == nil || commands.textView === textView else { return }
                 commands.updateWordCount(from: textView.string)
+                commands.setPendingChanges(false)
             }
         }
 
@@ -802,22 +901,97 @@ struct RichTextEditor: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             guard !isApplyingProgrammaticChange else { return }
             parent.commands.updateSelectionFormatting()
-            parent.commands.updateSelectionAnchor()
+        }
+
+        func textView(_ textView: NSTextView, shouldChangeTextIn affectedCharRange: NSRange, replacementString: String?) -> Bool {
+            displayEditRange = NSRange(location: affectedCharRange.location, length: (replacementString as NSString?)?.length ?? affectedCharRange.length)
+            return true
         }
 
         func textDidChange(_ notification: Notification) {
             guard !isApplyingProgrammaticChange else { return }
             guard let textView = notification.object as? NSTextView else { return }
-            parent.commands.updateWordCount(from: textView.string)
-            parent.commands.updateSelectionAnchor()
-            let range = NSRange(location: 0, length: textView.textStorage?.length ?? 0)
-            guard let data = try? textView.attributedString().data(
-                from: range,
-                documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
-            ) else { return }
-            lastAppliedData = data
-            parent.rtfData = data
-            parent.modifiedAt = .now
+            let selection = textView.selectedRange()
+            let source = textView.string as NSString
+            let safeSelection = NSIntersectionRange(selection, NSRange(location: 0, length: source.length))
+            let fallback = source.paragraphRange(for: safeSelection)
+            (textView as? QuotationTextView)?.refreshDisplayColors(in: displayEditRange ?? fallback)
+            displayEditRange = nil
+            hasPendingEdits = true
+            parent.commands.updateEmptyState((textView.textStorage?.length ?? 0) == 0)
+            parent.commands.setPendingChanges(true)
+            pendingSave?.cancel()
+            pendingSave = Task { @MainActor [weak self, weak textView] in
+                do { try await Task.sleep(for: .milliseconds(350)) } catch { return }
+                guard let self, let textView else { return }
+                self.flush(to: textView)
+            }
+            if maximumSaveDelay == nil {
+                maximumSaveDelay = Task { @MainActor [weak self, weak textView] in
+                    do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                    guard let self, let textView else { return }
+                    self.flush(to: textView)
+                }
+            }
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            if let textView = notification.object as? NSTextView { flush(to: textView) }
+        }
+
+        func installLifecycleObservers(for textView: NSTextView) {
+            for name in [NSApplication.willTerminateNotification, NSApplication.didResignActiveNotification, NSWindow.willCloseNotification, NSWindow.didResignKeyNotification] {
+                observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self, weak textView] notification in
+                    MainActor.assumeIsolated {
+                        guard let self, let textView else { return }
+                        if (name == NSWindow.willCloseNotification || name == NSWindow.didResignKeyNotification),
+                           (notification.object as? NSWindow) !== textView.window { return }
+                        textView.unmarkText()
+                        self.flush(to: textView)
+                    }
+                })
+            }
+        }
+
+        func flush(to textView: NSTextView) {
+            pendingSave?.cancel()
+            pendingSave = nil
+            maximumSaveDelay?.cancel()
+            maximumSaveDelay = nil
+            guard hasPendingEdits, !isApplyingProgrammaticChange else { return }
+            if textView.hasMarkedText() {
+                pendingSave = Task { @MainActor [weak self, weak textView] in
+                    do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+                    guard let self, let textView else { return }
+                    self.flush(to: textView)
+                }
+                return
+            }
+            do {
+                let data = try DocumentRTF.encode(textView.attributedString())
+                lastAppliedData = data
+                parent.rtfData = data
+                parent.modifiedAt = .now
+                try parent.onCommit?()
+                hasPendingEdits = false
+                if parent.commands.textView == nil || parent.commands.textView === textView {
+                    parent.commands.updateWordCount(from: textView.string)
+                    parent.commands.setPendingChanges(false)
+                }
+            } catch {
+                parent.commands.setPendingChanges(true, error: error.localizedDescription)
+            }
+        }
+    }
+}
+
+private final class DocumentScrollView: NSScrollView {
+    override func tile() {
+        super.tile()
+        guard let textView = documentView as? NSTextView else { return }
+        let inset = max(24, min(72, contentView.bounds.width * 0.12))
+        if abs(textView.textContainerInset.width - inset) > 0.5 {
+            textView.textContainerInset = NSSize(width: inset, height: 36)
         }
     }
 }

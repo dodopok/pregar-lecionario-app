@@ -442,8 +442,8 @@ struct ScripturePanelView: View {
                 }
                 .buttonStyle(.hoverHighlight)
                 .foregroundStyle(PrototypeStyle.muted)
-                .keyboardShortcut("2", modifiers: [.command, .option])
-                .help("Ocultar painel de leituras (⌥⌘2)")
+                .keyboardShortcut("2", modifiers: [.command, .option, .shift])
+                .help("Ocultar painel de leituras (⇧⌥⌘2)")
                 .accessibilityLabel("Ocultar painel de leituras")
             }
             .padding(.horizontal, 16)
@@ -738,8 +738,8 @@ struct ResourceContextPanel: View {
                 }
                 .buttonStyle(.hoverHighlight)
                 .foregroundStyle(PrototypeStyle.muted)
-                .keyboardShortcut("3", modifiers: [.command, .option])
-                .help("Ocultar painel de materiais (⌥⌘3)")
+                .keyboardShortcut("3", modifiers: [.command, .option, .shift])
+                .help("Ocultar painel de materiais (⇧⌥⌘3)")
                 .accessibilityLabel("Ocultar painel de materiais")
             }
             .padding(.horizontal, 12)
@@ -2069,44 +2069,5 @@ private extension View {
         padding(9)
             .background(PrototypeStyle.manuscript.opacity(0.68), in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
-    }
-}
-
-/// Barra flutuante que aparece sobre o texto selecionado no manuscrito, no espírito do Substack.
-struct EditorSelectionToolbar: View {
-    @ObservedObject var commands: EditorCommands
-    let accent: Color
-
-    var body: some View {
-        HStack(spacing: 2) {
-            toolbarButton("bold", help: "Negrito (⌘B)", isActive: commands.isBoldActive, action: commands.bold)
-            toolbarButton("italic", help: "Itálico (⌘I)", isActive: commands.isItalicActive, action: commands.italic)
-            Rectangle().fill(PrototypeStyle.line).frame(width: 1, height: 16).padding(.horizontal, 2)
-            toolbarButton("textformat.size", help: "Título (⇧⌘1)", isActive: commands.isHeadingActive, action: commands.heading)
-            toolbarButton("text.quote", help: "Citação em bloco (⇧⌘.)", isActive: commands.isQuoteActive, action: commands.quotation)
-            toolbarButton("list.bullet", help: "Lista (⇧⌘8)", isActive: commands.isListActive, action: commands.bulletedList)
-            toolbarButton("text.badge.plus", help: "Nota de rodapé (⌥⌘N)", isActive: false, action: commands.footnote)
-        }
-        .padding(4)
-        .background(PrototypeStyle.surface, in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous).stroke(PrototypeStyle.line, lineWidth: 1))
-        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Formatação da seleção")
-    }
-
-    private func toolbarButton(_ symbol: String, help: String, isActive: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(isActive ? accent : PrototypeStyle.ink)
-                .frame(width: 26, height: 26)
-                .background(isActive ? PrototypeStyle.softAccent(accent) : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.hoverHighlight(cornerRadius: 5))
-        .help(help)
-        .accessibilityLabel(help)
-        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }

@@ -34,7 +34,6 @@ struct PreparationWorkspace: View {
     @State private var isReadingsVisible = true
     @State private var isContextVisible = true
     @State private var focusMode = false
-    @AppStorage("pregar.onboarding.dismissed.v1") private var onboardingDismissed = false
     @AppStorage("pregar.layout.sidebarWidth") private var sidebarWidthValue = 236.0
     @AppStorage("pregar.layout.readingsWidth") private var readingsWidthValue = 300.0
     @AppStorage("pregar.layout.contextWidth") private var contextWidthValue = 320.0
@@ -48,6 +47,13 @@ struct PreparationWorkspace: View {
     @StateObject private var editorCommands = EditorCommands()
     private let revisionStore = SermonRevisionStore.shared
     private let reviewReportStore = SermonReviewReportStore.shared
+
+    private var dateSelection: Binding<Date> {
+        Binding(get: { selectedDate }, set: { date in
+            editorCommands.flushPendingEdits()
+            selectedDate = date
+        })
+    }
 
     private var selectedDayKey: String {
         SermonDateKey.string(from: selectedDate)
@@ -104,7 +110,7 @@ struct PreparationWorkspace: View {
             HStack(spacing: 0) {
                 if showsSidebar {
                     CalendarSidebarView(
-                        selectedDate: $selectedDate,
+                        selectedDate: dateSelection,
                         calendarMonth: $calendarMonth,
                         liturgicalDay: selectedDay,
                         accent: accentColor,
@@ -168,7 +174,7 @@ struct PreparationWorkspace: View {
                                 liturgicalDate: selectedDate,
                                 isSunday: selectedDay?.isSunday == true,
                                 reviewReports: $reviewReports,
-                                manuscript: activeDraft.map { SermonReviewText.plainText(from: $0.rtfData) } ?? "",
+                                manuscript: editorCommands.plainText,
                                 accent: accentColor,
                                 openSettings: openPreferences,
                                 openDriveConnection: { showingDriveConnection = true },
@@ -177,7 +183,7 @@ struct PreparationWorkspace: View {
                                 checkStructure: { requestReview(criteria: [.structure]) },
                                 selectQuote: { editorCommands.selectQuote($0) },
                                 insertText: { editorCommands.insertText($0) },
-                                emergencyQuestions: { showingQuestions = true },
+                                emergencyQuestions: { editorCommands.flushPendingEdits(); showingQuestions = true },
                                 collapse: { withAnimation(.easeInOut(duration: 0.16)) { isContextVisible = false } }
                             )
                             .frame(width: contextWidth)
@@ -303,6 +309,7 @@ struct PreparationWorkspace: View {
             appearanceStore.accent = accentColor
             if !settingsStore.isLoadingCredential && !settingsStore.hasAPIKey { showingSettingsOnLaunch = true }
         }
+        .onDisappear { editorCommands.flushPendingEdits() }
         .onChange(of: day?.color) { _, _ in appearanceStore.accent = accentColor }
         .onChange(of: navigation.dateRequest) { _, _ in consumeNavigationRequest() }
         .onChange(of: settingsStore.isLoadingCredential) { _, loading in
@@ -348,8 +355,8 @@ struct PreparationWorkspace: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.hoverHighlight)
-            .keyboardShortcut("1", modifiers: [.command, .option])
-            .help("Mostrar ou ocultar calendário (⌥⌘1)")
+            .keyboardShortcut("1", modifiers: [.command, .option, .shift])
+            .help("Mostrar ou ocultar calendário (⇧⌥⌘1)")
             .accessibilityLabel(isSidebarVisible ? "Ocultar calendário" : "Mostrar calendário")
 
             VStack(alignment: .leading, spacing: 2) {
@@ -376,8 +383,8 @@ struct PreparationWorkspace: View {
                 }
                 toolbarAction("ipad.landscape", title: "Tablet", help: "Preparar a cópia para pregar (⇧⌘T)") { showingTablet = true }
                     .keyboardShortcut("t", modifiers: [.command, .shift])
-                toolbarAction("timer", title: "Ensaio", help: "Ler em voz alta com cronômetro e tipo grande (⇧⌘E)") { showingRehearsal = true }
-                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                toolbarAction("timer", title: "Ensaio", help: "Ler em voz alta com cronômetro e tipo grande (⇧⌥⌘E)") { showingRehearsal = true }
+                    .keyboardShortcut("e", modifiers: [.command, .option, .shift])
             }
 
             toolbarDivider
@@ -406,8 +413,8 @@ struct PreparationWorkspace: View {
                 Label("Revisar", systemImage: "checkmark")
             }
             .buttonStyle(.primaryAction(accentColor))
-            .keyboardShortcut("r", modifiers: [.command, .shift])
-            .help("Solicitar uma revisão do manuscrito (⇧⌘R)")
+            .keyboardShortcut("r", modifiers: [.command, .option, .shift])
+            .help("Solicitar uma revisão do manuscrito (⇧⌥⌘R)")
 
             Button {
                 openPreferences()
@@ -534,12 +541,14 @@ struct PreparationWorkspace: View {
     }
 
     private func openPreferences() {
+        editorCommands.flushPendingEdits()
         openWindow(id: "preferences")
     }
 
     /// Abre a folha de revisão com os critérios pré-marcados e deixa o painel Revisão visível
     /// para receber o relatório. "Checar estrutura" passa só o critério de estrutura.
     private func requestReview(criteria: Set<SermonReviewCriterion>) {
+        editorCommands.flushPendingEdits()
         reviewCriteriaPreset = criteria
         contextTab = .review
         isContextVisible = true
@@ -547,7 +556,7 @@ struct PreparationWorkspace: View {
     }
 
     private func toolbarAction(_ symbol: String, title: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button { editorCommands.flushPendingEdits(); action() } label: {
             Label(title, systemImage: symbol)
                 .font(.system(size: 12))
                 .foregroundStyle(PrototypeStyle.muted)
@@ -579,8 +588,8 @@ struct PreparationWorkspace: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.hoverHighlight)
-                .keyboardShortcut(shortcut, modifiers: [.command, .option])
-                .help("Mostrar painel de \(title.lowercased()) (⌥⌘\(shortcut.character))")
+                .keyboardShortcut(shortcut, modifiers: [.command, .option, .shift])
+                .help("Mostrar painel de \(title.lowercased()) (⇧⌥⌘\(String(shortcut.character)))")
                 .accessibilityLabel("Mostrar painel de \(title.lowercased())")
             }
             Spacer(minLength: 0)
@@ -671,229 +680,15 @@ struct PreparationWorkspace: View {
     }
 
     private func sermonEditor(draft: SermonDraft) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 5) {
-                editorButton("bold", title: "Negrito", isActive: editorCommands.isBoldActive, shortcut: "b", action: editorCommands.bold)
-                editorButton("italic", title: "Itálico", isActive: editorCommands.isItalicActive, shortcut: "i", action: editorCommands.italic)
-                Divider().frame(height: 22).padding(.horizontal, 6)
-                Menu {
-                    ForEach(EditorCommands.fontFamilies, id: \.self) { family in
-                        Button(family) { editorCommands.setFontFamily(family) }
-                    }
-                } label: {
-                    Text(editorCommands.selectedFontFamily)
-                        .font(.system(size: 11))
-                        .lineLimit(1)
-                        .frame(width: 72, height: 32, alignment: .leading)
-                }
-                .menuStyle(.borderlessButton)
-                .help("Fonte: \(editorCommands.selectedFontFamily)")
-
-                Menu {
-                    ForEach(EditorCommands.fontSizes, id: \.self) { size in
-                        Button("\(size) pt") { editorCommands.setFontSize(size) }
-                    }
-                } label: {
-                    Text("\(editorCommands.selectedFontSize) pt")
-                        .font(.system(size: 11))
-                        .frame(width: 42, height: 32)
-                }
-                .menuStyle(.borderlessButton)
-                .help("Tamanho da fonte")
-                Divider().frame(height: 22).padding(.horizontal, 4)
-                editorTextButton("Título", help: "Título do parágrafo (⇧⌘1) · ou digite # e espaço no início da linha", shortcut: "1", isActive: editorCommands.isHeadingActive, action: editorCommands.heading)
-                editorTextButton("Citação", help: "Citação em bloco (⇧⌘.) · ou digite > e espaço no início da linha", shortcut: ".", isActive: editorCommands.isQuoteActive, action: editorCommands.quotation)
-                editorTextButton("Lista", help: "Lista com marcadores (⇧⌘8) · ou digite - e espaço · Return continua a lista", shortcut: "8", isActive: editorCommands.isListActive, action: editorCommands.bulletedList)
-                editorTextButton("Nota", help: "Nota de rodapé no ponto do cursor (⌥⌘N)", shortcut: "n", modifiers: [.command, .option], action: editorCommands.footnote)
-            }
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
-            .background(PrototypeStyle.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: PrototypeStyle.Radius.card, style: .continuous).stroke(PrototypeStyle.line.opacity(0.6), lineWidth: 1))
-            .shadow(color: .black.opacity(0.07), radius: 14, y: 4)
-            .padding(.top, 14)
-            .padding(.bottom, 12)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Formatação do manuscrito")
-
-            if !onboardingDismissed && editorCommands.isEmpty {
-                onboardingCard
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    TextField("Título do sermão", text: Binding(
-                        get: { draft.title },
-                        set: { title in
-                            guard draft.title != title else { return }
-                            draft.title = title
-                            draft.modifiedAt = .now
-                        }
-                    ))
-                        .font(PrototypeStyle.serif(28, weight: .semibold))
-                        .foregroundStyle(PrototypeStyle.ink)
-                        .textFieldStyle(.plain)
-                    Spacer(minLength: 8)
-                }
-                .padding(.top, 46)
-                .padding(.horizontal, 46)
-                .padding(.bottom, 8)
-
-                HStack {
-                    Text(draft.mainReadingReference.map { "Texto principal · \($0)" } ?? "Texto principal ainda não escolhido")
-                    Spacer()
-                    Text("Salvo neste Mac · \(draft.modifiedAt.formatted(date: .omitted, time: .shortened))")
-                }
-                .font(.system(size: 11))
-                .foregroundStyle(PrototypeStyle.muted)
-                .padding(.horizontal, 46)
-                .padding(.bottom, 12)
-
-                Divider().padding(.horizontal, 46)
-
-                RichTextEditor(
-                    rtfData: Bindable(draft).rtfData,
-                    modifiedAt: Bindable(draft).modifiedAt,
-                    commands: editorCommands
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(alignment: .topLeading) {
-                    if editorCommands.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Comece a escrever seu sermão…")
-                                .font(.custom("Arial", size: 10))
-                                .foregroundStyle(PrototypeStyle.muted.opacity(0.85))
-                            Text("Negrito ⌘B · Itálico ⌘I · No início da linha: # título, > citação, - lista")
-                                .font(.system(size: 10))
-                                .foregroundStyle(PrototypeStyle.muted.opacity(0.6))
-                        }
-                        .padding(.leading, 53)
-                        .padding(.top, 22)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                    }
-                }
-                .overlay(alignment: .topLeading) {
-                    if let anchor = editorCommands.selectionAnchor {
-                        GeometryReader { geometry in
-                            EditorSelectionToolbar(commands: editorCommands, accent: accentColor)
-                                .fixedSize()
-                                .position(
-                                    x: min(max(anchor.x, 130), max(130, geometry.size.width - 130)),
-                                    y: max(22, anchor.y - 24)
-                                )
-                        }
-                        .transition(.opacity)
-                    }
-                }
-                .padding(.horizontal, 28)
-                .padding(.bottom, 24)
-            }
-            .frame(maxWidth: 640, maxHeight: .infinity)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(PrototypeStyle.manuscript, in: RoundedRectangle(cornerRadius: 3))
-            .overlay(RoundedRectangle(cornerRadius: 3).stroke(PrototypeStyle.line.opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.05), radius: 16, y: 5)
-            .padding(.horizontal, 32)
-            .padding(.bottom, 16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .background(PrototypeStyle.editorSurface)
-    }
-
-    private func editorButton(_ symbol: String, title: String, isActive: Bool, shortcut: KeyEquivalent, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .foregroundStyle(isActive ? accentColor : PrototypeStyle.ink)
-                .frame(width: 32, height: 32)
-                .background(isActive ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                .contentShape(Rectangle())
-        }
-        .keyboardShortcut(shortcut, modifiers: .command)
-        .buttonStyle(.hoverHighlight(cornerRadius: 5))
-        .help(symbol == "bold" ? "\(title) (⌘B)" : "\(title) (⌘I)")
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isActive ? .isSelected : [])
-    }
-
-    private func editorTextButton(
-        _ title: String,
-        help: String,
-        shortcut: KeyEquivalent,
-        modifiers: EventModifiers = [.command, .shift],
-        isActive: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                .foregroundStyle(isActive ? accentColor : PrototypeStyle.ink)
-                .padding(.horizontal, 8)
-                .frame(height: 32)
-                .background(isActive ? PrototypeStyle.softAccent(accentColor) : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.hoverHighlight(cornerRadius: 5))
-        .keyboardShortcut(shortcut, modifiers: modifiers)
-        .help(help)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isActive ? .isSelected : [])
-    }
-
-    /// Orientação de primeiro uso. Aparece enquanto o manuscrito está vazio e some
-    /// definitivamente ao ser dispensada; não cobre nem interrompe a escrita.
-    private var onboardingCard: some View {
-        VStack(alignment: .leading, spacing: PrototypeStyle.Spacing.md) {
-            HStack(alignment: .center) {
-                Text("Como funciona a Mesa")
-                    .font(PrototypeStyle.serif(16, weight: .semibold))
-                    .foregroundStyle(PrototypeStyle.ink)
-                Spacer()
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { onboardingDismissed = true }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(PrototypeStyle.muted)
-                        .frame(width: 26, height: 26)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.hoverHighlight)
-                .help("Ocultar esta orientação")
-                .accessibilityLabel("Ocultar orientação de primeiro uso")
-            }
-            HStack(alignment: .top, spacing: PrototypeStyle.Spacing.lg) {
-                onboardingStep(1, symbol: "calendar", title: "Escolha o domingo", detail: "O calendário à esquerda carrega as leituras e a coleta do dia.")
-                onboardingStep(2, symbol: "text.book.closed", title: "Marque o texto principal", detail: "O círculo ao lado de uma leitura guia os materiais e a revisão.")
-                onboardingStep(3, symbol: "pencil.line", title: "Escreva e revise", detail: "Tudo é salvo neste Mac. Revisar aponta problemas, nunca reescreve.")
-            }
-        }
-        .panelCard(padding: PrototypeStyle.Spacing.lg, background: PrototypeStyle.manuscript)
-        .frame(maxWidth: 640)
-        .padding(.horizontal, 32)
-        .padding(.bottom, PrototypeStyle.Spacing.md)
-    }
-
-    private func onboardingStep(_ number: Int, symbol: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: PrototypeStyle.Spacing.sm) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(accentColor)
-                .frame(width: 28, height: 28)
-                .background(PrototypeStyle.softAccent(accentColor), in: RoundedRectangle(cornerRadius: PrototypeStyle.Radius.button, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(number). \(title)")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(PrototypeStyle.ink)
-                Text(detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(PrototypeStyle.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        ManuscriptEditorView(
+            draft: draft,
+            commands: editorCommands,
+            onCommit: { try modelContext.save() },
+            exportPDF: { showingTablet = true },
+            showHistory: { showingHistory = true },
+            toggleFocus: { withAnimation(.easeInOut(duration: 0.16)) { focusMode.toggle() } }
+        )
+        .id(draft.persistentModelID)
     }
 
     private func statusBar(draft: SermonDraft) -> some View {
@@ -933,6 +728,7 @@ struct PreparationWorkspace: View {
             .buttonStyle(.hoverHighlight(cornerRadius: 5))
             .help(googleDrive.isConnected ? "Gerenciar conexão com o Google Drive" : "Conectar Google Drive para manter uma cópia do sermão")
             Button {
+                editorCommands.flushPendingEdits()
                 showingHistory = true
             } label: {
                 Label("v\(currentRevisionNumber) · histórico", systemImage: "clock.arrow.circlepath")
@@ -942,8 +738,8 @@ struct PreparationWorkspace: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.hoverHighlight(cornerRadius: 5))
-            .keyboardShortcut("h", modifiers: [.command, .shift])
-            .help("Abrir histórico recuperável deste sermão (⇧⌘H)")
+            .keyboardShortcut("h", modifiers: [.command, .option, .shift])
+            .help("Abrir histórico recuperável deste sermão (⇧⌥⌘H)")
         }
         .font(.system(size: 11))
         .padding(.horizontal, PrototypeStyle.Spacing.md)
@@ -1093,6 +889,7 @@ struct PreparationWorkspace: View {
     /// Atende pedidos de outras janelas (Arquivo) para abrir a preparação de uma data.
     private func consumeNavigationRequest() {
         guard let requested = navigation.consumeDateRequest() else { return }
+        editorCommands.flushPendingEdits()
         let day = Calendar.current.startOfDay(for: requested)
         if focusMode { focusMode = false }
         selectedDate = day

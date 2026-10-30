@@ -290,6 +290,19 @@ Limites: sem Xcode no ambiente, build e testes seguem pendentes. Conferir primei
 
 Validação: a suíte completa passou com 111 testes aprovados, três testes de integração opcionais pulados e nenhuma falha. A execução adicional com os dois comentários reais passou com 22 testes aprovados e um teste de integração externo pulado; os arquivos foram somente lidos localmente, sem usar ou enviar o manuscrito.
 
+## Editor local no estilo Google Docs (30/10/2026)
+
+Pedido do usuário: substituir a sensação de atraso e a aparência anterior por uma experiência próxima do Google Docs. A escolha foi manter a escrita local, sem integrar o editor online.
+
+- O evento de digitação não converte mais o manuscrito inteiro em RTF. O buffer nativo recebe os caracteres imediatamente; salvamento e contagem ficam após 350 ms de pausa, com prazo máximo de dois segundos se a digitação continuar. O salvamento é forçado ao mudar de preparação ou janela, abrir revisão/exportação, perder atividade e encerrar. O eco dos dados salvos não reatribui o texto nem reinicia seleção, composição de acentos ou desfazer/refazer. O cabeçalho informa alterações pendentes, confirmação e erro com nova tentativa.
+- Estados de formatação só são publicados quando mudam. O painel de materiais recebe o texto já disponível em memória, sem decodificar RTF a cada atualização da Mesa. O desenho de citações examina o trecho visível; a barra flutuante anterior foi removida. Cores de contraste no papel escuro são temporárias no layout e não alteram as cores persistidas/exportadas.
+- A interface ganhou menus Arquivo, Editar, Ver, Inserir, Formatar, Ferramentas e Ajuda; barra fixa com disposição compacta; seletores de estilo, fontes instaladas e tamanho (inclusive fracionário); desfazer/refazer; negrito, itálico, sublinhado e tachado; cores de texto e realce; links com texto editável; alinhamento; espaçamento simples/1,15/1,5/duplo/personalizado; listas numeradas, marcadas e de verificação; recuos; limpeza/cópia de formatação; localizar/substituir; zoom e régua em centímetros. O papel fica centralizado e novos textos usam Arial 11, com entrelinha 1,15. Manuscritos existentes conservam sua formatação.
+- Atalhos de estilos, alinhamento, listas, notas e demais comandos seguem a documentação oficial do Docs para Mac. Os atalhos de painéis, revisão, ensaio e histórico receberam Shift/Option para não disputar as teclas de edição. Ajuda lista os atalhos e Option+/ pesquisa comandos.
+- Como o serializador RTF do AppKit não conserva `headerLevel`, os estilos semânticos são guardados em palavras-chave padrão do próprio RTF, com JSON ordenado e intervalos UTF-16 validados. Texto normal em negrito não se torna título por acidente. Copiar/colar mantém esses estilos, RTFs antigos continuam legíveis e a exportação para Google Docs preserva sublinhado, tachado, links, subscrito, alinhamento, entrelinha e níveis de título.
+- Os testes adicionais cobrem resposta imediata do buffer sem uma gravação por tecla, salvamento agrupado e contínuo, Unicode e composição de acentos, troca de documento, restauração com edição pendente, publicação de estados, desfazer/refazer, estilos, cópia por área de transferência isolada, links, listas, tamanhos fracionários e espaçamento. A interface é renderizada em 420, 560 e 1000 pontos, além do modo escuro, com dados sintéticos e sem acessar o manuscrito em uso.
+
+Validação final: 129 testes passaram, nenhum falhou e três verificações opcionais de serviços externos ficaram desativadas. As renderizações nativas confirmaram a disposição em 420, 560 e 1000 pontos e a leitura no modo escuro, incluindo citações sem alterar a tinta persistida. A revisão 3 do instalador usa a compilação `2026103003`, para Apple Silicon e Intel.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.
