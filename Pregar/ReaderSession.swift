@@ -166,7 +166,8 @@ final class ReaderSessionStore: ObservableObject {
         page: Int = 1,
         reference: String? = nil,
         sermonDateKey: String? = nil,
-        indexedSections: [PDFSectionLocation]? = nil
+        indexedSections: [PDFSectionLocation]? = nil,
+        preservePositionIfOpen: Bool = false
     ) async -> Bool {
         guard let document = await preparePDF(for: path) else { return false }
         return registerPDF(
@@ -176,6 +177,7 @@ final class ReaderSessionStore: ObservableObject {
             reference: reference,
             sermonDateKey: sermonDateKey,
             indexedSections: indexedSections,
+            preservePositionIfOpen: preservePositionIfOpen,
             document: document
         )
     }
@@ -187,16 +189,21 @@ final class ReaderSessionStore: ObservableObject {
         reference: String?,
         sermonDateKey: String?,
         indexedSections: [PDFSectionLocation]?,
+        preservePositionIfOpen: Bool,
         document: PDFDocument
     ) -> Bool {
         if let indexedSections { pdfSections[location] = indexedSections }
 
         if let index = tabs.firstIndex(where: { $0.kind == .pdf && $0.location == location }) {
+            let keepsPosition = preservePositionIfOpen
+                && tabs[index].reference == reference
+                && tabs[index].sermonDateKey == sermonDateKey
+            let previousPage = tabs[index].physicalPage
             tabs[index].title = title
             tabs[index].reference = reference
             tabs[index].sermonDateKey = sermonDateKey
             let remembered = reference.flatMap { rememberedPages[sectionLinkKey(path: location, reference: $0)] }
-            tabs[index].physicalPage = min(max(remembered ?? page, 1), document.pageCount)
+            tabs[index].physicalPage = min(max(keepsPosition ? previousPage : (remembered ?? page), 1), document.pageCount)
             selectedID = tabs[index].id
         } else {
             let remembered = reference.flatMap { rememberedPages[sectionLinkKey(path: location, reference: $0)] }
@@ -741,11 +748,16 @@ struct ReaderWindowView: View {
             if let document {
                 VStack(spacing: 0) {
                     HStack(spacing: 8) {
-                        Text("Página").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
+                        Text("Página física").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                         TextField("1", text: $pageField)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 58)
+                            .accessibilityLabel("Página física do PDF")
+                            .help("Posição da página no arquivo. A numeração impressa pode ser diferente. Pressione Enter ou clique em Ir.")
                             .onSubmit { commitPageField(document, tab: tab) }
+                        Button("Ir") { commitPageField(document, tab: tab) }
+                            .buttonStyle(.secondaryAction)
+                            .help("Ir para a página física informada")
                         Text("de \(document.pageCount)")
                             .font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                         if let printed = reader.printedPageLabel(tab.physicalPage, in: document) {
@@ -766,6 +778,7 @@ struct ReaderWindowView: View {
                         onPageChange: { reader.setPage($0, for: tab.id) },
                         onSelectionChange: { selectedText = $0 }
                     )
+                    .id(tab.id)
                     .background(Color(red: 0.49, green: 0.48, blue: 0.45))
                 }
             } else if failedPDFTabID == tab.id {
@@ -917,7 +930,9 @@ struct ReaderWindowView: View {
             pageField = String(tab.physicalPage)
             return
         }
-        reader.setPage(min(max(page, 1), document.pageCount), for: tab.id)
+        let boundedPage = min(max(page, 1), document.pageCount)
+        pageField = String(boundedPage)
+        reader.setPage(boundedPage, for: tab.id)
     }
 
     private func pageRange(_ section: PDFSectionLocation, document: PDFDocument?) -> String {
@@ -963,7 +978,7 @@ struct ReaderWindowView: View {
     }
 }
 
-private struct ReaderPDFView: NSViewRepresentable {
+struct ReaderPDFView: NSViewRepresentable {
     let document: PDFDocument
     let pageNumber: Int
     let onPageChange: (Int) -> Void
@@ -971,51 +986,111 @@ private struct ReaderPDFView: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> PDFView {
-        let view = PDFView()
+    func makeNSView(context: Context) -> ReaderPDFNavigationView {
+        let view = ReaderPDFNavigationView()
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
-        view.document = document
-        showPage(pageNumber, in: view)
+        view.onLayout = { [weak coordinator = context.coordinator, weak view] in
+            guard let view else { return }
+            coordinator?.scheduleNavigation(in: view)
+        }
         context.coordinator.observers = [
-            NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: view, queue: .main) { [weak coordinator = context.coordinator] notification in
-                guard let coordinator, let view = notification.object as? PDFView,
-                      let page = view.currentPage, let document = view.document else { return }
-                coordinator.onPageChange?(document.index(for: page) + 1)
+            NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: view, queue: .main) { [weak coordinator = context.coordinator, weak view] _ in
+                Task { @MainActor in
+                    guard let view else { return }
+                    coordinator?.publishPage(in: view)
+                }
             },
-            NotificationCenter.default.addObserver(forName: .PDFViewSelectionChanged, object: view, queue: .main) { [weak coordinator = context.coordinator] notification in
-                guard let coordinator, let view = notification.object as? PDFView else { return }
-                coordinator.onSelectionChange?(view.currentSelection?.string ?? "")
+            NotificationCenter.default.addObserver(forName: .PDFViewSelectionChanged, object: view, queue: .main) { [weak coordinator = context.coordinator, weak view] _ in
+                Task { @MainActor in
+                    guard let view else { return }
+                    coordinator?.onSelectionChange?(view.currentSelection?.string ?? "")
+                }
             }
         ]
-        context.coordinator.onPageChange = onPageChange
-        context.coordinator.onSelectionChange = onSelectionChange
+        updateNSView(view, context: context)
         return view
     }
 
-    func updateNSView(_ view: PDFView, context: Context) {
+    func updateNSView(_ view: ReaderPDFNavigationView, context: Context) {
         context.coordinator.onPageChange = onPageChange
         context.coordinator.onSelectionChange = onSelectionChange
-        if view.document !== document { view.document = document }
-        guard let current = view.currentPage, let currentDocument = view.document,
-              currentDocument.index(for: current) + 1 != pageNumber else { return }
-        showPage(pageNumber, in: view)
+        context.coordinator.update(view, document: document, page: pageNumber)
     }
 
-    static func dismantleNSView(_ view: PDFView, coordinator: Coordinator) {
+    static func dismantleNSView(_ view: ReaderPDFNavigationView, coordinator: Coordinator) {
+        view.onLayout = nil
+        coordinator.navigationTask?.cancel()
         coordinator.observers.forEach { NotificationCenter.default.removeObserver($0) }
+        coordinator.onPageChange = nil
+        coordinator.onSelectionChange = nil
     }
 
-    private func showPage(_ number: Int, in view: PDFView) {
-        guard let page = document.page(at: min(max(number - 1, 0), document.pageCount - 1)) else { return }
-        view.go(to: page)
-    }
-
+    @MainActor
     final class Coordinator {
         var observers: [NSObjectProtocol] = []
         var onPageChange: ((Int) -> Void)?
         var onSelectionChange: ((String) -> Void)?
+        var navigationTask: Task<Void, Never>?
+        private var lastRequestedPage: Int?
+        private var pendingPage: Int?
+
+        func update(_ view: ReaderPDFNavigationView, document: PDFDocument, page: Int) {
+            let target = min(max(page, 1), document.pageCount)
+            let documentChanged = view.document !== document
+            let pageChanged = lastRequestedPage != target
+            lastRequestedPage = target
+            if documentChanged || pageChanged {
+                navigationTask?.cancel()
+                navigationTask = nil
+                // Assigning a PDF can briefly report its cover or no current page. Keep the
+                // requested position until the view has a window and its final page layout.
+                pendingPage = target
+                if documentChanged { view.document = document }
+                if !documentChanged, let current = view.currentPage,
+                   document.index(for: current) + 1 == target {
+                    pendingPage = nil
+                }
+                view.needsLayout = true
+            }
+            scheduleNavigation(in: view)
+        }
+
+        func scheduleNavigation(in view: ReaderPDFNavigationView) {
+            guard pendingPage != nil, navigationTask == nil,
+                  view.window != nil, view.bounds.width > 0, view.bounds.height > 0 else { return }
+            navigationTask = Task { @MainActor [weak self, weak view] in
+                guard !Task.isCancelled, let self, let view, let target = self.pendingPage else { return }
+                view.layoutSubtreeIfNeeded()
+                view.layoutDocumentView()
+                if let page = view.document?.page(at: target - 1) { view.go(to: page) }
+                self.pendingPage = nil
+                self.navigationTask = nil
+            }
+        }
+
+        func publishPage(in view: PDFView) {
+            guard pendingPage == nil, view.window != nil,
+                  let document = view.document, let current = view.currentPage else { return }
+            let index = document.index(for: current)
+            guard (0..<document.pageCount).contains(index) else { return }
+            onPageChange?(index + 1)
+        }
+    }
+}
+
+final class ReaderPDFNavigationView: PDFView {
+    var onLayout: (() -> Void)?
+
+    override func layout() {
+        super.layout()
+        onLayout?()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        onLayout?()
     }
 }
 

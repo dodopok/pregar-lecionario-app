@@ -240,7 +240,10 @@ enum FavoriteReferenceLibrary {
     }
 
     static func fingerprint(sites: [FavoriteSite], authors: [FavoriteAuthor] = []) -> String {
-        let data = (try? JSONEncoder().encode(AnyCodableFavorites(sites: sites, authors: authors))) ?? Data()
+        let encoder = JSONEncoder()
+        // A ordem das chaves JSON não pode mudar a identidade da mesma busca entre renderizações.
+        encoder.outputFormatting = [.sortedKeys]
+        let data = (try? encoder.encode(AnyCodableFavorites(sites: sites, authors: authors))) ?? Data()
         return SHA256.hash(data: data).prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 

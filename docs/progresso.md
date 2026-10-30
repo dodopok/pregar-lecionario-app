@@ -1,6 +1,6 @@
 # Progresso de implementação
 
-Atualizado em 11 de outubro de 2026.
+Atualizado em 30 de outubro de 2026.
 
 ## Referência visual
 
@@ -279,6 +279,16 @@ Pedido do usuário depois de um HTTP 400 na revisão pelo Claude cuja razão nã
 - Nos testes o registro vai para uma pasta temporária. Novo teste: um HTTP 400 do provedor gera a linha de ERRO com o motivo e sem a chave, sem o token do corpo e sem o manuscrito.
 
 Limites: sem Xcode no ambiente, build e testes seguem pendentes. Conferir primeiro o `switch error` com padrão de enum na busca das fontes favoritas e a interpolação com `privacy: .public` do `Logger`.
+
+## Navegação de PDFs e estabilidade dos materiais (30/10/2026)
+
+- O Leitor mantém a página solicitada enquanto o PDF é carregado e espera a janela e o layout estarem prontos antes de navegar. A ausência temporária de página atual ao trocar de documento não cancela o salto, e notificações transitórias da capa não substituem a posição da aba. Cada aba tem seu próprio ciclo de vida do visor.
+- Clique nos títulos das seções, Enter no campo e o botão explícito “Ir” usam a mesma navegação. O campo agora identifica a **página física**, distinguindo-a da numeração impressa.
+- “Ir para a aba” nos Materiais preserva a última página quando o PDF já está aberto para a mesma passagem e data. Abrir outra passagem ou selecionar uma seção explícita na Biblioteca continua navegando para o destino solicitado.
+- A identidade dos sites/autores favoritos passa a usar JSON com chaves ordenadas. Antes, a ordem variável dos campos podia mudar a chave do cache a cada renderização, cancelar/reiniciar buscas automáticas e manter o indicador de recarregamento ativo.
+- Testes do visor usam PDFs sintéticos de 800 páginas e permitem conferência local com os arquivos reais por `TEST_RUNNER_PREGAR_READER_FEASTING_PDF` e `TEST_RUNNER_PREGAR_READER_CONNECTIONS_PDF`. O defeito anterior foi reproduzido ao alternar os dois comentários reais: o PDF ficou sem página atual ao voltar ao Feasting. Os testes também cobrem comandos de página, publicação da posição ao navegar, retorno ao mesmo material, persistência e mudança de contexto. Um teste de 100 leituras dos mesmos perfis exige uma única chave de cache e uma única busca automática.
+
+Validação: a suíte completa passou com 111 testes aprovados, três testes de integração opcionais pulados e nenhuma falha. A execução adicional com os dois comentários reais passou com 22 testes aprovados e um teste de integração externo pulado; os arquivos foram somente lidos localmente, sem usar ou enviar o manuscrito.
 
 ## Próximos passos
 

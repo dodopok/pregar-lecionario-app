@@ -1465,7 +1465,8 @@ struct ResourceContextPanel: View {
                 page: match.section.startPage,
                 reference: reference,
                 sermonDateKey: SermonDateKey.string(from: liturgicalDate),
-                indexedSections: match.record.sections
+                indexedSections: match.record.sections,
+                preservePositionIfOpen: true
             )
             guard openingPDFPath == match.record.path else { return }
             openingPDFPath = nil

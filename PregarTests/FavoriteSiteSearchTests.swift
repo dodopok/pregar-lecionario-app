@@ -82,6 +82,32 @@ final class FavoriteSiteSearchTests: XCTestCase {
         XCTAssertNotEqual(baseline, withAuthor)
     }
 
+    @MainActor
+    func testUnchangedFavoriteProfilesKeepOneCacheKeyAndOneAutomaticSearch() throws {
+        let sitesData = try JSONEncoder().encode(FavoriteSite.defaults)
+        let authorsData = try JSONEncoder().encode(FavoriteAuthor.defaults)
+        let date = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z"))
+        let gate = FavoriteSiteSearchAutoGate()
+        var cacheKeys: Set<String> = []
+        var searchesStarted = 0
+
+        for _ in 0..<100 {
+            let key = FavoriteSiteSearchReport.cacheKey(
+                reference: "Salmo 34:1-10, 22", occasion: "Todos os Santos", date: date, isSunday: true,
+                sites: FavoriteReferenceLibrary.sites(from: sitesData),
+                authors: FavoriteReferenceLibrary.authors(from: authorsData)
+            )
+            cacheKeys.insert(key)
+            if gate.begin(cacheKey: key, now: date) {
+                searchesStarted += 1
+                gate.finish(cacheKey: key, wasCancelled: false)
+            }
+        }
+
+        XCTAssertEqual(cacheKeys.count, 1, "Rendering unchanged favorites must not invalidate the material search cache.")
+        XCTAssertEqual(searchesStarted, 1)
+    }
+
     func testFavoriteProfilesDecodeLegacyIDsAndRoundTripEditableProfiles() throws {
         let legacy = try JSONDecoder().decode([FavoriteSite].self, from: Data("[\"workingPreacher\",\"anglicanCompass\"]".utf8))
         XCTAssertEqual(legacy, [.workingPreacher, .anglicanCompass])
