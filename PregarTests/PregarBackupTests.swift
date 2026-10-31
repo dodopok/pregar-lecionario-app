@@ -59,6 +59,9 @@ final class PregarBackupTests: XCTestCase {
         draft.rtfData = Data(#"{\rtf1\ansi Sermão de teste}"#.utf8)
 
         let tabID = UUID()
+        let position = ReaderPDFPosition(page: 1, x: 20, y: 340, scale: 1.6, autoScales: false)
+        var closed = ReaderTab(id: UUID(), title: "Aba fechada", kind: .pdf, location: pdfURL.path, physicalPage: 1, reference: nil, sermonDateKey: "2026-11-01", includedInReview: false)
+        closed.pdfPosition = position
         let reader = ReaderArchive(tabs: [ReaderTab(
             id: tabID,
             title: "Comentário de teste",
@@ -68,7 +71,7 @@ final class PregarBackupTests: XCTestCase {
             reference: "Romanos 13:8-14",
             sermonDateKey: "2026-10-04",
             includedInReview: false
-        )], selectedID: tabID)
+        )], selectedID: tabID, activeSermonDateKey: "2026-10-04", selectedBySermon: ["2026-10-04": tabID], closedTabs: [closed])
         defaults.set(try JSONEncoder().encode(reader), forKey: "reader.session.v1")
         defaults.set(try JSONEncoder().encode([
             "\(pdfURL.path)|Romanos 13:8-14": 1,
@@ -91,6 +94,8 @@ final class PregarBackupTests: XCTestCase {
         XCTAssertTrue(contents.drafts[0].tabletPDFPath?.hasPrefix("Files/") == true)
         XCTAssertTrue(contents.libraryRecords[0].path.hasPrefix("Files/"))
         XCTAssertTrue(contents.readerArchive.tabs[0].location.hasPrefix("Files/"))
+        XCTAssertTrue(contents.readerArchive.closedTabs?.first?.location.hasPrefix("Files/") == true)
+        XCTAssertEqual(contents.readerArchive.closedTabs?.first?.pdfPosition, position)
 
         let preferenceValues = try XCTUnwrap(
             PropertyListSerialization.propertyList(from: contents.preferences, format: nil) as? [String: Any]
@@ -129,6 +134,10 @@ final class PregarBackupTests: XCTestCase {
             applicationSupportDirectory: appSupport,
             historyDirectory: restoredHistory
         )
+        XCTAssertEqual(restored.readerArchive.activeSermonDateKey, "2026-10-04")
+        XCTAssertEqual(restored.readerArchive.selectedBySermon?["2026-10-04"], tabID)
+        XCTAssertEqual(restored.readerArchive.closedTabs?.first?.pdfPosition, position)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(restored.readerArchive.closedTabs?.first?.location)))
 
         let drafts = try container.mainContext.fetch(FetchDescriptor<SermonDraft>())
         let restoredDraft = try XCTUnwrap(drafts.first)

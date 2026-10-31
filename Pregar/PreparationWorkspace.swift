@@ -323,6 +323,7 @@ struct PreparationWorkspace: View {
             historySaveTask?.cancel()
             driveSyncTask?.cancel()
         }
+        .background(ReaderSermonContextBinder(dateKey: selectedDayKey, reference: activeDraft?.mainReadingReference).frame(width: 0, height: 0))
         .onChange(of: day?.color) { _, _ in appearanceStore.accent = accentColor }
         .onChange(of: navigation.dateRequest) { _, _ in consumeNavigationRequest() }
         .onChange(of: settingsStore.isLoadingCredential) { _, loading in

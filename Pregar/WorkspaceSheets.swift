@@ -493,7 +493,7 @@ struct ReviewRequestSheet: View {
         selected.sorted { $0.rawValue < $1.rawValue }
     }
 
-    private var selectedMaterials: [ReaderTab] { readerSession.materialsMarkedForReview() }
+    private var selectedMaterials: [ReaderTab] { readerSession.materialsMarkedForReview(sermonDateKey: context.dateKey) }
     private var configuredProvider: AIProvider { aiSettings.reviewProvider }
     private var needsBible: Bool { selected.contains(.fidelity) }
     private var canSend: Bool {
@@ -741,7 +741,7 @@ struct ReviewRequestSheet: View {
             guard let key = await aiSettings.key(for: provider), !key.isEmpty else { throw SermonReviewError.noKey }
             var sources = needsBible ? bibleSources : []
             if needsBible {
-                sources.append(contentsOf: try await readerSession.reviewSources(for: context.mainReference))
+                sources.append(contentsOf: try await readerSession.reviewSources(for: context.mainReference, sermonDateKey: context.dateKey))
             }
             let criteria = selectedCriteria
             let requestContext = SermonReviewContext(
@@ -803,7 +803,7 @@ struct EmergencyQuestionsSheet: View {
     @State private var validationNotice: String?
     @State private var sendingTask: Task<Void, Never>?
 
-    private var selectedMaterials: [ReaderTab] { readerSession.materialsMarkedForReview() }
+    private var selectedMaterials: [ReaderTab] { readerSession.materialsMarkedForReview(sermonDateKey: context.dateKey) }
     private var provider: AIProvider { aiSettings.reviewProvider }
     private var canSend: Bool {
         !isSending
@@ -959,7 +959,7 @@ struct EmergencyQuestionsSheet: View {
             guard let key = await aiSettings.key(for: provider), !key.isEmpty else {
                 throw SermonAIQuestionError.noKey
             }
-            let sources = bibleSources + (try await readerSession.reviewSources(for: context.mainReference))
+            let sources = bibleSources + (try await readerSession.reviewSources(for: context.mainReference, sermonDateKey: context.dateKey))
             let result = try await SermonAIQuestionClient().generate(
                 context: context,
                 sources: sources,

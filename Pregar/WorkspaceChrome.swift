@@ -1039,7 +1039,10 @@ struct ResourceContextPanel: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(accent)
-                .help("Buscar no site")
+                .help("Buscar no site · botão do meio abre uma nova aba")
+                .readerTabGesture { background in
+                    openFavoriteSite(site, url: group?.searchURL ?? site.searchURL(reference: reference, occasion: occasion, date: liturgicalDate, isSunday: isSunday), inBackground: background, forceNewTab: true)
+                }
             }
 
             if site.adapter == .workingPreacherArchive {
@@ -1116,7 +1119,8 @@ struct ResourceContextPanel: View {
                 }
             }
             HStack(spacing: 8) {
-                materialActionButton(title: readerActionTitle(for: existingTab, unopened: "Abrir"), isOpen: existingTab != nil) {
+                materialActionButton(title: readerActionTitle(for: existingTab, unopened: "Abrir"), isOpen: existingTab != nil,
+                                     newTabAction: { background in openFavoriteSite(article.site, url: article.url, title: article.title, inBackground: background, forceNewTab: true) }) {
                     openFavoriteSite(article.site, url: article.url, title: article.title)
                 }
                 if let reviewTab { reviewInclusionToggle(for: reviewTab) }
@@ -1125,6 +1129,7 @@ struct ResourceContextPanel: View {
             .padding(.leading, 23)
         }
         .materialCard()
+        .readerTabGesture { background in openFavoriteSite(article.site, url: article.url, title: article.title, inBackground: background, forceNewTab: true) }
     }
 
     private func readerTab(kind: ReaderTab.Kind, location: String) -> ReaderTab? {
@@ -1132,7 +1137,7 @@ struct ResourceContextPanel: View {
             ? URL(fileURLWithPath: location).standardizedFileURL.path
             : location
         return readerSession.tabs.first { tab in
-            guard tab.kind == kind else { return false }
+            guard tab.kind == kind, tab.sermonDateKey == SermonDateKey.string(from: liturgicalDate) else { return false }
             let candidate = kind == .pdf
                 ? URL(fileURLWithPath: tab.location).standardizedFileURL.path
                 : tab.location
@@ -1152,7 +1157,7 @@ struct ResourceContextPanel: View {
         return readerSession.selectedTab?.id == tab.id ? "Aberto no leitor" : "Ir para a aba"
     }
 
-    private func materialActionButton(title: String, isOpen: Bool, action: @escaping () -> Void) -> some View {
+    private func materialActionButton(title: String, isOpen: Bool, newTabAction: ((Bool) -> Void)? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: isOpen ? "checkmark" : "arrow.up.forward")
                 .font(.system(size: 11, weight: .medium))
@@ -1165,7 +1170,14 @@ struct ResourceContextPanel: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.hoverHighlight(cornerRadius: PrototypeStyle.Radius.control))
-        .help(isOpen ? "Este material já está aberto no Leitor" : "Abrir no Leitor, na página ou endereço indicado")
+        .help(isOpen ? "Este material já está aberto no Leitor" : "Abrir no Leitor · botão do meio ou ⌘clique abre nova aba em segundo plano")
+        .readerTabGesture(enabled: newTabAction != nil) { background in newTabAction?(background) }
+        .contextMenu {
+            if let newTabAction {
+                Button("Abrir em nova aba") { newTabAction(false) }
+                Button("Abrir em segundo plano") { newTabAction(true) }
+            }
+        }
     }
 
     private func filterHelp(_ option: MaterialFilter) -> String {
@@ -1190,14 +1202,14 @@ struct ResourceContextPanel: View {
         .fixedSize()
     }
 
-    private func openFavoriteSite(_ site: FavoriteSite, url: URL, title: String? = nil) {
+    private func openFavoriteSite(_ site: FavoriteSite, url: URL, title: String? = nil, inBackground: Bool = false, forceNewTab: Bool = false) {
         _ = readerSession.openWeb(
             title: title ?? site.title,
             url: url,
             reference: reference,
-            sermonDateKey: SermonDateKey.string(from: liturgicalDate)
+            sermonDateKey: SermonDateKey.string(from: liturgicalDate), inBackground: inBackground, forceNewTab: forceNewTab
         )
-        openWindow(id: "reader")
+        if !inBackground { openWindow(id: "reader") }
     }
 
     @MainActor
@@ -1307,7 +1319,8 @@ struct ResourceContextPanel: View {
                             }
                         }
                         HStack(spacing: 8) {
-                            materialActionButton(title: readerActionTitle(for: existingTab, unopened: "Abrir"), isOpen: existingTab != nil) {
+                            materialActionButton(title: readerActionTitle(for: existingTab, unopened: "Abrir"), isOpen: existingTab != nil,
+                                                 newTabAction: { background in openResearchSource(source, inBackground: background, forceNewTab: true) }) {
                                 openResearchSource(source)
                             }
                             Spacer(minLength: 0)
@@ -1383,14 +1396,14 @@ struct ResourceContextPanel: View {
         }
     }
 
-    private func openResearchSource(_ source: AIResearchSource) {
+    private func openResearchSource(_ source: AIResearchSource, inBackground: Bool = false, forceNewTab: Bool = false) {
         _ = readerSession.openWeb(
             title: source.title,
             url: source.url,
             reference: reference,
-            sermonDateKey: SermonDateKey.string(from: liturgicalDate)
+            sermonDateKey: SermonDateKey.string(from: liturgicalDate), inBackground: inBackground, forceNewTab: forceNewTab
         )
-        openWindow(id: "reader")
+        if !inBackground { openWindow(id: "reader") }
     }
 
     private func restoreResearchReports() {
@@ -1442,7 +1455,8 @@ struct ResourceContextPanel: View {
                     title: openingPDFPath == match.record.path
                         ? "Abrindo PDF…"
                         : readerActionTitle(for: tab, unopened: "Abrir"),
-                    isOpen: tab != nil
+                    isOpen: tab != nil,
+                    newTabAction: { background in openPDFMatch(match, inBackground: background, forceNewTab: true) }
                 ) {
                     openPDFMatch(match)
                 }
@@ -1453,11 +1467,12 @@ struct ResourceContextPanel: View {
             .padding(.leading, 23)
         }
         .materialCard()
+        .readerTabGesture { background in openPDFMatch(match, inBackground: background, forceNewTab: true) }
     }
 
-    private func openPDFMatch(_ match: MatchedPDF) {
-        guard openingPDFPath == nil else { return }
-        openingPDFPath = match.record.path
+    private func openPDFMatch(_ match: MatchedPDF, inBackground: Bool = false, forceNewTab: Bool = false) {
+        guard forceNewTab || openingPDFPath == nil else { return }
+        if !forceNewTab { openingPDFPath = match.record.path }
         Task { @MainActor in
             let opened = await readerSession.openPDF(
                 title: match.record.displayTitle,
@@ -1466,11 +1481,13 @@ struct ResourceContextPanel: View {
                 reference: reference,
                 sermonDateKey: SermonDateKey.string(from: liturgicalDate),
                 indexedSections: match.record.sections,
-                preservePositionIfOpen: true
+                preservePositionIfOpen: true, inBackground: inBackground, forceNewTab: forceNewTab
             )
-            guard openingPDFPath == match.record.path else { return }
-            openingPDFPath = nil
-            if opened { openWindow(id: "reader") }
+            if !forceNewTab {
+                guard openingPDFPath == match.record.path else { return }
+                openingPDFPath = nil
+            }
+            if opened && !inBackground && readerSession.activeSermonDateKey == SermonDateKey.string(from: liturgicalDate) { openWindow(id: "reader") }
         }
     }
 

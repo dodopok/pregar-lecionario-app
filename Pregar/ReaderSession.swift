@@ -2,6 +2,7 @@ import AppKit
 import PDFKit
 import SwiftUI
 import WebKit
+import UniformTypeIdentifiers
 
 struct ReaderTab: Codable, Identifiable, Equatable, Sendable {
     enum Kind: String, Codable, Sendable { case pdf, web }
@@ -15,6 +16,9 @@ struct ReaderTab: Codable, Identifiable, Equatable, Sendable {
     var sermonDateKey: String? = nil
     var includedInReview: Bool
     var reviewInclusionConfirmed: Bool? = nil
+    var pdfPosition: ReaderPDFPosition? = nil
+    var webPositions: [String: ReaderWebPosition]? = nil
+    var navigationID: UUID? = nil
 
     var isIncludedForReview: Bool { includedInReview && reviewInclusionConfirmed == true }
 
@@ -24,6 +28,22 @@ struct ReaderTab: Codable, Identifiable, Equatable, Sendable {
             $0.isIncludedForReview && $0.reference == reference && $0.sermonDateKey == sermonDateKey
         }.count
     }
+}
+
+struct ReaderPDFPosition: Codable, Equatable, Sendable {
+    var page: Int
+    var x: Double
+    var y: Double
+    var scale: Double
+    var autoScales: Bool
+
+    var isValid: Bool { page > 0 && x.isFinite && y.isFinite && abs(x) < 1e7 && abs(y) < 1e7 && scale.isFinite && scale > 0 && scale < 100 }
+}
+
+struct ReaderWebPosition: Codable, Equatable, Sendable {
+    var x: Double
+    var y: Double
+    var isValid: Bool { x.isFinite && y.isFinite && x >= 0 && y >= 0 && x < 1e8 && y < 1e8 }
 }
 
 struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
@@ -83,6 +103,9 @@ struct PDFSectionLocation: Codable, Identifiable, Equatable, Sendable {
 struct ReaderArchive: Codable, Sendable {
     var tabs: [ReaderTab]
     var selectedID: UUID?
+    var activeSermonDateKey: String? = nil
+    var selectedBySermon: [String: UUID]? = nil
+    var closedTabs: [ReaderTab]? = nil
 }
 
 private final class LoadedPDF: @unchecked Sendable {
@@ -97,6 +120,9 @@ private final class LoadedPDF: @unchecked Sendable {
 final class ReaderSessionStore: ObservableObject {
     @Published private(set) var tabs: [ReaderTab] = []
     @Published private(set) var selectedID: UUID?
+    @Published private(set) var activeSermonDateKey: String?
+    @Published private(set) var activeReference: String?
+    @Published private(set) var closedTabs: [ReaderTab] = []
 
     private let archiveKey = "reader.session.v1"
     private let linksKey = "reader.section-links.v1"
@@ -108,6 +134,25 @@ final class ReaderSessionStore: ObservableObject {
     private var webSessions: [UUID: ReaderWebSession] = [:]
     private var rememberedPages: [String: Int] = [:]
     private var pendingPagePersistence: Task<Void, Never>?
+    private var selectedBySermon: [String: UUID] = [:]
+    private var pdfPositions: [UUID: ReaderPDFPosition] = [:]
+    private var contextRevision = 0
+
+    var visibleTabs: [ReaderTab] { tabs.filter { $0.sermonDateKey == activeSermonDateKey } }
+    var canReopenClosedTab: Bool { closedTabs.contains { $0.sermonDateKey == activeSermonDateKey } }
+    var savedSermonDates: [String] { Array(Set(tabs.compactMap(\.sermonDateKey))).sorted(by: >) }
+    private func contextKey(_ date: String?) -> String { date ?? "general" }
+
+    static func contextLabel(_ date: String?) -> String {
+        guard let date else { return "Pesquisa geral" }
+        let parts = date.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, let value = Calendar(identifier: .gregorian).date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) else { return date }
+        return value.formatted(.dateTime.day().month(.wide).year().locale(Locale(identifier: "pt_BR")))
+    }
+
+    func updateActiveReference(_ reference: String?) {
+        if activeReference != reference { activeReference = reference }
+    }
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -116,21 +161,39 @@ final class ReaderSessionStore: ObservableObject {
             tabs = archive.tabs.filter { tab in
                 switch tab.kind {
                 case .pdf:
-                    return FileManager.default.fileExists(atPath: tab.location)
+                    return !tab.location.isEmpty
                 case .web:
                     return URL(string: tab.location)?.scheme == "https" || URL(string: tab.location)?.scheme == "http"
                 }
             }
-            selectedID = archive.selectedID.flatMap { id in tabs.contains(where: { $0.id == id }) ? id : nil }
+            activeSermonDateKey = archive.activeSermonDateKey ?? tabs.first(where: { $0.id == archive.selectedID })?.sermonDateKey
+            selectedBySermon = archive.selectedBySermon ?? [:]
+            selectedID = archive.selectedID.flatMap { id in visibleTabs.contains(where: { $0.id == id }) ? id : nil }
+            closedTabs = Array((archive.closedTabs ?? []).suffix(20))
         }
         if let data = userDefaults.data(forKey: linksKey),
            let links = try? JSONDecoder().decode([String: Int].self, from: data) {
             rememberedPages = links
         }
-        if selectedID == nil { selectedID = tabs.last?.id }
+        if selectedID == nil { selectedID = visibleTabs.last?.id }
+        activeReference = selectedTab?.reference
     }
 
     var selectedTab: ReaderTab? { tabs.first { $0.id == selectedID } }
+
+    func activateSermon(_ date: String?, reference: String? = nil) {
+        if let selectedID { selectedBySermon[contextKey(activeSermonDateKey)] = selectedID }
+        guard activeSermonDateKey != date else {
+            if let reference { activeReference = reference }
+            return
+        }
+        webSessions[selectedID ?? UUID()]?.captureScrollPosition()
+        contextRevision += 1
+        activeSermonDateKey = date
+        selectedID = selectedBySermon[contextKey(date)].flatMap { id in visibleTabs.contains { $0.id == id } ? id : nil } ?? visibleTabs.last?.id
+        activeReference = reference ?? selectedTab?.reference
+        persist()
+    }
 
     func preparePDF(for path: String) async -> PDFDocument? {
         let location = URL(fileURLWithPath: path).standardizedFileURL.path
@@ -155,8 +218,12 @@ final class ReaderSessionStore: ObservableObject {
     }
 
     func select(_ id: UUID) {
-        guard tabs.contains(where: { $0.id == id }) else { return }
+        guard let tab = tabs.first(where: { $0.id == id }) else { return }
+        contextRevision += 1
+        webSessions[selectedID ?? UUID()]?.captureScrollPosition()
+        if tab.sermonDateKey != activeSermonDateKey { activateSermon(tab.sermonDateKey, reference: tab.reference) }
         selectedID = id
+        selectedBySermon[contextKey(activeSermonDateKey)] = id
         persist()
     }
 
@@ -167,17 +234,26 @@ final class ReaderSessionStore: ObservableObject {
         reference: String? = nil,
         sermonDateKey: String? = nil,
         indexedSections: [PDFSectionLocation]? = nil,
-        preservePositionIfOpen: Bool = false
+        preservePositionIfOpen: Bool = false,
+        inBackground: Bool = false,
+        forceNewTab: Bool = false,
+        afterTabID: UUID? = nil
     ) async -> Bool {
+        let date = sermonDateKey
+        if !inBackground { contextRevision += 1 }
+        let revision = contextRevision
         guard let document = await preparePDF(for: path) else { return false }
         return registerPDF(
             title: title,
             location: URL(fileURLWithPath: path).standardizedFileURL.path,
             page: page,
             reference: reference,
-            sermonDateKey: sermonDateKey,
+            sermonDateKey: date,
             indexedSections: indexedSections,
             preservePositionIfOpen: preservePositionIfOpen,
+            inBackground: inBackground || revision != contextRevision,
+            forceNewTab: forceNewTab,
+            afterTabID: afterTabID,
             document: document
         )
     }
@@ -190,11 +266,15 @@ final class ReaderSessionStore: ObservableObject {
         sermonDateKey: String?,
         indexedSections: [PDFSectionLocation]?,
         preservePositionIfOpen: Bool,
+        inBackground: Bool,
+        forceNewTab: Bool,
+        afterTabID: UUID?,
         document: PDFDocument
     ) -> Bool {
         if let indexedSections { pdfSections[location] = indexedSections }
 
-        if let index = tabs.firstIndex(where: { $0.kind == .pdf && $0.location == location }) {
+        var openedID: UUID
+        if !forceNewTab, let index = tabs.firstIndex(where: { $0.kind == .pdf && $0.location == location && $0.sermonDateKey == sermonDateKey }) {
             let keepsPosition = preservePositionIfOpen
                 && tabs[index].reference == reference
                 && tabs[index].sermonDateKey == sermonDateKey
@@ -204,7 +284,12 @@ final class ReaderSessionStore: ObservableObject {
             tabs[index].sermonDateKey = sermonDateKey
             let remembered = reference.flatMap { rememberedPages[sectionLinkKey(path: location, reference: $0)] }
             tabs[index].physicalPage = min(max(keepsPosition ? previousPage : (remembered ?? page), 1), document.pageCount)
-            selectedID = tabs[index].id
+            if !keepsPosition {
+                pdfPositions[tabs[index].id] = nil
+                tabs[index].pdfPosition = nil
+                tabs[index].navigationID = UUID()
+            }
+            openedID = tabs[index].id
         } else {
             let remembered = reference.flatMap { rememberedPages[sectionLinkKey(path: location, reference: $0)] }
             let tab = ReaderTab(
@@ -213,54 +298,162 @@ final class ReaderSessionStore: ObservableObject {
                 reference: reference, sermonDateKey: sermonDateKey,
                 includedInReview: false, reviewInclusionConfirmed: true
             )
-            tabs.append(tab)
-            selectedID = tab.id
+            insert(tab, after: afterTabID)
+            openedID = tab.id
         }
+        if !inBackground { select(openedID) }
         persist()
         return true
     }
 
     @discardableResult
-    func openWeb(title: String, url: URL, reference: String? = nil, sermonDateKey: String? = nil) -> Bool {
+    func openWeb(title: String, url: URL, reference: String? = nil, sermonDateKey: String? = nil, inBackground: Bool = false, forceNewTab: Bool = false, afterTabID: UUID? = nil) -> Bool {
         guard ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return false }
         let address = url.absoluteString
-        if let existing = tabs.first(where: { $0.kind == .web && $0.location == address }) {
+        let date = sermonDateKey
+        var openedID: UUID
+        if !forceNewTab, let existing = tabs.first(where: { $0.kind == .web && $0.location == address && $0.sermonDateKey == date }) {
             if let index = tabs.firstIndex(where: { $0.id == existing.id }) {
                 tabs[index].title = title
                 tabs[index].reference = reference
-                tabs[index].sermonDateKey = sermonDateKey
+                tabs[index].sermonDateKey = date
             }
-            selectedID = existing.id
+            openedID = existing.id
         } else {
             let tab = ReaderTab(
                 id: UUID(), title: title, kind: .web, location: address,
-                physicalPage: 1, reference: reference, sermonDateKey: sermonDateKey,
+                physicalPage: 1, reference: reference, sermonDateKey: date,
                 includedInReview: false, reviewInclusionConfirmed: true
             )
-            tabs.append(tab)
-            selectedID = tab.id
+            insert(tab, after: afterTabID)
+            openedID = tab.id
         }
+        if !inBackground { select(openedID) }
         persist()
         return true
     }
 
     func close(_ id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        webSessions[id]?.captureScrollPosition()
+        let saved = snapshot(tabs[index])
+        closedTabs.append(saved)
+        closedTabs = Array(closedTabs.suffix(20))
         let closed = tabs.remove(at: index)
+        pdfPositions[id] = nil
         switch closed.kind {
         case .pdf:
-            pdfDocuments[closed.location] = nil
-            pdfSections[closed.location] = nil
-            sectionTasks[closed.location]?.cancel()
-            sectionTasks[closed.location] = nil
+            if !tabs.contains(where: { $0.kind == .pdf && $0.location == closed.location }) {
+                pdfDocuments[closed.location] = nil
+                pdfSections[closed.location] = nil
+                sectionTasks[closed.location]?.cancel()
+                sectionTasks[closed.location] = nil
+            }
         case .web:
-            webSessions[id]?.webView.stopLoading()
-            webSessions[id]?.webView.navigationDelegate = nil
+            webSessions[id]?.invalidate()
             webSessions[id] = nil
         }
         if selectedID == id {
-            selectedID = tabs.isEmpty ? nil : tabs[min(index, tabs.count - 1)].id
+            let remaining = visibleTabs
+            selectedID = remaining.first(where: { candidate in (tabs.firstIndex(where: { $0.id == candidate.id }) ?? 0) >= index })?.id ?? remaining.last?.id
         }
+        selectedBySermon = selectedBySermon.filter { $0.value != id }
+        persist()
+    }
+
+    private func insert(_ tab: ReaderTab, after id: UUID?) {
+        if let id, let index = tabs.firstIndex(where: { $0.id == id }) { tabs.insert(tab, at: index + 1) }
+        else { tabs.append(tab) }
+    }
+
+    private func snapshot(_ tab: ReaderTab) -> ReaderTab {
+        var copy = tab
+        copy.pdfPosition = pdfPositions[tab.id] ?? tab.pdfPosition
+        copy.webPositions = webSessions[tab.id]?.positions ?? tab.webPositions
+        return copy
+    }
+
+    func pdfPosition(for tab: ReaderTab) -> ReaderPDFPosition? { pdfPositions[tab.id] ?? tab.pdfPosition }
+
+    func recordPDFPosition(_ position: ReaderPDFPosition, for id: UUID) {
+        guard position.isValid, let index = tabs.firstIndex(where: { $0.id == id && $0.kind == .pdf }) else { return }
+        pdfPositions[id] = position
+        if tabs[index].physicalPage != position.page { tabs[index].physicalPage = position.page }
+        schedulePagePersistence()
+    }
+
+    func recordPDFPage(_ page: Int, for id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id && $0.kind == .pdf }), tabs[index].physicalPage != page else { return }
+        tabs[index].physicalPage = page
+        schedulePagePersistence()
+    }
+
+    func selectRelative(_ delta: Int) {
+        let visible = visibleTabs
+        guard !visible.isEmpty else { return }
+        let index = visible.firstIndex { $0.id == selectedID } ?? 0
+        select(visible[(index + delta + visible.count) % visible.count].id)
+    }
+
+    func reopenClosedTab() {
+        guard let index = closedTabs.lastIndex(where: { $0.sermonDateKey == activeSermonDateKey }) else { return }
+        var tab = closedTabs.remove(at: index)
+        if tabs.contains(where: { $0.id == tab.id }) { tab.id = UUID() }
+        insert(tab, after: selectedID)
+        select(tab.id)
+    }
+
+    func duplicate(_ id: UUID, inBackground: Bool = false) {
+        guard let original = tabs.first(where: { $0.id == id }) else { return }
+        var copy = snapshot(original)
+        copy.id = UUID()
+        copy.includedInReview = false
+        copy.reviewInclusionConfirmed = true
+        insert(copy, after: id)
+        if !inBackground { select(copy.id) }
+        persist()
+    }
+
+    func openPDFTab(page: Int, position: ReaderPDFPosition? = nil, from id: UUID, inBackground: Bool) {
+        guard let original = tabs.first(where: { $0.id == id && $0.kind == .pdf }), let document = pdfDocument(for: original) else { return }
+        var copy = original
+        copy.id = UUID()
+        copy.physicalPage = min(document.pageCount, max(1, page))
+        copy.pdfPosition = position?.isValid == true ? position : nil
+        copy.navigationID = nil
+        copy.includedInReview = false
+        copy.reviewInclusionConfirmed = true
+        insert(copy, after: id)
+        if !inBackground { select(copy.id) }
+        persist()
+    }
+
+    func closeOtherTabs(keeping id: UUID, toRightOnly: Bool = false) {
+        guard let index = visibleTabs.firstIndex(where: { $0.id == id }) else { return }
+        let ids = visibleTabs.enumerated().filter { toRightOnly ? $0.offset > index : $0.element.id != id }.map(\.element.id)
+        for other in ids { close(other) }
+    }
+
+    func move(_ id: UUID, before target: UUID) {
+        move(id, relativeTo: target, after: false)
+    }
+
+    func move(_ id: UUID, relativeTo target: UUID, after: Bool) {
+        guard id != target, let from = tabs.firstIndex(where: { $0.id == id }),
+              let destination = tabs.first(where: { $0.id == target }), tabs[from].sermonDateKey == destination.sermonDateKey else { return }
+        let moved = tabs.remove(at: from)
+        if let to = tabs.firstIndex(where: { $0.id == target }) { tabs.insert(moved, at: to + (after ? 1 : 0)) }
+        persist()
+    }
+
+    func openLink(_ url: URL, from id: UUID, inBackground: Bool) {
+        guard ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+              let source = tabs.first(where: { $0.id == id }) else { return }
+        let child = ReaderTab(id: UUID(), title: url.host ?? url.absoluteString, kind: .web, location: url.absoluteString,
+                              physicalPage: 1, reference: source.reference, sermonDateKey: source.sermonDateKey,
+                              includedInReview: false, reviewInclusionConfirmed: true)
+        insert(child, after: id)
+        if !inBackground { select(child.id) }
         persist()
     }
 
@@ -273,7 +466,15 @@ final class ReaderSessionStore: ObservableObject {
         guard tab.kind == .web else { return nil }
         if let session = webSessions[tab.id] { return session }
         guard let url = URL(string: tab.location) else { return nil }
-        let session = ReaderWebSession(url: url)
+        let session = ReaderWebSession(url: url, positions: tab.webPositions ?? [:])
+        session.onOpenTab = { [weak self] url, background in self?.openLink(url, from: tab.id, inBackground: background) }
+        session.onStateChange = { [weak self, weak session] in
+            guard let self, let session, let index = self.tabs.firstIndex(where: { $0.id == tab.id }) else { return }
+            self.updateWebLocation(session.currentURL.absoluteString, for: tab.id)
+            if !session.title.isEmpty, self.tabs[index].title != session.title { self.tabs[index].title = session.title }
+            self.schedulePagePersistence()
+        }
+        session.onPositionChange = { [weak self] in self?.schedulePagePersistence() }
         webSessions[tab.id] = session
         return session
     }
@@ -282,6 +483,7 @@ final class ReaderSessionStore: ObservableObject {
         guard tab.kind == .pdf else { return [] }
         let path = tab.location
         let title = tab.title
+        let storedRecords = userDefaults.data(forKey: "pregar.library.records.v1")
         if let cached = pdfSections[path] { return cached }
 
         let task: Task<[PDFSectionLocation], Never>
@@ -290,7 +492,7 @@ final class ReaderSessionStore: ObservableObject {
         } else {
             task = Task.detached(priority: .utility) {
                 guard !Task.isCancelled else { return [] }
-                if let data = UserDefaults.standard.data(forKey: "pregar.library.records.v1"),
+                if let data = storedRecords,
                    let records = try? JSONDecoder().decode([PDFLibraryRecord].self, from: data),
                    let sections = records.first(where: { $0.path == path })?.sections {
                     return sections
@@ -317,8 +519,10 @@ final class ReaderSessionStore: ObservableObject {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }), tabs[index].kind == .pdf,
               let document = pdfDocument(for: tabs[index]) else { return }
         let boundedPage = min(max(page, 1), document.pageCount)
-        guard tabs[index].physicalPage != boundedPage else { return }
         tabs[index].physicalPage = boundedPage
+        tabs[index].navigationID = UUID()
+        tabs[index].pdfPosition = nil
+        pdfPositions[tabID] = nil
         schedulePagePersistence()
     }
 
@@ -329,13 +533,14 @@ final class ReaderSessionStore: ObservableObject {
         persist()
     }
 
-    func materialsMarkedForReview() -> [ReaderTab] {
-        tabs.filter(\.isIncludedForReview)
+    func materialsMarkedForReview(sermonDateKey: String? = nil) -> [ReaderTab] {
+        let date = sermonDateKey ?? activeSermonDateKey
+        return tabs.filter { $0.sermonDateKey == date && $0.isIncludedForReview }
     }
 
-    func reviewSources(for reference: String?) async throws -> [SermonReviewSource] {
+    func reviewSources(for reference: String?, sermonDateKey: String? = nil) async throws -> [SermonReviewSource] {
         var sources: [SermonReviewSource] = []
-        for tab in materialsMarkedForReview() {
+        for tab in materialsMarkedForReview(sermonDateKey: sermonDateKey) {
             try Task.checkCancellation()
             switch tab.kind {
             case .pdf:
@@ -363,12 +568,15 @@ final class ReaderSessionStore: ObservableObject {
     func updateWebLocation(_ location: String, for tabID: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }), tabs[index].kind == .web,
               tabs[index].location != location else { return }
+        let previous = URLComponents(string: tabs[index].location).map { parts -> String? in var p = parts; p.fragment = nil; return p.string } ?? nil
+        let next = URLComponents(string: location).map { parts -> String? in var p = parts; p.fragment = nil; return p.string } ?? nil
+        if previous != next { tabs[index].includedInReview = false }
         tabs[index].location = location
         persist()
     }
 
     func flushPagePersistence() {
-        guard pendingPagePersistence != nil else { return }
+        for session in webSessions.values { session.captureScrollPosition() }
         persist()
     }
 
@@ -376,11 +584,11 @@ final class ReaderSessionStore: ObservableObject {
         pendingPagePersistence?.cancel()
         pendingPagePersistence = nil
         for session in webSessions.values {
-            session.webView.stopLoading()
-            session.webView.navigationDelegate = nil
+            session.invalidate()
         }
         sectionTasks.values.forEach { $0.cancel() }
         webSessions.removeAll()
+        pdfPositions.removeAll()
         pdfDocuments.removeAll()
         pdfSections.removeAll()
         sectionTasks.removeAll()
@@ -388,13 +596,17 @@ final class ReaderSessionStore: ObservableObject {
         tabs = archive.tabs.filter { tab in
             switch tab.kind {
             case .pdf:
-                FileManager.default.fileExists(atPath: tab.location)
+                !tab.location.isEmpty
             case .web:
                 ["https", "http"].contains(URL(string: tab.location)?.scheme?.lowercased() ?? "")
             }
         }
-        selectedID = archive.selectedID.flatMap { selected in tabs.contains(where: { $0.id == selected }) ? selected : nil }
-        if selectedID == nil { selectedID = tabs.last?.id }
+        activeSermonDateKey = archive.activeSermonDateKey ?? tabs.first(where: { $0.id == archive.selectedID })?.sermonDateKey
+        selectedBySermon = archive.selectedBySermon ?? [:]
+        closedTabs = Array((archive.closedTabs ?? []).suffix(20))
+        selectedID = archive.selectedID.flatMap { selected in visibleTabs.contains(where: { $0.id == selected }) ? selected : nil }
+        if selectedID == nil { selectedID = visibleTabs.last?.id }
+        activeReference = selectedTab?.reference
         self.rememberedPages = rememberedPages
         persistNow()
     }
@@ -435,7 +647,9 @@ final class ReaderSessionStore: ObservableObject {
     }
 
     private func persistNow() {
-        let archive = ReaderArchive(tabs: tabs, selectedID: selectedID)
+        if let selectedID { selectedBySermon[contextKey(activeSermonDateKey)] = selectedID }
+        let archive = ReaderArchive(tabs: tabs.map(snapshot), selectedID: selectedID,
+                                    activeSermonDateKey: activeSermonDateKey, selectedBySermon: selectedBySermon, closedTabs: closedTabs)
         if let data = try? JSONEncoder().encode(archive) {
             userDefaults.set(data, forKey: archiveKey)
         }
@@ -445,26 +659,169 @@ final class ReaderSessionStore: ObservableObject {
     }
 }
 
+enum ReaderLinkGesture {
+    static func opensNewTab(button: Int, modifiers: NSEvent.ModifierFlags, newWindow: Bool = false) -> Bool? {
+        if button == 2 || modifiers.contains(.command) { return !modifiers.contains(.shift) }
+        return newWindow ? false : nil
+    }
+}
+
 @MainActor
-final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate {
+private final class ReaderScrollMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var owner: ReaderWebSession?
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        owner?.receiveScroll(message.body)
+    }
+}
+
+@MainActor
+final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
     @Published private(set) var currentURL: URL
+    @Published private(set) var title = ""
     @Published private(set) var canGoBack = false
     @Published private(set) var canGoForward = false
     @Published private(set) var isLoading = true
-
+    @Published private(set) var estimatedProgress = 0.0
+    @Published private(set) var errorMessage: String?
+    private(set) var positions: [String: ReaderWebPosition]
+    var onOpenTab: ((URL, Bool) -> Void)?
+    var onStateChange: (() -> Void)?
+    var onPositionChange: (() -> Void)?
     let webView: WKWebView
+    private var observations: [NSKeyValueObservation] = []
+    private var restoreTask: Task<Void, Never>?
+    private var generation = 0
+    private var restoring = true
+    private var invalidated = false
 
-    init(url: URL) {
+    init(url: URL, positions: [String: ReaderWebPosition] = [:], configuration: WKWebViewConfiguration? = nil) {
         currentURL = url
-        webView = WKWebView(frame: .zero)
+        self.positions = positions.filter { $0.value.isValid }
+        let configuration = configuration ?? WKWebViewConfiguration()
+        if PregarRuntime.isIsolatedTestHost { configuration.websiteDataStore = .nonPersistent() }
+        let handler = ReaderScrollMessageHandler()
+        configuration.userContentController.add(handler, name: "pregarScroll")
+        configuration.userContentController.addUserScript(WKUserScript(source: Self.scrollScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
+        handler.owner = self
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
+        observations = [
+            webView.observe(\.title, options: [.new]) { [weak self] view, _ in
+                Task { @MainActor in
+                    guard let self, !self.invalidated else { return }
+                    let title = view.title ?? ""
+                    if self.title != title { self.title = title; self.onStateChange?() }
+                }
+            },
+            webView.observe(\.estimatedProgress, options: [.new]) { [weak self] view, _ in
+                Task { @MainActor in self?.estimatedProgress = view.estimatedProgress }
+            },
+            webView.observe(\.isLoading, options: [.new]) { [weak self] view, _ in
+                Task { @MainActor in
+                    guard let self, !self.invalidated else { return }
+                    self.isLoading = view.isLoading
+                }
+            },
+            webView.observe(\.url, options: [.new]) { [weak self] _, _ in
+                Task { @MainActor in
+                    guard let self, !self.invalidated else { return }
+                    self.updateNavigationState()
+                }
+            }
+        ]
         webView.load(URLRequest(url: url))
     }
 
-    func goBack() { if webView.canGoBack { webView.goBack() } }
-    func goForward() { if webView.canGoForward { webView.goForward() } }
+    func goBack() { captureScrollPosition(); if webView.canGoBack { isLoading = true; webView.goBack() } }
+    func goForward() { captureScrollPosition(); if webView.canGoForward { isLoading = true; webView.goForward() } }
+    func reload() {
+        captureScrollPosition()
+        isLoading = true
+        if webView.reload() == nil { webView.load(URLRequest(url: currentURL)) }
+    }
+    func stop() { webView.stopLoading(); isLoading = false; restoring = false }
+    func load(_ url: URL) {
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+        captureScrollPosition()
+        isLoading = true
+        errorMessage = nil
+        currentURL = url
+        onStateChange?()
+        webView.load(URLRequest(url: url))
+    }
+
+    func invalidate() {
+        invalidated = true
+        restoreTask?.cancel()
+        observations.removeAll()
+        webView.stopLoading()
+        webView.navigationDelegate = nil
+        webView.uiDelegate = nil
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "pregarScroll")
+        onOpenTab = nil; onStateChange = nil; onPositionChange = nil
+    }
+
+    func captureScrollPosition() {
+        guard !invalidated, !isLoading, !restoring else { return }
+        webView.evaluateJavaScript("window.__pregarRestoring ? null : {url:location.href,x:scrollX,y:scrollY}") { [weak self] result, _ in
+            guard let self, let result else { return }
+            self.receiveScroll(result)
+        }
+    }
+
+    fileprivate func receiveScroll(_ body: Any) {
+        guard !invalidated, !restoring, !isLoading, let body = body as? [String: Any],
+              let url = body["url"] as? String, url == currentURL.absoluteString,
+              let x = body["x"] as? Double, let y = body["y"] as? Double else { return }
+        let position = ReaderWebPosition(x: x, y: y)
+        guard position.isValid, positions[url] != position else { return }
+        positions[url] = position
+        if positions.count > 50, let key = positions.keys.first(where: { $0 != url }) { positions[key] = nil }
+        onPositionChange?()
+    }
+
+    private static let scrollScript = """
+    (() => {
+      let timer;
+      window.__pregarSendScroll = () => {
+        if (!window.__pregarRestoring) window.webkit.messageHandlers.pregarScroll.postMessage({url:location.href,x:scrollX,y:scrollY});
+      };
+      addEventListener('scroll', () => { clearTimeout(timer); timer=setTimeout(window.__pregarSendScroll,100); }, {passive:true});
+      addEventListener('pagehide', window.__pregarSendScroll);
+    })();
+    """
+
+    private func restorePosition() {
+        restoreTask?.cancel()
+        guard let position = positions[currentURL.absoluteString], position.isValid else { restoring = false; return }
+        let generation = generation
+        restoreTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            _ = try? await self.webView.callAsyncJavaScript("""
+                window.__pregarCancelRestore?.();
+                window.__pregarRestoring=true;
+                const controller=new AbortController();
+                let timer, observer, finished=false;
+                const finish=()=>{
+                  if(finished) return; finished=true;
+                  clearTimeout(timer); observer?.disconnect(); controller.abort();
+                  window.__pregarRestoring=false; window.__pregarSendScroll?.();
+                };
+                window.__pregarCancelRestore=finish;
+                ['wheel','touchstart','pointerdown','keydown'].forEach(type=>addEventListener(type,finish,{once:true,passive:true,signal:controller.signal}));
+                const apply=()=>{ if(!finished) scrollTo(x,y); };
+                observer=new ResizeObserver(apply); observer.observe(document.documentElement);
+                timer=setTimeout(finish,1500);
+                await new Promise(resolve=>requestAnimationFrame(()=>{apply();resolve();}));
+                return true;
+                """, arguments: ["x": position.x, "y": position.y], in: nil, contentWorld: .page)
+            guard !Task.isCancelled, self.generation == generation, !self.invalidated else { return }
+            self.restoring = false
+        }
+    }
 
     func reviewPageText() async throws -> (title: String, citation: String, text: String) {
         guard !isLoading else { throw SermonReviewMaterialError.pageStillLoading }
@@ -495,30 +852,69 @@ final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate {
         }
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    private func updateNavigationState() {
         currentURL = webView.url ?? currentURL
+        title = webView.title ?? title
         canGoBack = webView.canGoBack
         canGoForward = webView.canGoForward
+        onStateChange?()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        updateNavigationState()
         isLoading = false
+        estimatedProgress = 1
+        errorMessage = nil
+        restorePosition()
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        currentURL = webView.url ?? currentURL
-        canGoBack = webView.canGoBack
-        canGoForward = webView.canGoForward
+        generation += 1
+        restoreTask?.cancel()
+        restoring = true
         isLoading = true
+        errorMessage = nil
+        updateNavigationState()
     }
 
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        canGoBack = webView.canGoBack
-        canGoForward = webView.canGoForward
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { updateNavigationState() }
+
+    private func failed(_ error: Error) {
+        if (error as NSError).code == NSURLErrorCancelled {
+            isLoading = webView.isLoading
+            if !isLoading { restoring = false }
+            return
+        }
+        updateNavigationState()
         isLoading = false
+        restoring = false
+        if (error as NSError).code != NSURLErrorCancelled { errorMessage = error.localizedDescription }
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(error) }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(error) }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        isLoading = false
+        errorMessage = "A página foi interrompida. Recarregue para continuar a leitura."
     }
 
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        canGoBack = webView.canGoBack
-        canGoForward = webView.canGoForward
-        isLoading = false
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = action.request.url else { decisionHandler(.cancel); return }
+        if let background = ReaderLinkGesture.opensNewTab(button: action.buttonNumber, modifiers: action.modifierFlags, newWindow: action.targetFrame == nil),
+           ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            onOpenTab?(url, background)
+            decisionHandler(.cancel)
+        } else if ["http", "https", "about"].contains(url.scheme?.lowercased() ?? "") {
+            decisionHandler(.allow)
+        } else {
+            decisionHandler(.cancel)
+        }
+    }
+
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            onOpenTab?(url, ReaderLinkGesture.opensNewTab(button: action.buttonNumber, modifiers: action.modifierFlags) ?? false)
+        }
+        return nil
     }
 }
 
@@ -535,6 +931,10 @@ struct ReaderWindowView: View {
     @State private var loadingPDFTabID: UUID?
     @State private var failedPDFTabID: UUID?
     @State private var pdfLoadRevision = 0
+    @State private var showingSections = true
+    @State private var showingContext = false
+    @State private var addressFocusID = UUID()
+    @StateObject private var pdfControls = ReaderPDFControls()
 
     private var tab: ReaderTab? { reader.selectedTab }
     private var document: PDFDocument? { tab.flatMap { reader.pdfDocument(for: $0) } }
@@ -550,22 +950,27 @@ struct ReaderWindowView: View {
         VStack(spacing: 0) {
             tabBar
             Divider()
+            contextBar
+            Divider()
             if let tab {
                 HStack(spacing: 0) {
-                    sectionSidebar(tab)
-                        .frame(width: 235)
-                    Rectangle().fill(PrototypeStyle.line).frame(width: 1)
+                    if showingSections && tab.kind == .pdf {
+                        sectionSidebar(tab).frame(width: 210)
+                        Rectangle().fill(PrototypeStyle.line).frame(width: 1)
+                    }
                     documentPane(tab)
-                        .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
-                    Rectangle().fill(PrototypeStyle.line).frame(width: 1)
-                    locationSidebar(tab)
-                        .frame(width: 380)
+                        .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
+                    if showingContext {
+                        Rectangle().fill(PrototypeStyle.line).frame(width: 1)
+                        locationSidebar(tab).frame(width: 300)
+                    }
                 }
             } else {
                 emptyState
             }
         }
-        .frame(minWidth: 1020, minHeight: 640)
+        .frame(minWidth: 820, minHeight: 600)
+        .background(ReaderKeyboardShortcuts(handler: handleKeyboard).frame(width: 0, height: 0))
         .background(PrototypeStyle.paper)
         .onChange(of: reader.selectedID) { _, _ in
             selectedText = ""
@@ -605,8 +1010,8 @@ struct ReaderWindowView: View {
                 _ = reader.openWeb(
                     title: url.host ?? url.absoluteString,
                     url: url,
-                    reference: tab?.reference,
-                    sermonDateKey: tab?.sermonDateKey
+                    reference: reader.activeReference,
+                    sermonDateKey: reader.activeSermonDateKey
                 )
             }
         }
@@ -625,71 +1030,127 @@ struct ReaderWindowView: View {
         }
     }
 
-    private var tabBar: some View {
-        HStack(spacing: 8) {
-            Button(action: navigateBack) {
-                Image(systemName: "chevron.left").frame(width: 28, height: 28).contentShape(Rectangle())
+    private var contextBar: some View {
+        HStack(spacing: 12) {
+            Menu {
+                Button("Pesquisa geral") { reader.activateSermon(nil) }
+                ForEach(reader.savedSermonDates, id: \.self) { date in
+                    Button(ReaderSessionStore.contextLabel(date)) { reader.activateSermon(date) }
+                }
+            } label: {
+                Label(reader.activeSermonDateKey.map { "Pesquisa · \(ReaderSessionStore.contextLabel($0))" } ?? "Pesquisa geral", systemImage: "books.vertical")
+                    .font(.system(size: 12, weight: .semibold))
             }
-            .buttonStyle(.hoverHighlight).disabled(!canNavigateBack)
-            .keyboardShortcut("[", modifiers: .command)
-            .help("Voltar (⌘[)")
-            Button(action: navigateForward) {
-                Image(systemName: "chevron.right").frame(width: 28, height: 28).contentShape(Rectangle())
+            .menuStyle(.borderlessButton).fixedSize()
+            if let reference = reader.activeReference {
+                Text(reference).font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted).lineLimit(1)
             }
-            .buttonStyle(.hoverHighlight).disabled(!canNavigateForward)
-            .keyboardShortcut("]", modifiers: .command)
-            .help("Avançar (⌘])")
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 7) {
-                    ForEach(reader.tabs) { item in
-                        HStack(spacing: 0) {
-                            Button { reader.select(item.id) } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: item.kind == .pdf ? "doc.text" : "globe")
-                                        .foregroundStyle(item.id == reader.selectedID ? PrototypeStyle.ink : PrototypeStyle.muted)
-                                    Text(item.title).lineLimit(1)
-                                        .foregroundStyle(item.id == reader.selectedID ? PrototypeStyle.ink : PrototypeStyle.muted)
-                                }
-                                .font(.system(size: 13, weight: item.id == reader.selectedID ? .semibold : .regular))
-                                .frame(minWidth: 120, maxWidth: 230, minHeight: 32, alignment: .leading)
-                                .padding(.leading, 11)
-                            }
-                            .buttonStyle(.plain)
-                            Button { reader.close(item.id) } label: {
-                                Image(systemName: "xmark").font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(PrototypeStyle.muted)
-                                    .frame(width: 18, height: 18)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.hoverHighlight(cornerRadius: 5))
-                            .padding(.trailing, 6)
-                            .help("Fechar aba")
-                        }
-                        .background(item.id == reader.selectedID ? PrototypeStyle.surface : .clear, in: RoundedRectangle(cornerRadius: 8))
-                        .shadow(color: item.id == reader.selectedID ? .black.opacity(0.12) : .clear, radius: 3, y: 1)
+            Spacer(minLength: 4)
+            if tab?.kind == .pdf {
+                Button { showingSections.toggle() } label: { Image(systemName: "sidebar.left") }
+                    .buttonStyle(.hoverHighlight).help(showingSections ? "Ocultar seções do PDF" : "Mostrar seções do PDF")
+                    .accessibilityLabel("Alternar painel de seções")
+            }
+            Button { showingContext.toggle() } label: { Image(systemName: "sidebar.right") }
+                .buttonStyle(.hoverHighlight).help(showingContext ? "Ocultar informações do material" : "Mostrar informações e opções de revisão")
+                .accessibilityLabel("Alternar informações do material")
+            Menu {
+                ForEach(reader.visibleTabs) { item in
+                    Button { reader.select(item.id) } label: {
+                        Label(item.title, systemImage: item.id == reader.selectedID ? "checkmark" : (item.kind == .pdf ? "doc.text" : "globe"))
                     }
                 }
-            }
+                Divider()
+                Button("Reabrir aba fechada", systemImage: "arrow.uturn.backward") { reader.reopenClosedTab() }
+                    .disabled(!reader.canReopenClosedTab)
+            } label: { Image(systemName: "list.bullet") }
+            .menuStyle(.borderlessButton).fixedSize().help("Todas as abas desta pesquisa · reabrir aba fechada")
+        }
+        .foregroundStyle(PrototypeStyle.ink)
+        .padding(.horizontal, 15).frame(height: 34).background(PrototypeStyle.canvas)
+    }
 
-            Button { showingNewTab = true } label: {
-                Image(systemName: "plus").frame(width: 28, height: 30).contentShape(Rectangle())
+    private var tabBar: some View {
+        HStack(spacing: 6) {
+            Button(action: navigateBack) { Image(systemName: "chevron.left").frame(width: 28, height: 28).contentShape(Rectangle()) }
+                .buttonStyle(.hoverHighlight).disabled(!canNavigateBack).keyboardShortcut("[", modifiers: .command).help("Voltar (⌘[)")
+            Button(action: navigateForward) { Image(systemName: "chevron.right").frame(width: 28, height: 28).contentShape(Rectangle()) }
+                .buttonStyle(.hoverHighlight).disabled(!canNavigateForward).keyboardShortcut("]", modifiers: .command).help("Avançar (⌘])")
+            GeometryReader { geometry in
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        HStack(spacing: 4) {
+                            ForEach(reader.visibleTabs) { item in
+                                tabButton(item, width: ReaderTabLayout.width(available: geometry.size.width, count: reader.visibleTabs.count))
+                                    .id(item.id)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .onAppear { if let id = reader.selectedID { proxy.scrollTo(id, anchor: .center) } }
+                    .onChange(of: reader.selectedID) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
+                    .onChange(of: reader.visibleTabs.map(\.id)) { _, _ in if let id = reader.selectedID { proxy.scrollTo(id, anchor: .center) } }
+                    .onChange(of: geometry.size.width) { _, _ in if let id = reader.selectedID { proxy.scrollTo(id, anchor: .center) } }
+                    .task { await Task.yield(); if let id = reader.selectedID { proxy.scrollTo(id, anchor: .center) } }
+                }
             }
-            .buttonStyle(.hoverHighlight)
-            .keyboardShortcut("t", modifiers: .command)
-            .help("Nova aba (⌘T)")
-            Spacer(minLength: 4)
-            Button(action: copyWithSource) {
-                Label("Copiar com origem", systemImage: "doc.on.doc")
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .buttonStyle(.secondaryAction)
-            .disabled(tab == nil)
+            .frame(height: 44)
+            Button { showingNewTab = true } label: { Image(systemName: "plus").frame(width: 28, height: 30).contentShape(Rectangle()) }
+                .buttonStyle(.hoverHighlight).keyboardShortcut("t", modifiers: .command).help("Nova aba (⌘T)")
+            Button(action: copyWithSource) { Image(systemName: "doc.on.doc").frame(width: 28, height: 30) }
+                .buttonStyle(.hoverHighlight).disabled(tab == nil).help("Copiar seleção com a origem")
         }
         .padding(.leading, PrototypeStyle.Layout.windowControlsInset)
-        .padding(.trailing, 12)
-        .frame(height: PrototypeStyle.Layout.headerHeight)
-        .background(PrototypeStyle.canvas)
+        .padding(.trailing, 12).frame(height: PrototypeStyle.Layout.headerHeight).background(PrototypeStyle.canvas)
+    }
+
+    private func tabButton(_ item: ReaderTab, width: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Button { reader.select(item.id) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: item.kind == .pdf ? "doc.text" : "globe").font(.system(size: 12))
+                    Text(item.title).lineLimit(1).truncationMode(.tail)
+                }
+                .font(.system(size: 12, weight: item.id == reader.selectedID ? .semibold : .regular))
+                .foregroundStyle(item.id == reader.selectedID ? PrototypeStyle.ink : PrototypeStyle.muted)
+                .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading).contentShape(Rectangle()).padding(.leading, 9)
+            }
+            .buttonStyle(.plain)
+            Button { reader.close(item.id) } label: { Image(systemName: "xmark").font(.system(size: 10)).frame(width: 22, height: 24).contentShape(Rectangle()) }
+                .buttonStyle(.hoverHighlight(cornerRadius: 5)).help("Fechar aba (⌘W ou botão do meio)").accessibilityLabel("Fechar \(item.title)")
+        }
+        .frame(width: width)
+        .background(item.id == reader.selectedID ? PrototypeStyle.surface : .clear, in: RoundedRectangle(cornerRadius: 7))
+        .help(item.title + (item.kind == .pdf ? " · página \(item.physicalPage)" : " · \(item.location)"))
+        .readerTabGesture(includeCommandClick: false) { _ in reader.close(item.id) }
+        .onDrag { NSItemProvider(object: item.id.uuidString as NSString) }
+        .onDrop(of: [.text], delegate: ReaderTabDropDelegate(reader: reader, target: item.id, width: width))
+        .contextMenu {
+            Button("Duplicar aba") { reader.duplicate(item.id) }
+            Button("Fechar aba") { reader.close(item.id) }
+            Button("Fechar outras abas") { reader.closeOtherTabs(keeping: item.id) }.disabled(reader.visibleTabs.count < 2)
+            Button("Fechar abas à direita") { reader.closeOtherTabs(keeping: item.id, toRightOnly: true) }
+            Divider()
+            Button("Reabrir aba fechada") { reader.reopenClosedTab() }.disabled(!reader.canReopenClosedTab)
+        }
+    }
+
+    private func handleKeyboard(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection([.command, .shift, .control, .option])
+        let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        if event.keyCode == 48 && (flags == [.control] || flags == [.control, .shift]) {
+            reader.selectRelative(flags.contains(.shift) ? -1 : 1); return true
+        }
+        if flags == [.command, .shift], key == "t" { reader.reopenClosedTab(); return true }
+        guard flags == [.command] else { return false }
+        switch key {
+        case "w": guard let tab else { return false }; reader.close(tab.id); return true
+        case "l": guard tab?.kind == .web else { return false }; addressFocusID = UUID(); return true
+        case "r": guard let webSession else { return false }; webSession.reload(); return true
+        case "+", "=": guard tab?.kind == .pdf else { return false }; pdfControls.zoom(1.2); return true
+        case "-": guard tab?.kind == .pdf else { return false }; pdfControls.zoom(1 / 1.2); return true
+        default: return false
+        }
     }
 
     @ViewBuilder
@@ -721,6 +1182,8 @@ struct ReaderWindowView: View {
                                 .background(section.id == activeSection?.id ? PrototypeStyle.softAccent(appearance.accent) : .clear, in: RoundedRectangle(cornerRadius: 7))
                             }
                             .buttonStyle(.hoverHighlight)
+                            .readerTabGesture { background in reader.openPDFTab(page: section.startPage, from: tab.id, inBackground: background) }
+                            .contextMenu { Button("Abrir seção em nova aba") { reader.openPDFTab(page: section.startPage, from: tab.id, inBackground: false) } }
                         }
                     }
                 }
@@ -764,6 +1227,9 @@ struct ReaderWindowView: View {
                             Text("impressa \(printed)").font(.system(size: 12)).foregroundStyle(PrototypeStyle.muted)
                         }
                         Spacer()
+                        Button { pdfControls.zoom(1 / 1.2) } label: { Image(systemName: "minus.magnifyingglass") }.buttonStyle(.hoverHighlight).help("Diminuir zoom (⌘−)")
+                        Button { pdfControls.fit() } label: { Image(systemName: "arrow.up.left.and.arrow.down.right") }.buttonStyle(.hoverHighlight).help("Ajustar página à janela")
+                        Button { pdfControls.zoom(1.2) } label: { Image(systemName: "plus.magnifyingglass") }.buttonStyle(.hoverHighlight).help("Aumentar zoom (⌘+)")
                         if let activeSection {
                             Label(tab.reference == nil ? activeSection.title : "Mesma passagem · seção \(activeSection.title)", systemImage: "text.book.closed")
                                 .font(.system(size: 11, weight: .medium)).foregroundStyle(appearance.accent)
@@ -775,7 +1241,12 @@ struct ReaderWindowView: View {
                     ReaderPDFView(
                         document: document,
                         pageNumber: tab.physicalPage,
-                        onPageChange: { reader.setPage($0, for: tab.id) },
+                        position: reader.pdfPosition(for: tab), navigationID: tab.navigationID,
+                        onPositionChange: { reader.recordPDFPosition($0, for: tab.id) },
+                        onOpenURL: { reader.openLink($0, from: tab.id, inBackground: $1) },
+                        onOpenDestination: { reader.openPDFTab(page: $0.page, position: $0, from: tab.id, inBackground: $1) },
+                        onReady: { pdfControls.view = $0 },
+                        onPageChange: { reader.recordPDFPage($0, for: tab.id) },
                         onSelectionChange: { selectedText = $0 }
                     )
                     .id(tab.id)
@@ -800,23 +1271,7 @@ struct ReaderWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else if tab.kind == .web, let session = reader.webSession(for: tab) {
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    if session.isLoading { ProgressView().controlSize(.small) }
-                    Text(session.currentURL.absoluteString)
-                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(PrototypeStyle.muted)
-                        .lineLimit(1).textSelection(.enabled)
-                    Spacer(minLength: 0)
-                    Button("Abrir no navegador", systemImage: "arrow.up.right.square") {
-                        NSWorkspace.shared.open(session.currentURL)
-                    }
-                    .buttonStyle(.plain).font(.system(size: 11)).help("Abrir esta página no navegador padrão")
-                }
-                .padding(.horizontal, 14).frame(height: 41).background(PrototypeStyle.canvas)
-                Divider()
-                ReaderWebView(session: session)
-                    .id(tab.id)
-            }
+            ReaderWebDocumentPane(session: session, focusRequest: addressFocusID).id(tab.id)
         } else {
             ContentUnavailableView("Não foi possível abrir o material", systemImage: "doc.questionmark")
         }
@@ -981,6 +1436,12 @@ struct ReaderWindowView: View {
 struct ReaderPDFView: NSViewRepresentable {
     let document: PDFDocument
     let pageNumber: Int
+    var position: ReaderPDFPosition? = nil
+    var navigationID: UUID? = nil
+    var onPositionChange: (ReaderPDFPosition) -> Void = { _ in }
+    var onOpenURL: (URL, Bool) -> Void = { _, _ in }
+    var onOpenDestination: (ReaderPDFPosition, Bool) -> Void = { _, _ in }
+    var onReady: (ReaderPDFNavigationView) -> Void = { _ in }
     let onPageChange: (Int) -> Void
     let onSelectionChange: (String) -> Void
 
@@ -989,92 +1450,147 @@ struct ReaderPDFView: NSViewRepresentable {
     func makeNSView(context: Context) -> ReaderPDFNavigationView {
         let view = ReaderPDFNavigationView()
         view.autoScales = true
+        view.minScaleFactor = 0.1
+        view.maxScaleFactor = 8
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
         view.onLayout = { [weak coordinator = context.coordinator, weak view] in
             guard let view else { return }
+            coordinator?.observeScrolling(in: view)
             coordinator?.scheduleNavigation(in: view)
         }
-        context.coordinator.observers = [
-            NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: view, queue: .main) { [weak coordinator = context.coordinator, weak view] _ in
-                Task { @MainActor in
-                    guard let view else { return }
-                    coordinator?.publishPage(in: view)
-                }
+        let coordinator = context.coordinator
+        coordinator.observers = [
+            NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: view, queue: .main) { [weak coordinator, weak view] _ in
+                Task { @MainActor in if let view { coordinator?.publishPage(in: view); coordinator?.schedulePosition(in: view) } }
             },
-            NotificationCenter.default.addObserver(forName: .PDFViewSelectionChanged, object: view, queue: .main) { [weak coordinator = context.coordinator, weak view] _ in
-                Task { @MainActor in
-                    guard let view else { return }
-                    coordinator?.onSelectionChange?(view.currentSelection?.string ?? "")
-                }
+            NotificationCenter.default.addObserver(forName: .PDFViewScaleChanged, object: view, queue: .main) { [weak coordinator, weak view] _ in
+                Task { @MainActor in if let view { coordinator?.schedulePosition(in: view) } }
+            },
+            NotificationCenter.default.addObserver(forName: .PDFViewSelectionChanged, object: view, queue: .main) { [weak coordinator, weak view] _ in
+                Task { @MainActor in if let view { coordinator?.onSelectionChange?(view.currentSelection?.string ?? "") } }
             }
         ]
         updateNSView(view, context: context)
+        onReady(view)
         return view
     }
 
     func updateNSView(_ view: ReaderPDFNavigationView, context: Context) {
         context.coordinator.onPageChange = onPageChange
         context.coordinator.onSelectionChange = onSelectionChange
-        context.coordinator.update(view, document: document, page: pageNumber)
+        context.coordinator.onPositionChange = onPositionChange
+        view.onOpenURL = onOpenURL
+        view.onOpenDestination = onOpenDestination
+        context.coordinator.update(view, document: document, page: pageNumber, position: position, navigationID: navigationID)
     }
 
     static func dismantleNSView(_ view: ReaderPDFNavigationView, coordinator: Coordinator) {
+        coordinator.publishPosition(in: view)
         view.onLayout = nil
+        view.onOpenURL = nil
+        view.onOpenDestination = nil
         coordinator.navigationTask?.cancel()
+        coordinator.positionTask?.cancel()
         coordinator.observers.forEach { NotificationCenter.default.removeObserver($0) }
+        if let observer = coordinator.scrollObserver { NotificationCenter.default.removeObserver(observer) }
         coordinator.onPageChange = nil
         coordinator.onSelectionChange = nil
+        coordinator.onPositionChange = nil
     }
 
     @MainActor
     final class Coordinator {
         var observers: [NSObjectProtocol] = []
+        var scrollObserver: NSObjectProtocol?
+        private weak var observedClip: NSClipView?
         var onPageChange: ((Int) -> Void)?
         var onSelectionChange: ((String) -> Void)?
+        var onPositionChange: ((ReaderPDFPosition) -> Void)?
         var navigationTask: Task<Void, Never>?
+        var positionTask: Task<Void, Never>?
         private var lastRequestedPage: Int?
+        private var lastPublishedPage: Int?
+        private var lastNavigationID: UUID?
         private var pendingPage: Int?
+        private var pendingPosition: ReaderPDFPosition?
 
-        func update(_ view: ReaderPDFNavigationView, document: PDFDocument, page: Int) {
+        func update(_ view: ReaderPDFNavigationView, document: PDFDocument, page: Int, position: ReaderPDFPosition?, navigationID: UUID?) {
             let target = min(max(page, 1), document.pageCount)
             let documentChanged = view.document !== document
+            let explicitNavigation = navigationID != lastNavigationID
             let pageChanged = lastRequestedPage != target
             lastRequestedPage = target
-            if documentChanged || pageChanged {
+            lastNavigationID = navigationID
+            if documentChanged || explicitNavigation || (pageChanged && lastPublishedPage != target) {
                 navigationTask?.cancel()
                 navigationTask = nil
-                // Assigning a PDF can briefly report its cover or no current page. Keep the
-                // requested position until the view has a window and its final page layout.
                 pendingPage = target
+                pendingPosition = documentChanged && position?.isValid == true && position?.page == target ? position : nil
                 if documentChanged { view.document = document }
-                if !documentChanged, let current = view.currentPage,
-                   document.index(for: current) + 1 == target {
-                    pendingPage = nil
-                }
+                if !documentChanged, !explicitNavigation, let current = view.currentPage, document.index(for: current) + 1 == target { pendingPage = nil }
                 view.needsLayout = true
             }
+            observeScrolling(in: view)
             scheduleNavigation(in: view)
         }
 
-        func scheduleNavigation(in view: ReaderPDFNavigationView) {
-            guard pendingPage != nil, navigationTask == nil,
-                  view.window != nil, view.bounds.width > 0, view.bounds.height > 0 else { return }
-            navigationTask = Task { @MainActor [weak self, weak view] in
-                guard !Task.isCancelled, let self, let view, let target = self.pendingPage else { return }
-                view.layoutSubtreeIfNeeded()
-                view.layoutDocumentView()
-                if let page = view.document?.page(at: target - 1) { view.go(to: page) }
-                self.pendingPage = nil
-                self.navigationTask = nil
+        func observeScrolling(in view: PDFView) {
+            guard let clip = view.documentView?.enclosingScrollView?.contentView, clip !== observedClip else { return }
+            if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
+            observedClip = clip
+            clip.postsBoundsChangedNotifications = true
+            scrollObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: clip, queue: .main) { [weak self, weak view] _ in
+                Task { @MainActor in if let view { self?.schedulePosition(in: view) } }
             }
         }
 
+        func scheduleNavigation(in view: ReaderPDFNavigationView) {
+            guard pendingPage != nil, navigationTask == nil, view.window != nil, view.bounds.width > 0, view.bounds.height > 0 else { return }
+            navigationTask = Task { @MainActor [weak self, weak view] in
+                guard !Task.isCancelled, let self, let view, let target = self.pendingPage else { return }
+                if let saved = self.pendingPosition {
+                    view.autoScales = saved.autoScales
+                    if !saved.autoScales { view.scaleFactor = min(view.maxScaleFactor, max(view.minScaleFactor, saved.scale)) }
+                }
+                view.layoutSubtreeIfNeeded()
+                view.layoutDocumentView()
+                if let page = view.document?.page(at: target - 1) {
+                    if let saved = self.pendingPosition { view.go(to: PDFDestination(page: page, at: NSPoint(x: saved.x, y: saved.y))) }
+                    else { view.go(to: page) }
+                }
+                self.pendingPosition = nil
+                self.pendingPage = nil
+                self.navigationTask = nil
+                self.observeScrolling(in: view)
+            }
+        }
+
+        func schedulePosition(in view: PDFView) {
+            guard pendingPage == nil else { return }
+            positionTask?.cancel()
+            positionTask = Task { @MainActor [weak self, weak view] in
+                do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+                if let view { self?.publishPosition(in: view) }
+            }
+        }
+
+        func publishPosition(in view: PDFView) {
+            guard pendingPage == nil, view.window != nil, let document = view.document, let destination = view.currentDestination, let page = destination.page else { return }
+            let index = document.index(for: page)
+            guard (0..<document.pageCount).contains(index) else { return }
+            let point = destination.point
+            let position = ReaderPDFPosition(page: index + 1, x: point.x, y: point.y, scale: view.scaleFactor, autoScales: view.autoScales)
+            guard position.isValid else { return }
+            lastPublishedPage = position.page
+            onPositionChange?(position)
+        }
+
         func publishPage(in view: PDFView) {
-            guard pendingPage == nil, view.window != nil,
-                  let document = view.document, let current = view.currentPage else { return }
+            guard pendingPage == nil, view.window != nil, let document = view.document, let current = view.currentPage else { return }
             let index = document.index(for: current)
             guard (0..<document.pageCount).contains(index) else { return }
+            lastPublishedPage = index + 1
             onPageChange?(index + 1)
         }
     }
@@ -1082,15 +1598,220 @@ struct ReaderPDFView: NSViewRepresentable {
 
 final class ReaderPDFNavigationView: PDFView {
     var onLayout: (() -> Void)?
+    var onOpenURL: ((URL, Bool) -> Void)?
+    var onOpenDestination: ((ReaderPDFPosition, Bool) -> Void)?
+    private var mouseMonitor: Any?
 
-    override func layout() {
-        super.layout()
-        onLayout?()
-    }
-
+    override func layout() { super.layout(); onLayout?() }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
+        mouseMonitor = nil
+        if window != nil {
+            mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown, .otherMouseUp]) { [weak self] event in
+                guard let self, let window = self.window, event.window === window, event.buttonNumber == 2,
+                      self.link(at: self.localPoint(for: event)) != nil else { return event }
+                if event.type == .otherMouseUp { self.otherMouseUp(with: event) }
+                return nil
+            }
+        }
         onLayout?()
+    }
+    private func localPoint(for event: NSEvent) -> NSPoint {
+        let point = event.window == nil ? (window?.convertPoint(fromScreen: event.locationInWindow) ?? event.locationInWindow) : event.locationInWindow
+        return convert(point, from: nil)
+    }
+    private func link(at point: NSPoint) -> PDFAnnotation? {
+        guard bounds.contains(point), let page = page(for: point, nearest: false) else { return nil }
+        return page.annotation(at: convert(point, to: page))
+    }
+    override func perform(_ action: PDFAction) {
+        if let action = action as? PDFActionURL, let url = action.url { onOpenURL?(url, false) }
+        else { super.perform(action) }
+    }
+    override func otherMouseDown(with event: NSEvent) {
+        if event.buttonNumber != 2 { super.otherMouseDown(with: event) }
+    }
+    override func otherMouseUp(with event: NSEvent) {
+        guard event.buttonNumber == 2 else { super.otherMouseUp(with: event); return }
+        guard let annotation = link(at: localPoint(for: event)) else { return }
+        let background = !event.modifierFlags.contains(.shift)
+        if let action = annotation.action as? PDFActionURL, let url = action.url { onOpenURL?(url, background) }
+        else if let destination = (annotation.action as? PDFActionGoTo)?.destination, let page = destination.page, let document {
+            onOpenDestination?(ReaderPDFPosition(page: document.index(for: page) + 1, x: destination.point.x, y: destination.point.y, scale: scaleFactor, autoScales: autoScales), background)
+        }
+    }
+}
+
+@MainActor
+final class ReaderPDFControls: ObservableObject {
+    weak var view: ReaderPDFNavigationView?
+    func zoom(_ multiplier: CGFloat) {
+        guard let view else { return }
+        view.autoScales = false
+        view.scaleFactor = min(view.maxScaleFactor, max(view.minScaleFactor, view.scaleFactor * multiplier))
+    }
+    func fit() { view?.autoScales = true }
+}
+
+struct ReaderSermonContextBinder: View {
+    @EnvironmentObject private var reader: ReaderSessionStore
+    let dateKey: String
+    let reference: String?
+    var body: some View {
+        Color.clear.onAppear(perform: update)
+            .onChange(of: dateKey) { _, _ in update() }
+            .onChange(of: reference) { _, _ in update() }
+    }
+    private func update() {
+        guard !PregarRuntime.isIsolatedTestHost else { return }
+        reader.activateSermon(dateKey, reference: reference)
+        reader.updateActiveReference(reference)
+    }
+}
+
+enum ReaderTabLayout {
+    static func width(available: CGFloat, count: Int) -> CGFloat {
+        guard count > 0 else { return 220 }
+        return min(220, max(108, (available - CGFloat(count - 1) * 4) / CGFloat(count)))
+    }
+}
+
+private struct ReaderTabDropDelegate: DropDelegate {
+    let reader: ReaderSessionStore
+    let target: UUID
+    let width: CGFloat
+    func performDrop(info: DropInfo) -> Bool {
+        guard let provider = info.itemProviders(for: [.text]).first else { return false }
+        let after = info.location.x > width / 2
+        _ = provider.loadObject(ofClass: NSString.self) { value, _ in
+            guard let string = value as? String, let id = UUID(uuidString: string) else { return }
+            Task { @MainActor in reader.move(id, relativeTo: target, after: after) }
+        }
+        return true
+    }
+}
+
+private struct ReaderTabGesture: NSViewRepresentable {
+    var enabled: Bool
+    var includeCommandClick: Bool
+    var action: (Bool) -> Void
+    func makeNSView(context: Context) -> ReaderTabGestureView { ReaderTabGestureView() }
+    func updateNSView(_ view: ReaderTabGestureView, context: Context) {
+        view.includeCommandClick = includeCommandClick
+        view.enabled = enabled
+        view.action = action
+    }
+}
+
+final class ReaderTabGestureView: NSView {
+    var enabled = true
+    var includeCommandClick = true
+    var action: ((Bool) -> Void)?
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard enabled, let event = NSApp.currentEvent else { return nil }
+        let middle = [.otherMouseDown, .otherMouseUp].contains(event.type) && event.buttonNumber == 2
+        let command = includeCommandClick && [.leftMouseDown, .leftMouseUp].contains(event.type) && event.modifierFlags.contains(.command)
+        return middle || command ? super.hitTest(point) : nil
+    }
+    override func otherMouseDown(with event: NSEvent) {}
+    override func mouseDown(with event: NSEvent) {}
+    override func otherMouseUp(with event: NSEvent) {
+        if event.buttonNumber == 2, bounds.contains(convert(event.locationInWindow, from: nil)) { action?(!event.modifierFlags.contains(.shift)) }
+    }
+    override func mouseUp(with event: NSEvent) {
+        if includeCommandClick, event.modifierFlags.contains(.command), bounds.contains(convert(event.locationInWindow, from: nil)) { action?(!event.modifierFlags.contains(.shift)) }
+    }
+}
+
+extension View {
+    func readerTabGesture(enabled: Bool = true, includeCommandClick: Bool = true, action: @escaping (Bool) -> Void) -> some View {
+        overlay(ReaderTabGesture(enabled: enabled, includeCommandClick: includeCommandClick, action: action))
+    }
+}
+
+private struct ReaderKeyboardShortcuts: NSViewRepresentable {
+    let handler: (NSEvent) -> Bool
+    func makeNSView(context: Context) -> ReaderKeyboardView { ReaderKeyboardView() }
+    func updateNSView(_ view: ReaderKeyboardView, context: Context) { view.handler = handler }
+    static func dismantleNSView(_ view: ReaderKeyboardView, coordinator: ()) { view.removeMonitor() }
+}
+
+private final class ReaderKeyboardView: NSView {
+    var handler: ((NSEvent) -> Bool)?
+    private var monitor: Any?
+    func removeMonitor() { if let monitor { NSEvent.removeMonitor(monitor) }; monitor = nil }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        removeMonitor()
+        guard window != nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, let window = self.window, window.isKeyWindow, event.window === window, window.attachedSheet == nil else { return event }
+            return self.handler?(event) == true ? nil : event
+        }
+    }
+}
+
+enum ReaderWebAddress {
+    static func url(from text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let value = trimmed.contains("://") ? trimmed : "https://" + trimmed
+        guard let url = URL(string: value), ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let host = url.host, !host.isEmpty else { return nil }
+        return url
+    }
+}
+
+private struct ReaderWebDocumentPane: View {
+    @ObservedObject var session: ReaderWebSession
+    let focusRequest: UUID
+    @State private var address = ""
+    @State private var invalidAddress = false
+    @FocusState private var addressFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 9) {
+                Button {
+                    if session.isLoading { session.stop() } else { session.reload() }
+                } label: { Image(systemName: session.isLoading ? "xmark" : "arrow.clockwise").frame(width: 24, height: 24) }
+                .buttonStyle(.hoverHighlight).help(session.isLoading ? "Interromper carregamento" : "Recarregar (⌘R)")
+                TextField("Endereço do site", text: $address)
+                    .font(.system(size: 12)).textFieldStyle(.roundedBorder).focused($addressFocused)
+                    .accessibilityLabel("Endereço do site (⌘L)")
+                    .onSubmit {
+                        guard let url = ReaderWebAddress.url(from: address) else { invalidAddress = true; return }
+                        invalidAddress = false; addressFocused = false; session.load(url)
+                    }
+                    .onExitCommand { address = session.currentURL.absoluteString; invalidAddress = false; addressFocused = false }
+                Button { NSWorkspace.shared.open(session.currentURL) } label: { Image(systemName: "arrow.up.right.square").frame(width: 24, height: 24) }
+                    .buttonStyle(.hoverHighlight).help("Abrir esta página no navegador padrão")
+            }
+            .padding(.horizontal, 12).frame(height: 41).background(PrototypeStyle.canvas)
+            ProgressView(value: session.estimatedProgress).progressViewStyle(.linear).frame(height: 2).opacity(session.isLoading ? 1 : 0)
+            if invalidAddress { Text("Informe um endereço http ou https válido.").font(.system(size: 11)).foregroundStyle(.red).padding(6) }
+            ZStack {
+                ReaderWebView(session: session)
+                if let error = session.errorMessage {
+                    ContentUnavailableView {
+                        Label("Não foi possível carregar a página", systemImage: "wifi.exclamationmark")
+                    } description: { Text(error) } actions: {
+                        Button("Tentar novamente") { session.reload() }.buttonStyle(.secondaryAction)
+                    }
+                    .background(PrototypeStyle.paper)
+                }
+            }
+        }
+        .onAppear { address = session.currentURL.absoluteString }
+        .onChange(of: session.currentURL) { _, url in if !addressFocused { address = url.absoluteString } }
+        .onChange(of: focusRequest) { _, _ in
+            address = session.currentURL.absoluteString; addressFocused = true
+            weak var window = session.webView.window
+            DispatchQueue.main.async {
+                if window?.isKeyWindow == true, let editor = window?.firstResponder as? NSTextView, editor.isFieldEditor { editor.selectAll(nil) }
+            }
+        }
     }
 }
 
@@ -1099,6 +1820,9 @@ private struct ReaderWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView { session.webView }
     func updateNSView(_ view: WKWebView, context: Context) {}
+    static func dismantleNSView(_ view: WKWebView, coordinator: ()) {
+        view.evaluateJavaScript("window.__pregarSendScroll?.()", completionHandler: nil)
+    }
 }
 
 private struct ReaderNewTabSheet: View {

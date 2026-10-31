@@ -225,6 +225,7 @@ struct PDFLibraryView: View {
                         }
                             .buttonStyle(.secondaryAction)
                             .disabled(openingPDFRecordID != nil)
+                            .readerTabGesture { background in openInReader(selectedRecord, page: 1, inBackground: background, forceNewTab: true) }
                         if let ocrProgress, ocrTargetID == selectedRecord.id {
                             HStack(spacing: 7) {
                                 ProgressView().controlSize(.small)
@@ -348,6 +349,10 @@ struct PDFLibraryView: View {
                 .buttonStyle(.hoverHighlight(cornerRadius: 6))
                 .disabled(openingPDFRecordID != nil)
                 .help("Abrir no leitor na página física \(section.startPage)")
+                .readerTabGesture { background in
+                    guard let selectedRecord else { return }
+                    openInReader(selectedRecord, page: section.startPage, reference: section.title, inBackground: background, forceNewTab: true)
+                }
                 .overlay(alignment: .bottom) { Rectangle().fill(PrototypeStyle.line).frame(height: 1) }
             }
         }
@@ -379,24 +384,29 @@ struct PDFLibraryView: View {
             : "\(credits.joined(separator: " · ")) · \(record.pageCount) páginas físicas"
     }
 
-    private func openInReader(_ record: PDFLibraryRecord, page: Int, reference: String? = nil) {
-        guard openingPDFRecordID == nil else { return }
-        openingPDFRecordID = record.id
+    private func openInReader(_ record: PDFLibraryRecord, page: Int, reference: String? = nil, inBackground: Bool = false, forceNewTab: Bool = false) {
+        guard forceNewTab || openingPDFRecordID == nil else { return }
+        if !forceNewTab { openingPDFRecordID = record.id }
+        let date = readerSession.activeSermonDateKey
+        let reference = reference ?? readerSession.activeReference
         Task { @MainActor in
             let opened = await readerSession.openPDF(
                 title: record.displayTitle,
                 path: record.path,
                 page: page,
                 reference: reference,
-                indexedSections: record.sections
+                sermonDateKey: date,
+                indexedSections: record.sections, inBackground: inBackground, forceNewTab: forceNewTab
             )
-            guard openingPDFRecordID == record.id else { return }
-            openingPDFRecordID = nil
+            if !forceNewTab {
+                guard openingPDFRecordID == record.id else { return }
+                openingPDFRecordID = nil
+            }
             guard opened else {
                 errorMessage = "Este PDF não pôde ser aberto. Verifique se o arquivo ainda está disponível."
                 return
             }
-            openWindow(id: "reader")
+            if !inBackground, readerSession.activeSermonDateKey == date { openWindow(id: "reader") }
         }
     }
 

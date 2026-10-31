@@ -273,6 +273,14 @@ enum PregarBackupService {
                 guard let relativePath = assetLocations[path] else { throw PregarBackupError.missingAsset }
                 readerArchive.tabs[index].location = relativePath
             }
+            readerArchive.closedTabs = try readerArchive.closedTabs?.filter { $0.kind != .pdf || fileManager.fileExists(atPath: $0.location) }.map { original in
+                var tab = original
+                if tab.kind == .pdf {
+                    guard let relative = assetLocations[standardizedFilePath(tab.location)] else { throw PregarBackupError.missingAsset }
+                    tab.location = relative
+                }
+                return tab
+            }
             let rememberedPages = remapRememberedPages(snapshot.rememberedPages, paths: assetLocations)
 
             let historyFiles = try copyHistory(
@@ -357,6 +365,7 @@ enum PregarBackupService {
             drafts.compactMap(\.tabletPDFPath)
                 + libraryRecords.map(\.path)
                 + readerArchive.tabs.filter { $0.kind == .pdf }.map(\.location)
+                + (readerArchive.closedTabs ?? []).filter { $0.kind == .pdf }.map(\.location)
                 + rememberedPages.keys.compactMap { rememberedAssetPath(in: $0) }
         )
         guard referencedAssets.allSatisfy({ assetPaths.contains($0) && isValidAssetPath($0) }) else {
@@ -465,6 +474,14 @@ enum PregarBackupService {
             guard let path = installedAssets.paths[readerArchive.tabs[index].location] else { throw PregarBackupError.missingAsset }
             readerArchive.tabs[index].location = path
         }
+        readerArchive.closedTabs = try readerArchive.closedTabs?.map { original in
+            var tab = original
+            if tab.kind == .pdf {
+                guard let path = installedAssets.paths[tab.location] else { throw PregarBackupError.missingAsset }
+                tab.location = path
+            }
+            return tab
+        }
         let rememberedPages = remapRememberedPages(contents.rememberedPages, paths: installedAssets.paths)
         let libraryData = try encode(restoredRecords)
         let readerData = try encode(readerArchive)
@@ -539,6 +556,7 @@ enum PregarBackupService {
         var paths = Set(snapshot.libraryRecords.map(\.path))
         paths.formUnion(snapshot.drafts.compactMap(\.tabletPDFPath))
         paths.formUnion(snapshot.readerArchive.tabs.filter { $0.kind == .pdf }.map(\.location))
+        paths.formUnion((snapshot.readerArchive.closedTabs ?? []).filter { $0.kind == .pdf && FileManager.default.fileExists(atPath: $0.location) }.map(\.location))
         return paths
     }
 
