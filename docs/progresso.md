@@ -349,6 +349,15 @@ Validação final: 37 testes de revisão e pesquisa passaram, sem falhas, inclui
 
 Validação: 57 testes de editor, histórico e Google Drive passaram, sem falhas nem testes pulados. A regressão da ausência de HTML falhou na implementação anterior e passou após a correção. A revisão 8 usa a compilação `2026103008`, para Apple Silicon e Intel.
 
+## Revisão e perguntas avaliadas pelo contexto (30/10/2026, revisão 9)
+
+- Os bloqueios por expressões da revisão e do mapa foram retirados, junto dos detectores antigos de vocabulário e tópicos. A presença de uma palavra, hipótese ou fala imperativa citada deixa de determinar se uma análise é exibida. O código continua conferindo critérios, classificações, correção ortográfica, tamanhos, citações declaradas e fontes fornecidas. Movimentos do mapa exigem um início localizável.
+- As perguntas voltam a ser redigidas pelo modelo, com até 400 caracteres e vínculo literal com o manuscrito, substituindo os três moldes da revisão 7. Uma pergunta pode relacionar dois trechos existentes, de até 240 caracteres cada. Itens com formato ou citações inválidas são descartados individualmente, com motivo compatível com essa conferência objetiva.
+- As instruções compartilhadas explicam a diferença entre crítica textual, esclarecimento e coautoria, com exemplos de propostas explícitas e indiretas. Também distinguem uma autorização ou intenção de um resultado não narrado. A regra de autoria é orientada no contexto, sem um novo classificador por palavras nem uma segunda chamada de IA em produção.
+- A [documentação de validação](validacao-ia.md) distingue testes do contrato e avaliação do comportamento real. O teste real optativo contém quatro cenários sintéticos: hipótese e imperativo citado, comentário distinto de Escritura, instruções embutidas e episódio sem desfecho. A conferência contextual de apontamentos, perguntas e mapa é registrada separadamente da aprovação técnica. Essa avaliação não garante a correção de todos os juízos; uma imprecisão sobre pessoa gramatical foi registrada na amostra.
+
+Validação final: 39 testes de revisão e pesquisa passaram, sem falhas; dois testes externos opcionais ficaram desativados. Na rodada final, os quatro cenários sintéticos geraram oito respostas, com 15 apontamentos e 11 perguntas, sem proposta de conteúdo novo ou desfecho inventado observado na conferência de escopo. Com o sermão de 1.272 palavras e Salmo 34:1-10,22 na NVT, ambos os fluxos autorizados terminaram com HTTP 200 e `end_turn`: 11 apontamentos e o mapa foram validados; duas perguntas foram preservadas e uma foi descartada por alterar as aspas de uma citação. O manuscrito e as respostas pessoais permanecem fora do repositório e do instalador. A revisão 9 usa a compilação `2026103009`, para Apple Silicon e Intel.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.
