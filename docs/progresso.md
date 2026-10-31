@@ -340,6 +340,15 @@ Validação final: 29 testes locais de revisão e pesquisa passaram, sem falhas;
 
 Validação final: 37 testes de revisão e pesquisa passaram, sem falhas, incluindo a geração real autorizada com o mesmo arquivo de 1.272 palavras, Salmo 34:1-10,22 na NVT e Claude Opus 5.5. A resposta terminou com `end_turn`, retornou três perguntas e todas foram aceitas com âncoras literais verificadas. Três testes externos optativos ficaram desativados. A rodada local anterior aprovou 36 testes sem rede. O texto e as respostas pessoais permanecem fora do repositório e do instalador. A revisão 7 usa a compilação `2026103007`, para Apple Silicon e Intel.
 
+## Copiar texto formatado para editores web (30/10/2026, revisão 8)
+
+- A falha foi reproduzida no comando nativo de copiar: a seleção tinha RTF e texto simples, mas não HTML. Editores web recebem a representação rica por `text/html`, um dos [formatos obrigatórios da área de transferência web](https://www.w3.org/TR/clipboard-apis/#mandatory-data-types-x). A escrita da seleção agora publica HTML junto dos formatos nativos e conserva no RTF os metadados dos títulos.
+- O HTML usa estilos inline e blocos explícitos para cada parágrafo, inclusive os vazios e o parágrafo final. Quebras dentro de um parágrafo viram `br`; espaços consecutivos e tabulações usam `white-space:pre-wrap`. Fontes e tamanhos fracionários, negrito, itálico, sublinhado, tachado, cores, realce, links, sobrescrito/subscrito, títulos, alinhamento, recuos e espaçamento acompanham a seleção.
+- Copiar e recortar usam o mesmo caminho nativo de escrita da seleção. Pedidos de texto simples continuam com o formato solicitado. O HTML contém apenas a seleção, escapa a marcação escrita pelo autor e não transforma links executáveis em âncoras. A serialização acontece ao copiar, sem adicionar trabalho ao caminho da digitação.
+- Os testes usam uma área de transferência isolada e um editor `contenteditable` local no WebKit, com armazenamento não persistente. A colagem verifica os estilos computados pelo navegador, parágrafos vazios, quebra interna, Unicode, espaços consecutivos, links e limites da seleção. Não foram acessados o conteúdo da área de transferência pessoal nem documentos do usuário no Google Drive; a validação foi local, sem enviar o sermão.
+
+Validação: 57 testes de editor, histórico e Google Drive passaram, sem falhas nem testes pulados. A regressão da ausência de HTML falhou na implementação anterior e passou após a correção. A revisão 8 usa a compilação `2026103008`, para Apple Silicon e Intel.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.

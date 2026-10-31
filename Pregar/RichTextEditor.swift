@@ -657,9 +657,20 @@ final class QuotationTextView: NSTextView {
         needsDisplay = true
     }
 
-    override func copy(_ sender: Any?) {
-        super.copy(sender)
-        try? DocumentRTF.copySelection(from: self, to: .general)
+    override var writablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        let types = super.writablePasteboardTypes
+        return types.contains(.html) ? types : types + [.html]
+    }
+
+    override func writeSelection(to pasteboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
+        let written = super.writeSelection(to: pasteboard, types: types)
+        guard selectedRange().length > 0, types.contains(.rtf) || types.contains(.html) else { return written }
+        do {
+            try DocumentRTF.copySelection(from: self, to: pasteboard)
+            return true
+        } catch {
+            return written
+        }
     }
 
     override func cut(_ sender: Any?) {

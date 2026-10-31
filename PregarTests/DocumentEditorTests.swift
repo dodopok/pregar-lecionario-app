@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import SwiftData
 import SwiftUI
+import WebKit
 import XCTest
 @testable import Pregar
 
@@ -374,6 +375,129 @@ final class DocumentEditorTests: XCTestCase {
         XCTAssertEqual(content.paragraphs.first?.headingType, "HEADING_3")
     }
 
+    func testNativeCopyPublishesHTMLAlongsideRTFAndPlainTextForWebEditors() throws {
+        let harness = try EditorHarness(text: "😀 Título\n\nPrimeiro parágrafo.\nSegundo parágrafo.\n")
+        defer { harness.close() }
+        harness.textView.setSelectedRange((harness.textView.string as NSString).range(of: "😀 Título"))
+        harness.commands.setParagraphStyle(.heading2)
+        harness.textView.selectAll(nil)
+        let clipboard = NSPasteboard.withUniqueName()
+        defer { clipboard.releaseGlobally() }
+        let types = harness.textView.writablePasteboardTypes
+        clipboard.declareTypes(types, owner: nil)
+        XCTAssertTrue(harness.textView.writeSelection(to: clipboard, types: types))
+        XCTAssertNotNil(clipboard.string(forType: .html), "Web editors need the formatted HTML representation of the selection.")
+        XCTAssertEqual(clipboard.string(forType: .string), harness.textView.string)
+        let content = try GoogleDocsContent.fromRTF(XCTUnwrap(clipboard.data(forType: .rtf)))
+        XCTAssertEqual(content.text, harness.textView.string)
+        XCTAssertEqual(content.paragraphs.first?.headingType, "HEADING_2")
+    }
+
+    func testClipboardHTMLPastesIntoAWebEditorWithFormattingAndExplicitBreaks() async throws {
+        let source = NSMutableAttributedString(string: "😀 Título & <teste>\n\nUm trecho forte e uma referência.\u{2028}Outra linha com  dois espaços.\nÚltimo parágrafo.\n", attributes: [
+            .font: NSFont(name: "Arial", size: 12.5)!, .paragraphStyle: EditorCommands.bodyParagraphStyle()
+        ])
+        let text = source.string as NSString
+        let heading = text.paragraphRange(for: text.range(of: "Título"))
+        source.addAttribute(.pregarParagraphStyle, value: DocumentParagraphStyle.heading2.rawValue, range: heading)
+        source.addAttribute(.font, value: NSFont(name: "Arial", size: 20)!, range: heading)
+        let paragraph = EditorCommands.bodyParagraphStyle()
+        paragraph.alignment = .justified
+        paragraph.lineHeightMultiple = 1.5
+        paragraph.paragraphSpacingBefore = 6
+        paragraph.paragraphSpacing = 8
+        paragraph.headIndent = 20
+        paragraph.firstLineHeadIndent = 30
+        paragraph.tailIndent = -12
+        source.addAttribute(.paragraphStyle, value: paragraph, range: text.paragraphRange(for: text.range(of: "Um trecho")))
+        let styledFont = NSFontManager.shared.convert(NSFont(name: "Arial", size: 12.5)!, toHaveTrait: [.boldFontMask, .italicFontMask])
+        source.addAttributes([
+            .font: styledFont, .underlineStyle: NSUnderlineStyle.single.rawValue, .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+            .foregroundColor: NSColor(srgbRed: 18 / 255.0, green: 52 / 255.0, blue: 86 / 255.0, alpha: 1), .backgroundColor: NSColor.yellow
+        ], range: text.range(of: "forte"))
+        source.addAttribute(.link, value: URL(string: "https://example.org/?a=1&b=2")!, range: text.range(of: "referência"))
+        source.addAttribute(.baselineOffset, value: 4, range: text.range(of: "Último"))
+        let harness = try EditorHarness(text: "")
+        defer { harness.close() }
+        harness.textView.textStorage?.setAttributedString(source)
+        harness.textView.selectAll(nil)
+        let clipboard = NSPasteboard.withUniqueName()
+        defer { clipboard.releaseGlobally() }
+        clipboard.declareTypes(harness.textView.writablePasteboardTypes, owner: nil)
+        XCTAssertTrue(harness.textView.writeSelection(to: clipboard, types: harness.textView.writablePasteboardTypes))
+        let html = try XCTUnwrap(clipboard.string(forType: .html))
+        let page = ClipboardTestPage()
+        try await page.load()
+        let inspected = try await page.webView.callAsyncJavaScript("""
+            const editor = document.getElementById('editor');
+            editor.focus();
+            document.execCommand('insertHTML', false, html);
+            const blocks = Array.from(editor.querySelectorAll('p,h1,h2,h3,h4,h5,h6'));
+            const strong = Array.from(editor.querySelectorAll('span')).find(node => node.textContent === 'forte');
+            const style = getComputedStyle(strong);
+            const paragraph = getComputedStyle(blocks[2]);
+            return {
+                text: blocks.map(node => node.textContent), tags: blocks.map(node => node.tagName),
+                breaks: blocks.map(node => node.querySelectorAll('br').length),
+                fontSize: parseFloat(style.fontSize), weight: style.fontWeight, italic: style.fontStyle,
+                decoration: style.textDecorationLine, color: style.color, background: style.backgroundColor,
+                alignment: paragraph.textAlign, lineHeight: parseFloat(paragraph.lineHeight),
+                before: parseFloat(paragraph.marginTop), after: parseFloat(paragraph.marginBottom),
+                indent: parseFloat(paragraph.marginLeft), firstLine: parseFloat(paragraph.textIndent),
+                link: editor.querySelector('a').getAttribute('href'), superscripts: editor.querySelectorAll('sup').length,
+                literalTagCount: editor.querySelectorAll('teste').length
+            };
+            """, arguments: ["html": html], in: nil, contentWorld: .page)
+        let result = try XCTUnwrap(inspected as? [String: Any])
+        XCTAssertEqual(result["text"] as? [String], ["😀 Título & <teste>", "", "Um trecho forte e uma referência.Outra linha com  dois espaços.", "Último parágrafo.", ""])
+        XCTAssertEqual(result["tags"] as? [String], ["H2", "P", "P", "P", "P"])
+        XCTAssertEqual(result["breaks"] as? [Int], [0, 1, 1, 0, 1])
+        XCTAssertEqual(try XCTUnwrap(result["fontSize"] as? Double), 12.5 * 96 / 72, accuracy: 0.05)
+        XCTAssertEqual(result["weight"] as? String, "700")
+        XCTAssertEqual(result["italic"] as? String, "italic")
+        XCTAssertTrue((result["decoration"] as? String)?.contains("underline") == true)
+        XCTAssertTrue((result["decoration"] as? String)?.contains("line-through") == true)
+        XCTAssertEqual(result["color"] as? String, "rgb(18, 52, 86)")
+        XCTAssertEqual(result["background"] as? String, "rgb(255, 255, 0)")
+        XCTAssertEqual(result["alignment"] as? String, "justify")
+        XCTAssertEqual(try XCTUnwrap(result["lineHeight"] as? Double), 25, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(result["before"] as? Double), 8, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(result["after"] as? Double), 8 * 96 / 72, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(result["indent"] as? Double), 20 * 96 / 72, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(result["firstLine"] as? Double), 10 * 96 / 72, accuracy: 0.05)
+        XCTAssertEqual(result["link"] as? String, "https://example.org/?a=1&b=2")
+        XCTAssertEqual(result["superscripts"] as? Int, 1)
+        XCTAssertEqual(result["literalTagCount"] as? Int, 0)
+        XCTAssertEqual(clipboard.string(forType: .string), source.string)
+    }
+
+    func testClipboardHTMLOnlyIncludesTheSelectionAndEscapesMarkupAndUnsafeLinks() async throws {
+        let harness = try EditorHarness(text: "Privado antes. <script>window.injected=true</script> & café. Privado depois.")
+        defer { harness.close() }
+        let selected = (harness.textView.string as NSString).range(of: "<script>window.injected=true</script> & café.")
+        harness.textView.textStorage?.addAttribute(.link, value: "javascript:window.injected=true", range: selected)
+        harness.textView.setSelectedRange(selected)
+        let clipboard = NSPasteboard.withUniqueName()
+        defer { clipboard.releaseGlobally() }
+        try DocumentRTF.copySelection(from: harness.textView, to: clipboard)
+        let html = try XCTUnwrap(clipboard.string(forType: .html))
+        let page = ClipboardTestPage()
+        try await page.load()
+        let inspected = try await page.webView.callAsyncJavaScript("""
+            const editor = document.getElementById('editor');
+            editor.innerHTML = html;
+            return { text: editor.textContent, scripts: editor.querySelectorAll('script').length,
+                     links: editor.querySelectorAll('a').length, injected: window.injected === true };
+            """, arguments: ["html": html], in: nil, contentWorld: .page)
+        let result = try XCTUnwrap(inspected as? [String: Any])
+        XCTAssertEqual(result["text"] as? String, "<script>window.injected=true</script> & café.")
+        XCTAssertEqual(result["scripts"] as? Int, 0)
+        XCTAssertEqual(result["links"] as? Int, 0)
+        XCTAssertEqual(result["injected"] as? Bool, false)
+        XCTAssertFalse(html.contains("Privado"))
+        XCTAssertEqual(clipboard.string(forType: .string), "<script>window.injected=true</script> & café.")
+    }
+
     func testLinksCanBeInsertedEditedAndRemovedWithOnlyTheCaretInside() throws {
         let harness = try EditorHarness(text: "Referência: ")
         defer { harness.close() }
@@ -489,6 +613,41 @@ final class DocumentEditorTests: XCTestCase {
     private func plainText(_ data: Data?) throws -> String {
         try NSAttributedString(data: XCTUnwrap(data), options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil).string
     }
+}
+
+@MainActor
+private final class ClipboardTestPage: NSObject, WKNavigationDelegate {
+    let webView: WKWebView
+    private var loading: CheckedContinuation<Void, Error>?
+
+    override init() {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 900), configuration: configuration)
+        super.init()
+        webView.navigationDelegate = self
+    }
+
+    func load() async throws {
+        let timeout = Task {
+            do { try await Task.sleep(for: .seconds(15)) } catch { return }
+            finish(.failure(URLError(.timedOut)))
+        }
+        defer { timeout.cancel() }
+        try await withCheckedThrowingContinuation { continuation in
+            loading = continuation
+            webView.loadHTMLString("<html><body><div id='editor' contenteditable='true'></div></body></html>", baseURL: nil)
+        }
+    }
+
+    private func finish(_ result: Result<Void, Error>) {
+        loading?.resume(with: result)
+        loading = nil
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { finish(.success(())) }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { finish(.failure(error)) }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { finish(.failure(error)) }
 }
 
 @MainActor
