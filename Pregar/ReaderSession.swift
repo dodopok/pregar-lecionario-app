@@ -675,6 +675,69 @@ private final class ReaderScrollMessageHandler: NSObject, WKScriptMessageHandler
 }
 
 @MainActor
+final class ReaderWebNavigationView: WKWebView {
+    var onOpenURL: ((URL, Bool) -> Void)?
+    private var middleMouseMonitor: Any?
+
+    func removeMouseMonitor() {
+        if let middleMouseMonitor { NSEvent.removeMonitor(middleMouseMonitor) }
+        middleMouseMonitor = nil
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        removeMouseMonitor()
+        guard window != nil else { return }
+        middleMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown, .otherMouseUp]) { [weak self] event in
+            guard let self, event.window === self.window, event.buttonNumber == 2,
+                  self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else { return event }
+            if event.type == .otherMouseUp { self.otherMouseUp(with: event) }
+            return nil
+        }
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        if event.buttonNumber != 2 { super.otherMouseDown(with: event) }
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        guard event.buttonNumber == 2 else { super.otherMouseUp(with: event); return }
+        let windowPoint = event.window == nil ? (window?.convertPoint(fromScreen: event.locationInWindow) ?? event.locationInWindow) : event.locationInWindow
+        let point = convert(windowPoint, from: nil)
+        guard bounds.contains(point) else { return }
+        let background = !event.modifierFlags.contains(.shift)
+        Task { @MainActor [weak self] in
+            guard let self, let value = try? await self.callAsyncJavaScript("""
+            let root=document, px=x, py=y;
+            for(let depth=0;depth<8;depth++) {
+              let element=root.elementFromPoint(px,py);
+              if(!element) return null;
+              while(element.shadowRoot) {
+                const inner=element.shadowRoot.elementFromPoint(px,py);
+                if(!inner || inner===element) break;
+                element=inner;
+              }
+              const link=element.closest('a[href],area[href]');
+              if(link) return new URL(link.getAttribute('href'),link.baseURI).href;
+              if(element.tagName!=='IFRAME') return null;
+              try {
+                const frameDocument=element.contentDocument;
+                if(!frameDocument) return null;
+                const rect=element.getBoundingClientRect();
+                px-=rect.left+element.clientLeft; py-=rect.top+element.clientTop;
+                root=frameDocument;
+              } catch { return null; }
+            }
+            return null;
+            """, arguments: ["x": point.x, "y": self.isFlipped ? point.y : self.bounds.height - point.y], in: nil, contentWorld: .defaultClient),
+                  let address = value as? String, let url = URL(string: address),
+                  ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+            self.onOpenURL?(url, background)
+        }
+    }
+}
+
+@MainActor
 final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
     @Published private(set) var currentURL: URL
     @Published private(set) var title = ""
@@ -687,7 +750,7 @@ final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate, 
     var onOpenTab: ((URL, Bool) -> Void)?
     var onStateChange: (() -> Void)?
     var onPositionChange: (() -> Void)?
-    let webView: WKWebView
+    let webView: ReaderWebNavigationView
     private var observations: [NSKeyValueObservation] = []
     private var restoreTask: Task<Void, Never>?
     private var generation = 0
@@ -702,11 +765,12 @@ final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate, 
         let handler = ReaderScrollMessageHandler()
         configuration.userContentController.add(handler, name: "pregarScroll")
         configuration.userContentController.addUserScript(WKUserScript(source: Self.scrollScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
-        webView = WKWebView(frame: .zero, configuration: configuration)
+        webView = ReaderWebNavigationView(frame: .zero, configuration: configuration)
         super.init()
         handler.owner = self
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        webView.onOpenURL = { [weak self] url, background in self?.onOpenTab?(url, background) }
         webView.allowsBackForwardNavigationGestures = true
         observations = [
             webView.observe(\.title, options: [.new]) { [weak self] view, _ in
@@ -758,6 +822,8 @@ final class ReaderWebSession: NSObject, ObservableObject, WKNavigationDelegate, 
         restoreTask?.cancel()
         observations.removeAll()
         webView.stopLoading()
+        webView.removeMouseMonitor()
+        webView.onOpenURL = nil
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "pregarScroll")
@@ -1459,6 +1525,9 @@ struct ReaderPDFView: NSViewRepresentable {
             coordinator?.observeScrolling(in: view)
             coordinator?.scheduleNavigation(in: view)
         }
+        view.onResizeComplete = { [weak coordinator = context.coordinator, weak view] in
+            if let view { coordinator?.publishPage(in: view); coordinator?.publishPosition(in: view) }
+        }
         let coordinator = context.coordinator
         coordinator.observers = [
             NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: view, queue: .main) { [weak coordinator, weak view] _ in
@@ -1487,7 +1556,9 @@ struct ReaderPDFView: NSViewRepresentable {
 
     static func dismantleNSView(_ view: ReaderPDFNavigationView, coordinator: Coordinator) {
         coordinator.publishPosition(in: view)
+        view.cancelResizeRestoration()
         view.onLayout = nil
+        view.onResizeComplete = nil
         view.onOpenURL = nil
         view.onOpenDestination = nil
         coordinator.navigationTask?.cancel()
@@ -1523,6 +1594,8 @@ struct ReaderPDFView: NSViewRepresentable {
             lastRequestedPage = target
             lastNavigationID = navigationID
             if documentChanged || explicitNavigation || (pageChanged && lastPublishedPage != target) {
+                view.cancelResizeRestoration()
+                view.preservesViewportOnResize = false
                 navigationTask?.cancel()
                 navigationTask = nil
                 pendingPage = target
@@ -1562,6 +1635,7 @@ struct ReaderPDFView: NSViewRepresentable {
                 self.pendingPosition = nil
                 self.pendingPage = nil
                 self.navigationTask = nil
+                view.preservesViewportOnResize = true
                 self.observeScrolling(in: view)
             }
         }
@@ -1576,7 +1650,8 @@ struct ReaderPDFView: NSViewRepresentable {
         }
 
         func publishPosition(in view: PDFView) {
-            guard pendingPage == nil, view.window != nil, let document = view.document, let destination = view.currentDestination, let page = destination.page else { return }
+            guard pendingPage == nil, (view as? ReaderPDFNavigationView)?.isRestoringResize != true,
+                  view.window != nil, let document = view.document, let destination = view.currentDestination, let page = destination.page else { return }
             let index = document.index(for: page)
             guard (0..<document.pageCount).contains(index) else { return }
             let point = destination.point
@@ -1587,7 +1662,8 @@ struct ReaderPDFView: NSViewRepresentable {
         }
 
         func publishPage(in view: PDFView) {
-            guard pendingPage == nil, view.window != nil, let document = view.document, let current = view.currentPage else { return }
+            guard pendingPage == nil, (view as? ReaderPDFNavigationView)?.isRestoringResize != true,
+                  view.window != nil, let document = view.document, let current = view.currentPage else { return }
             let index = document.index(for: current)
             guard (0..<document.pageCount).contains(index) else { return }
             lastPublishedPage = index + 1
@@ -1598,9 +1674,40 @@ struct ReaderPDFView: NSViewRepresentable {
 
 final class ReaderPDFNavigationView: PDFView {
     var onLayout: (() -> Void)?
+    var onResizeComplete: (() -> Void)?
     var onOpenURL: ((URL, Bool) -> Void)?
     var onOpenDestination: ((ReaderPDFPosition, Bool) -> Void)?
     private var mouseMonitor: Any?
+    var preservesViewportOnResize = false
+    private var resizeDestination: PDFDestination?
+    private var resizeTask: Task<Void, Never>?
+    var isRestoringResize: Bool { resizeDestination != nil }
+
+    func cancelResizeRestoration() {
+        resizeTask?.cancel()
+        resizeTask = nil
+        resizeDestination = nil
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        if preservesViewportOnResize, window != nil, bounds.width > 0, bounds.height > 0,
+           newSize != frame.size, resizeDestination == nil { resizeDestination = currentDestination }
+        super.setFrameSize(newSize)
+        guard resizeDestination != nil else { return }
+        resizeTask?.cancel()
+        resizeTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled, let self, let destination = self.resizeDestination else { return }
+            self.layoutSubtreeIfNeeded()
+            self.layoutDocumentView()
+            self.go(to: destination)
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            self.resizeDestination = nil
+            self.resizeTask = nil
+            self.onResizeComplete?()
+        }
+    }
 
     override func layout() { super.layout(); onLayout?() }
     override func viewDidMoveToWindow() {

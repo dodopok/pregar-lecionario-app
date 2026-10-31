@@ -60,7 +60,9 @@ final class PregarBackupTests: XCTestCase {
 
         let tabID = UUID()
         let position = ReaderPDFPosition(page: 1, x: 20, y: 340, scale: 1.6, autoScales: false)
-        var closed = ReaderTab(id: UUID(), title: "Aba fechada", kind: .pdf, location: pdfURL.path, physicalPage: 1, reference: nil, sermonDateKey: "2026-11-01", includedInReview: false)
+        let closedPDF = sourceDirectory.appendingPathComponent("ApenasNaAbaFechada.pdf")
+        try Data("%PDF-1.7\nclosed-only backup fixture\n".utf8).write(to: closedPDF)
+        var closed = ReaderTab(id: UUID(), title: "Aba fechada", kind: .pdf, location: closedPDF.path, physicalPage: 1, reference: nil, sermonDateKey: "2026-11-01", includedInReview: false)
         closed.pdfPosition = position
         let reader = ReaderArchive(tabs: [ReaderTab(
             id: tabID,
@@ -89,7 +91,7 @@ final class PregarBackupTests: XCTestCase {
         XCTAssertEqual(contents.manifest.draftCount, 1)
         XCTAssertEqual(contents.manifest.libraryCount, 1)
         XCTAssertEqual(contents.manifest.historyFileCount, 1)
-        XCTAssertEqual(contents.assetPaths.count, 1)
+        XCTAssertEqual(contents.assetPaths.count, 2)
         XCTAssertEqual(contents.rememberedPages.count, 1)
         XCTAssertTrue(contents.drafts[0].tabletPDFPath?.hasPrefix("Files/") == true)
         XCTAssertTrue(contents.libraryRecords[0].path.hasPrefix("Files/"))

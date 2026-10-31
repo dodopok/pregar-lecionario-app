@@ -318,6 +318,24 @@ final class ReaderNavigationTests: XCTestCase {
         XCTAssertEqual(physicalPage(in: pdf), 1)
     }
 
+    func testResizingThePDFKeepsItsDestinationInsteadOfPublishingThePreviousPage() async throws {
+        let document = try makeDocument()
+        let (window, hosting, pdf) = try host(document: document, page: 14)
+        defer { window.close() }
+        try await assertPage(14, in: pdf)
+        pdf.go(to: PDFDestination(page: try XCTUnwrap(document.page(at: 13)), at: NSPoint(x: 0, y: 600)))
+        try await Task.sleep(for: .milliseconds(100))
+        let before = try XCTUnwrap(pdf.currentDestination)
+        for width in [1100, 610, 900] {
+            window.setContentSize(NSSize(width: width, height: 800))
+            hosting.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(150))
+            let destination = try XCTUnwrap(pdf.currentDestination)
+            XCTAssertEqual(document.index(for: try XCTUnwrap(destination.page)), document.index(for: try XCTUnwrap(before.page)))
+            XCTAssertEqual(destination.point.y, before.point.y, accuracy: 2)
+        }
+    }
+
     func testTabWidthsShrinkUntilTheMinimumAndThenOverflowForHorizontalScrolling() {
         XCTAssertEqual(ReaderTabLayout.width(available: 900, count: 2), 220)
         XCTAssertEqual(ReaderTabLayout.width(available: 620, count: 4), 152)
@@ -395,6 +413,86 @@ final class ReaderNavigationTests: XCTestCase {
         XCTAssertEqual(store.selectedTab?.location, server.url("/b").absoluteString)
         XCTAssertEqual(store.selectedTab?.title, "Artigo B")
         XCTAssertFalse(try XCTUnwrap(store.selectedTab).isIncludedForReview)
+    }
+
+    func testNativeWebMiddleClickOpensABackgroundTabWithoutChangingTheArticle() async throws {
+        let fixture = try ReaderTestEnvironment()
+        defer { fixture.cleanup() }
+        let server = try await ReaderTestServer.start()
+        defer { server.stop() }
+        let store = fixture.store
+        store.openWeb(title: "A", url: server.url("/a"), sermonDateKey: "2026-11-01")
+        let tab = try XCTUnwrap(store.selectedTab)
+        let session = try XCTUnwrap(store.webSession(for: tab))
+        let window = hostWeb(session)
+        window.styleMask = [.titled, .closable]
+        window.setContentSize(NSSize(width: 800, height: 600))
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(session.webView)
+        defer { window.close(); session.invalidate() }
+        try await waitForWeb(session)
+        let rawPoint = try await session.webView.evaluateJavaScript("""
+            const rect=document.getElementById('middle').getBoundingClientRect();
+            ({x:rect.x+rect.width/2,y:rect.y+rect.height/2});
+            """)
+        let point = try XCTUnwrap(rawPoint as? [String: Double])
+        let local = NSPoint(x: point["x"]!, y: session.webView.isFlipped ? point["y"]! : session.webView.bounds.height - point["y"]!)
+        let screenPoint = window.convertPoint(toScreen: session.webView.convert(local, to: nil))
+        for type in [CGEventType.otherMouseDown, .otherMouseUp] {
+            let cg = try XCTUnwrap(CGEvent(mouseEventSource: nil, mouseType: type,
+                mouseCursorPosition: CGPoint(x: screenPoint.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - screenPoint.y), mouseButton: .center))
+            let event = try XCTUnwrap(NSEvent(cgEvent: cg))
+            XCTAssertEqual(event.buttonNumber, 2)
+            if type == .otherMouseDown { session.webView.otherMouseDown(with: event) } else { session.webView.otherMouseUp(with: event) }
+            try await Task.sleep(for: .milliseconds(30))
+        }
+        for _ in 0..<150 {
+            if store.visibleTabs.count == 2 { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(store.visibleTabs.count, 2)
+        XCTAssertEqual(store.selectedID, tab.id)
+        XCTAssertEqual(session.currentURL, server.url("/a"))
+        XCTAssertTrue(store.visibleTabs.contains { $0.location == server.url("/b").absoluteString })
+    }
+
+    func testReaderWindowRendersOverflowTabsAtCompactAndWideWidthsWhenOptedIn() async throws {
+        guard let directory = ProcessInfo.processInfo.environment["PREGAR_READER_CAPTURE_DIRECTORY"] else {
+            throw XCTSkip("Ative a captura local para conferir a janela com muitas abas.")
+        }
+        let fixture = try ReaderTestEnvironment()
+        defer { fixture.cleanup() }
+        let file = fixture.directory.appendingPathComponent("preview.pdf")
+        XCTAssertTrue(try makeDocument().write(to: file))
+        let store = fixture.store
+        for index in 1...24 {
+            store.openWeb(title: "Material de pesquisa \(index)", url: URL(string: "https://example.invalid/material-\(index)")!, sermonDateKey: "2026-11-01", inBackground: true, forceNewTab: true)
+        }
+        let opened = await store.openPDF(title: "Comentário de teste", path: file.path, page: 14, reference: "Salmo 34:1-10,22", sermonDateKey: "2026-11-01", indexedSections: [.init(title: "Salmo 34", startPage: 14, endPage: 17)])
+        XCTAssertTrue(opened)
+        let appearance = AppAppearanceStore(defaults: fixture.defaults)
+        let originalAppearance = NSApp.appearance
+        defer { NSApp.appearance = originalAppearance }
+        let hosting = NSHostingView(rootView: ReaderWindowView().environmentObject(store).environmentObject(appearance))
+        let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: 1380, height: 820), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        window.orderFront(nil)
+        defer { window.close() }
+        let folder = URL(fileURLWithPath: directory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for width in [820, 1380] {
+            window.setContentSize(NSSize(width: width, height: 820))
+            hosting.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(250))
+            XCTAssertEqual(store.selectedTab?.physicalPage, 14, "Redimensionar a pesquisa não pode trocar a página do PDF.")
+            let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
+            hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+            let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            try png.write(to: folder.appendingPathComponent("pesquisa-\(width).png"))
+        }
+        XCTAssertEqual(store.visibleTabs.count, 25)
+        XCTAssertEqual(store.selectedTab?.kind, .pdf)
     }
 
     private func hostWeb(_ session: ReaderWebSession) -> NSWindow {

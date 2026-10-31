@@ -138,6 +138,23 @@ Atalhos da preparação:
 
 Os atalhos que antes conflitavam com alinhamento e estilos de parágrafo foram movidos. Os painéis da Mesa continuam redimensionáveis e lembram suas larguras entre sessões.
 
+## Pesquisa: PDFs e sites
+
+Cada sermão mantém suas abas, a aba selecionada e a posição da leitura. Ao voltar a um PDF, o Leitor restaura o ponto dentro da página e o zoom; sites mantêm a rolagem ao trocar de aba e ao reabrir o app. O menu de pesquisa permite consultar os conjuntos salvos de outros sermões. Abas antigas sem sermão associado ficam em **Pesquisa geral**.
+
+O botão do meio abre materiais, seções e links em uma nova aba ao fundo. ⌘clique também funciona nas listas de materiais e seções e nos links web. Acrescente ⇧ para selecionar a nova aba. O botão do meio sobre uma aba a fecha. As abas diminuem até uma largura mínima; depois, a barra permite rolagem horizontal. Também é possível arrastar para reordenar e usar o menu de todas as abas para encontrar um material.
+
+| Atalho no Leitor | Ação |
+| --- | --- |
+| ⌘T · ⌘W | Nova aba · Fechar aba |
+| ⇧⌘T | Reabrir a última aba fechada neste sermão |
+| ⌃Tab · ⇧⌃Tab | Próxima aba · Aba anterior |
+| ⌘[ · ⌘] | Voltar · Avançar |
+| ⌘L · ⌘R | Editar endereço do site · Recarregar |
+| ⌘+ · ⌘− | Aumentar · Diminuir zoom do PDF |
+
+O menu de contexto de uma aba oferece duplicar, fechar outras abas e fechar as abas à direita. Os painéis de seções e informações podem ser ocultados para ampliar a leitura. As marcações de materiais para revisão ficam associadas ao sermão; navegar para outra página web pede uma nova marcação.
+
 ## Onde os dados ficam
 
 - **Manuscritos** em SwiftData, no armazenamento padrão do app, em RTF. Esse RTF é a fonte das exportações: estilos de título em metadados do próprio RTF, citação com recuo de 34 pt, listas com marcadores explícitos e notas em sobrescrito. RTFs anteriores continuam compatíveis.
