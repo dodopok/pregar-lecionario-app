@@ -331,6 +331,15 @@ Validação: 25 testes da revisão e pesquisa passaram, sem falhas; um teste ext
 
 Validação final: 29 testes locais de revisão e pesquisa passaram, sem falhas; três testes externos optativos ficaram desativados nessa rodada. Separadamente, a revisão real do arquivo autorizado com Claude Opus 5.5 e a NVT passou após receber `end_turn`. A reprodução de falha e a correção registram apenas metadados, sem incluir o sermão no repositório. A revisão 6 usa a compilação `2026103006`, para Apple Silicon e Intel.
 
+## Perguntas de emergência com trechos verificados (30/10/2026, revisão 7)
+
+- A reprodução com o texto autorizado confirmou resposta HTTP 200 do Claude, mas o filtro de vocabulário rejeitava perguntas por tratar palavras de ligação e de esclarecimento como conceitos novos. No macOS usado para reproduzir, o português não oferece os esquemas `lexicalClass` e `lemma`; essa comparação não distinguia de forma confiável uma pergunta neutra de uma sugestão.
+- O contrato agora pede ao provedor somente um tipo de esclarecimento (`meaning`, `role` ou `connection`) e trechos literais do manuscrito, com até 120 caracteres cada. O aplicativo forma a pergunta neutra sobre sentido, papel ou relação no texto existente. Redação livre de perguntas é rejeitada; a pergunta não depende mais do classificador lexical. Relações exigem dois trechos diferentes, e o resultado oferece navegação para ambos.
+- Cada item é verificado separadamente: trecho ausente, tipo desconhecido, citação inventada ou fonte não fornecida descartam apenas esse item. O resultado conserva até três perguntas válidas e informa quantas foram descartadas. Se nenhum item recebido passar, o erro continua explícito. Os registros guardam somente contagens e motivos, sem copiar o sermão ou as perguntas.
+- O transporte das perguntas compartilha o tratamento de truncamento da revisão: no Claude, 16.000 tokens, uma única nova tentativa de 32.000 quando houver `max_tokens`, e distinção entre resposta incompleta, recusa e falha de leitura. Fechar a janela cancela a solicitação, sem acrescentar nada ao manuscrito.
+
+Validação final: 37 testes de revisão e pesquisa passaram, sem falhas, incluindo a geração real autorizada com o mesmo arquivo de 1.272 palavras, Salmo 34:1-10,22 na NVT e Claude Opus 5.5. A resposta terminou com `end_turn`, retornou três perguntas e todas foram aceitas com âncoras literais verificadas. Três testes externos optativos ficaram desativados. A rodada local anterior aprovou 36 testes sem rede. O texto e as respostas pessoais permanecem fora do repositório e do instalador. A revisão 7 usa a compilação `2026103007`, para Apple Silicon e Intel.
+
 ## Próximos passos
 
 1. Criar o OAuth Client ID e uma chave restrita à Drive API no Google Cloud; validar a sincronização Google Docs e a importação a partir de uma pasta pública real.

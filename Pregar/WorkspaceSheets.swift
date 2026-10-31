@@ -800,6 +800,8 @@ struct EmergencyQuestionsSheet: View {
     @State private var questions: [SermonAIQuestion]?
     @State private var isSending = false
     @State private var errorMessage: String?
+    @State private var validationNotice: String?
+    @State private var sendingTask: Task<Void, Never>?
 
     private var selectedMaterials: [ReaderTab] { readerSession.materialsMarkedForReview() }
     private var provider: AIProvider { aiSettings.reviewProvider }
@@ -857,7 +859,7 @@ struct EmergencyQuestionsSheet: View {
                     Spacer()
                     Button("Cancelar") { dismiss() }.buttonStyle(.secondaryAction).keyboardShortcut(.cancelAction)
                     Button {
-                        Task { await requestQuestions() }
+                        sendingTask = Task { await requestQuestions() }
                     } label: {
                         if isSending {
                             Label("Pensando…", systemImage: "hourglass")
@@ -875,6 +877,7 @@ struct EmergencyQuestionsSheet: View {
         .frame(width: 560)
         .frame(minHeight: 300)
         .background(PrototypeStyle.canvas)
+        .onDisappear { sendingTask?.cancel() }
     }
 
     private var payloadDescription: String {
@@ -895,6 +898,12 @@ struct EmergencyQuestionsSheet: View {
                 Text("\(provider.name) · \(aiSettings.reviewModel)")
                     .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
             }
+            if let validationNotice {
+                Label(validationNotice, systemImage: "checkmark.shield")
+                    .font(.system(size: 11))
+                    .foregroundStyle(PrototypeStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if questions.isEmpty {
                 ContentUnavailableView("Sem perguntas adicionais", systemImage: "text.bubble", description: Text("Não encontrei uma pergunta neutra que respeitasse os limites definidos."))
                     .frame(minHeight: 150)
@@ -911,6 +920,10 @@ struct EmergencyQuestionsSheet: View {
                                     .fixedSize(horizontal: false, vertical: true)
                                 Button("Ir ao trecho", systemImage: "text.viewfinder") { selectQuote(item.manuscriptQuote) }
                                     .buttonStyle(.linkAction(accent, compact: true))
+                                if let related = item.relatedManuscriptQuote {
+                                    Button("Ir ao outro trecho", systemImage: "text.viewfinder") { selectQuote(related) }
+                                        .buttonStyle(.linkAction(accent, compact: true))
+                                }
                                 if !item.evidenceQuote.isEmpty {
                                     Text("“\(item.evidenceQuote)”")
                                         .font(.system(size: 10)).foregroundStyle(PrototypeStyle.muted)
@@ -940,13 +953,14 @@ struct EmergencyQuestionsSheet: View {
         guard canSend else { return }
         isSending = true
         errorMessage = nil
+        validationNotice = nil
         defer { isSending = false }
         do {
             guard let key = await aiSettings.key(for: provider), !key.isEmpty else {
                 throw SermonAIQuestionError.noKey
             }
             let sources = bibleSources + (try await readerSession.reviewSources(for: context.mainReference))
-            questions = try await SermonAIQuestionClient().questions(
+            let result = try await SermonAIQuestionClient().generate(
                 context: context,
                 sources: sources,
                 configuration: SermonReviewConfiguration(
@@ -955,8 +969,11 @@ struct EmergencyQuestionsSheet: View {
                     apiKey: key
                 )
             )
+            try Task.checkCancellation()
+            questions = result.questions
+            validationNotice = result.validationNotice
         } catch {
-            errorMessage = error.localizedDescription
+            if !Task.isCancelled { errorMessage = error.localizedDescription }
         }
     }
 }

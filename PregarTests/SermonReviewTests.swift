@@ -3,6 +3,187 @@ import XCTest
 @testable import Pregar
 
 final class SermonReviewTests: XCTestCase {
+    func testEmergencyQuestionsRenderNeutralClarificationsFromLiteralPortugueseQuotes() async throws {
+        let manuscript = "Explique o temor. A confiança sustenta o testemunho. O exemplo retoma a confiança."
+        let json = #"{"questions":[{"kind":"meaning","manuscript_quote":"Explique o temor.","related_manuscript_quote":"","evidence_source_id":"","evidence_quote":""},{"kind":"role","manuscript_quote":"O exemplo retoma a confiança.","related_manuscript_quote":"","evidence_source_id":"","evidence_quote":""},{"kind":"connection","manuscript_quote":"A confiança sustenta o testemunho.","related_manuscript_quote":"O exemplo retoma a confiança.","evidence_source_id":"","evidence_quote":""}]}"#
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .anthropic)) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIQuestionClient(session: session).generate(context: questionContext(manuscript: manuscript), sources: [], configuration: configuration(for: .anthropic))
+        XCTAssertEqual(result.questions.map(\.question), [
+            "O que você quis dizer com “Explique o temor.”?",
+            "Qual é o papel de “O exemplo retoma a confiança.” no seu texto?",
+            "Qual é a relação, no seu texto, entre “A confiança sustenta o testemunho.” e “O exemplo retoma a confiança.”?"
+        ])
+        XCTAssertNil(result.questions[0].relatedManuscriptQuote)
+        XCTAssertEqual(result.questions[2].relatedManuscriptQuote, "O exemplo retoma a confiança.")
+        XCTAssertEqual(result.rejectedQuestionCount, 0)
+        XCTAssertNil(result.validationNotice)
+    }
+
+    func testEmergencyQuestionsKeepValidQuestionsAndReportDiscardedItems() async throws {
+        let json = #"{"questions":[{"kind":"meaning","manuscript_quote":"distante","related_manuscript_quote":"","evidence_source_id":"","evidence_quote":""},{"kind":"meaning","question":"Você poderia acrescentar uma aplicação?","manuscript_quote":"A promessa parece distante.","related_manuscript_quote":"","evidence_source_id":"","evidence_quote":""}]}"#
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(json, provider: .anthropic)) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIQuestionClient(session: session).generate(context: questionContext(manuscript: "A promessa parece distante."), sources: [], configuration: configuration(for: .anthropic))
+        XCTAssertEqual(result.questions.map(\.question), ["O que você quis dizer com “distante”?"])
+        XCTAssertEqual(result.rejectedQuestionCount, 1)
+        XCTAssertNotNil(result.validationNotice)
+        XCTAssertFalse(result.validationNotice?.contains("acrescentar") == true)
+    }
+
+    func testEmergencyQuestionsRequireDistinctLiteralConnectionAnchorsWithinTheLimit() async throws {
+        let longQuote = String(repeating: "a", count: 121)
+        let manuscript = "A promessa parece distante. A confiança sustenta a vida. " + longQuote
+        let base = ["kind": "connection", "manuscript_quote": "A promessa parece distante.", "related_manuscript_quote": "A confiança sustenta a vida.", "evidence_source_id": "", "evidence_quote": ""]
+        var items: [[String: String]] = []
+        for related in ["", "trecho inexistente", "A promessa parece distante.", longQuote] {
+            var invalid = base
+            invalid["related_manuscript_quote"] = related
+            items.append(invalid)
+        }
+        var tooLong = base
+        tooLong["manuscript_quote"] = longQuote
+        items.append(tooLong)
+        var unexpectedRelated = base
+        unexpectedRelated["kind"] = "meaning"
+        items.append(unexpectedRelated)
+        items.append(base)
+        let json = try JSONSerialization.data(withJSONObject: ["questions": items])
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(String(decoding: json, as: UTF8.self), provider: .anthropic)) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIQuestionClient(session: session).generate(context: questionContext(manuscript: manuscript), sources: [], configuration: configuration(for: .anthropic))
+        XCTAssertEqual(result.questions.count, 1)
+        XCTAssertEqual(result.rejectedQuestionCount, 6)
+        XCTAssertEqual(result.questions.first?.relatedManuscriptQuote, "A confiança sustenta a vida.")
+    }
+
+    func testEmergencyQuestionsRequireProvidedSourcesAndLiteralEvidence() async throws {
+        let source = bibleSource()
+        let valid = ["kind": "meaning", "manuscript_quote": "distante", "related_manuscript_quote": "", "evidence_source_id": source.id, "evidence_quote": source.text]
+        var missingSource = valid
+        missingSource["evidence_source_id"] = "unknown"
+        var inventedEvidence = valid
+        inventedEvidence["evidence_quote"] = "evidência inexistente"
+        let json = try JSONSerialization.data(withJSONObject: ["questions": [missingSource, inventedEvidence, valid]])
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(String(decoding: json, as: UTF8.self), provider: .openAI)) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIQuestionClient(session: session).generate(context: questionContext(manuscript: "A promessa parece distante."), sources: [source], configuration: configuration(for: .openAI))
+        XCTAssertEqual(result.questions.count, 1)
+        XCTAssertEqual(result.rejectedQuestionCount, 2)
+        XCTAssertEqual(result.questions.first?.evidenceQuote, source.text)
+        XCTAssertEqual(result.questions.first?.evidenceSourceTitle, source.title)
+    }
+
+    func testEmergencyQuestionsNeverDisplayMoreThanThreeValidatedQuestions() async throws {
+        let question = ["kind": "meaning", "manuscript_quote": "distante", "related_manuscript_quote": "", "evidence_source_id": "", "evidence_quote": ""]
+        let json = try JSONSerialization.data(withJSONObject: ["questions": Array(repeating: question, count: 4)])
+        ReviewStubURLProtocol.setHandler { _ in (200, Self.responseData(String(decoding: json, as: UTF8.self), provider: .anthropic)) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIQuestionClient(session: session).generate(context: questionContext(manuscript: "A promessa parece distante."), sources: [], configuration: configuration(for: .anthropic))
+        XCTAssertEqual(result.questions.count, 3)
+        XCTAssertEqual(result.rejectedQuestionCount, 1)
+    }
+
+    func testClaudeEmergencyQuestionsUseTheSharedBoundedTruncationHandling() async throws {
+        var requests = 0
+        ReviewStubURLProtocol.setHandler { _ in
+            requests += 1
+            return (200, try! JSONSerialization.data(withJSONObject: ["stop_reason": "max_tokens", "content": [["type": "text", "text": "{\"questions\":[]}"]]]))
+        }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        do {
+            _ = try await SermonAIQuestionClient(session: session).questions(context: questionContext(), sources: [], configuration: configuration(for: .anthropic))
+            XCTFail("A truncated response must not become a completed question list.")
+        } catch let error as SermonAIQuestionError {
+            guard case .incompleteResponse = error else { return XCTFail("Unexpected error: \(error)") }
+        }
+        XCTAssertEqual(requests, 2)
+        let request = try SermonAIQuestionClient.makeRequest(context: questionContext(), sources: [], configuration: configuration(for: .anthropic))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+        XCTAssertEqual(body["max_tokens"] as? Int, 16_000)
+    }
+
+    func testEmergencyQuestionSchemaOnlyAllowsKindsAndAnchors() throws {
+        let source = bibleSource()
+        let request = try SermonAIQuestionClient.makeRequest(context: questionContext(), sources: [source], configuration: configuration(for: .anthropic))
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+        let format = try XCTUnwrap((body["output_config"] as? [String: Any])?["format"] as? [String: Any])
+        let schema = try XCTUnwrap(format["schema"] as? [String: Any])
+        let properties = try XCTUnwrap(schema["properties"] as? [String: Any])
+        let questions = try XCTUnwrap(properties["questions"] as? [String: Any])
+        let item = try XCTUnwrap(questions["items"] as? [String: Any])
+        let fields = try XCTUnwrap(item["properties"] as? [String: Any])
+        XCTAssertNil(fields["question"], "O provedor não redige texto que possa sugerir ideias ao autor.")
+        XCTAssertEqual((fields["kind"] as? [String: Any])?["enum"] as? [String], ["meaning", "connection", "role"])
+        XCTAssertEqual((fields["evidence_source_id"] as? [String: Any])?["enum"] as? [String], ["", source.id])
+        XCTAssertEqual(Set(try XCTUnwrap(item["required"] as? [String])), Set(fields.keys))
+        XCTAssertEqual(item["additionalProperties"] as? Bool, false)
+        XCTAssertNil(item["anyOf"])
+        XCTAssertTrue(((fields["manuscript_quote"] as? [String: Any])?["description"] as? String)?.contains("120") == true)
+    }
+
+    @MainActor
+    func testLiveAttachedManuscriptQuestionsWhenOptedIn() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let path = environment["PREGAR_LIVE_QUESTIONS_MANUSCRIPT"] else {
+            throw XCTSkip("Informe PREGAR_LIVE_QUESTIONS_MANUSCRIPT para autorizar a geração real com um arquivo local.")
+        }
+        guard let key = await AISettingsStore().key(for: .anthropic),
+              let bibleKey = await Task.detached(priority: .utility, operation: { APIKeychain.read() }).value else {
+            throw XCTSkip("As chaves configuradas devem estar disponíveis.")
+        }
+        let manuscript = try String(contentsOfFile: path, encoding: .utf8)
+        let reference = "Salmo 34:1-10,22"
+        let passage = try await LiturgicalAPIClient(settings: APISettings.load(), apiKey: bibleKey).fetchPassage(reference: reference, bible: "nvt")
+        let sourceText = passage.verses?.map { "\($0.number) \($0.text)" }.joined(separator: "\n") ?? passage.content ?? ""
+        XCTAssertFalse(sourceText.isEmpty)
+        let sources = [SermonReviewSource(id: "bible:nvt", title: "NVT", citation: reference, text: sourceText)]
+        let context = SermonQuestionContext(dateKey: "2026-11-01", title: "Reprodução local", mainReference: reference, manuscript: manuscript)
+        let configuration = SermonReviewConfiguration(provider: .anthropic, model: "claude-opus-5-5", apiKey: key)
+        let request = try SermonAIQuestionClient.makeRequest(context: context, sources: sources, configuration: configuration)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = try XCTUnwrap(response as? HTTPURLResponse).statusCode
+        guard status == 200 else { throw SermonAIQuestionError.provider(status: status, detail: AIProviderResponseError.detail(in: data, redacting: key)) }
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let output = try XCTUnwrap(SermonAIReviewClient.outputText(in: data, from: .anthropic))
+        var receipt: [String: Any] = ["status": status, "stopReason": root["stop_reason"] ?? NSNull(), "usage": root["usage"] ?? [:], "outputCharacters": output.count]
+        if let value = try? JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any],
+           let questions = value["questions"] as? [[String: String]] {
+            receipt["questions"] = questions.map { item -> [String: Any] in
+                let quote = item["manuscript_quote"] ?? ""
+                let related = item["related_manuscript_quote"] ?? ""
+                return ["kind": item["kind"] ?? "", "quoteCharacters": quote.count,
+                        "quoteFound": !quote.isEmpty && SermonAIReviewClient.containsExact(quote, in: manuscript),
+                        "relatedQuoteCharacters": related.count,
+                        "relatedQuoteFound": related.isEmpty || SermonAIReviewClient.containsExact(related, in: manuscript)]
+            }
+        }
+        if let directory = environment["PREGAR_QUESTIONS_CAPTURE_DIRECTORY"] {
+            let url = URL(fileURLWithPath: directory)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys]).write(to: url.appendingPathComponent("receipt.json"))
+            // Somente a saída destinada ao usuário; pensamentos e chaves não são gravados.
+            try Data(output.utf8).write(to: url.appendingPathComponent("questions.json"))
+        }
+        ReviewStubURLProtocol.setHandler { _ in (status, data) }
+        let session = stubSession()
+        defer { session.invalidateAndCancel() }
+        let result = try await SermonAIQuestionClient(session: session).generate(context: context, sources: sources, configuration: configuration)
+        XCTAssertFalse(result.questions.isEmpty)
+        XCTAssertLessThanOrEqual(result.questions.count, 3)
+        receipt["acceptedCount"] = result.questions.count
+        receipt["rejectedCount"] = result.rejectedQuestionCount
+        if let directory = environment["PREGAR_QUESTIONS_CAPTURE_DIRECTORY"] {
+            try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys]).write(to: URL(fileURLWithPath: directory).appendingPathComponent("receipt.json"))
+        }
+    }
+
     func testClaudeReviewReservesOutputForThinkingAndTheStructuredReport() throws {
         let request = try SermonAIReviewClient.makeRequest(context: reviewContext(criteria: SermonReviewCriterion.allCases), sources: [bibleSource()], configuration: configuration(for: .anthropic))
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
@@ -647,7 +828,7 @@ final class SermonReviewTests: XCTestCase {
 
     func testEmergencyQuestionsUseAllProvidersWithoutSendingDateOrTitle() async throws {
         let context = questionContext(manuscript: "A promessa parece distante.")
-        let json = #"{"questions":[{"question":"O que você quis dizer com “distante”?","manuscript_quote":"A promessa parece distante.","evidence_source_id":"","evidence_quote":""}]}"#
+        let json = #"{"questions":[{"kind":"meaning","manuscript_quote":"distante","related_manuscript_quote":"","evidence_source_id":"","evidence_quote":""}]}"#
 
         for provider in AIProvider.allCases {
             var captured: URLRequest?
@@ -686,6 +867,8 @@ final class SermonReviewTests: XCTestCase {
 
     func testEmergencyQuestionsRejectUnanchoredTextAndLeadingSuggestions() async throws {
         let invalidResults = [
+            #"{"questions":[{"kind":"meaning","manuscript_quote":"trecho inexistente","related_manuscript_quote":"","evidence_source_id":"","evidence_quote":""}]}"#,
+            #"{"questions":[{"kind":"add_application","manuscript_quote":"A promessa parece distante.","related_manuscript_quote":"","evidence_source_id":"","evidence_quote":""}]}"#,
             #"{"questions":[{"question":"O que você quis dizer com isso?","manuscript_quote":"trecho inexistente","evidence_source_id":"","evidence_quote":""}]}"#,
             #"{"questions":[{"question":"Você poderia acrescentar uma aplicação?","manuscript_quote":"MANUSCRITO_PRIVADO","evidence_source_id":"","evidence_quote":""}]}"#,
             #"{"questions":[{"question":"Que aplicação cotidiana caberia nesta mensagem?","manuscript_quote":"A promessa parece distante.","evidence_source_id":"","evidence_quote":""}]}"#,
