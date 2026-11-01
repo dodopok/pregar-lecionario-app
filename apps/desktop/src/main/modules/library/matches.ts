@@ -2,8 +2,8 @@
  * Índice em memória das seções do acervo para responder rapidamente às correspondências por
  * passagem (painel Materiais da Mesa e contagem do Arquivo). Puro: só o domínio.
  */
-import { parseReference } from '@pregar/core/bible/reference'
-import { matchSection, sectionReferences, PDF_SECTION_MATCH_ORDER } from '@pregar/core/library/matching'
+import { parseReference, type ScriptureReference } from '@pregar/core/bible/reference'
+import { sectionReferences, PDF_SECTION_MATCH_ORDER } from '@pregar/core/library/matching'
 import type { PdfSectionMatchKind } from '@pregar/core/library/matching'
 import type { PdfLibraryRecord, PdfSectionLocation } from '@pregar/core/library/model'
 import { recordDisplayAuthor, recordDisplayTitle } from '@pregar/core/library/record'
@@ -13,6 +13,46 @@ import type { LibrarySectionMatch } from '@shared/ipc-library'
 interface IndexedSection {
   record: PdfLibraryRecord
   section: PdfSectionLocation
+  /** Referências do título e do contexto, lidas uma vez por revisão do acervo. */
+  references: ScriptureReference[]
+}
+
+function chapterWithin(chapter: number, candidate: ScriptureReference): boolean {
+  return chapter >= candidate.chapter && chapter <= (candidate.endChapter ?? candidate.chapter)
+}
+
+/**
+ * Mesma regra de `matchSection` do domínio, sobre referências já lidas: `exact` quando alguma
+ * referência contém a passagem inteira, `partial` quando só se sobrepõem e `context` quando um
+ * dos lados não tem versículos e o capítulo coincide. (Um teste confere a equivalência.)
+ */
+export function matchReferences(candidates: readonly ScriptureReference[], target: ScriptureReference): PdfSectionMatchKind | null {
+  let hasPartial = false
+  for (const candidate of candidates) {
+    if (candidate.book !== target.book) continue
+    const targetStart = target.startVerse
+    const candidateStart = candidate.startVerse
+    if (targetStart === null || candidateStart === null) {
+      if (chapterWithin(target.chapter, candidate)) return 'context'
+      continue
+    }
+    const targetEndChapter = target.endChapter ?? target.chapter
+    const targetEndVerse = target.endVerse ?? targetStart
+    const candidateEndChapter = candidate.endChapter ?? candidate.chapter
+    const candidateEndVerse = candidate.endVerse ?? candidateStart
+    const targetStartsBeforeCandidateEnds =
+      target.chapter < candidateEndChapter || (target.chapter === candidateEndChapter && targetStart <= candidateEndVerse)
+    const candidateStartsBeforeTargetEnds =
+      candidate.chapter < targetEndChapter || (candidate.chapter === targetEndChapter && candidateStart <= targetEndVerse)
+    if (!(targetStartsBeforeCandidateEnds && candidateStartsBeforeTargetEnds)) continue
+    const containsStart =
+      candidate.chapter < target.chapter || (candidate.chapter === target.chapter && candidateStart <= targetStart)
+    const containsEnd =
+      candidateEndChapter > targetEndChapter || (candidateEndChapter === targetEndChapter && candidateEndVerse >= targetEndVerse)
+    if (containsStart && containsEnd) return 'exact'
+    hasPartial = true
+  }
+  return hasPartial ? 'partial' : null
 }
 
 export class SectionMatchIndex {
@@ -23,11 +63,12 @@ export class SectionMatchIndex {
   constructor(records: readonly PdfLibraryRecord[]) {
     for (const record of records) {
       for (const section of record.sections ?? []) {
-        const books = new Set(sectionReferences(section).map((reference) => reference.book))
-        for (const book of books) {
+        const references = sectionReferences(section)
+        const entry: IndexedSection = { record, section, references }
+        for (const book of new Set(references.map((reference) => reference.book))) {
           let list = this.byBook.get(book)
           if (!list) this.byBook.set(book, (list = []))
-          list.push({ record, section })
+          list.push(entry)
         }
       }
     }
@@ -44,8 +85,8 @@ export class SectionMatchIndex {
     const target = parseReference(key)
     const result: LibrarySectionMatch[] = []
     if (target) {
-      for (const { record, section } of this.byBook.get(target.book) ?? []) {
-        const kind = matchSection(section, target)
+      for (const { record, section, references } of this.byBook.get(target.book) ?? []) {
+        const kind = matchReferences(references, target)
         if (kind === null) continue
         result.push({
           recordId: record.id,

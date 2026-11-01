@@ -4,9 +4,10 @@
  */
 import type { PdfMetadata, PdfOutlineItem, PdfPageText, PdfTextSource } from '@pregar/core/library/text-source'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type * as PdfJsModule from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { pageTextFromItems, type PositionedTextItem } from './text-lines'
 
-type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs')
+type PdfJs = typeof PdfJsModule
 
 let loaded: Promise<PdfJs> | null = null
 

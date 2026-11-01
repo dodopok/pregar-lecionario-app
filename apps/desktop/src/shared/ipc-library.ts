@@ -44,6 +44,8 @@ export interface LibraryWork {
   /** Identificador do registro: o caminho do PDF. */
   id: string
   path: string
+  /** `pregar-pdf://open/<base64url(caminho)>`, para renderizar capa e páginas do OCR. */
+  pdfURL: string
   /** Título exibido (correção local ou extraído do PDF). */
   title: string
   author: string | null

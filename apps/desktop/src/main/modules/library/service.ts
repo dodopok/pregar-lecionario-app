@@ -38,7 +38,7 @@ import { UserFacingError } from '../../ipc/router'
 import { checkPdfFile, currentFileInfo, libraryKey, PdfFileError } from './files'
 import { SectionMatchIndex } from './matches'
 import type { LibraryStore } from './store'
-import { coverFileName } from './urls'
+import { coverFileName, pdfURLForPath } from './urls'
 import type { IndexerClient, JobPriority } from './worker-client'
 
 const MAX_COVER_BYTES = 2 * 1024 * 1024
@@ -214,6 +214,7 @@ export class LibraryService {
     return {
       id: record.id,
       path: record.path,
+      pdfURL: pdfURLForPath(record.path),
       title: recordDisplayTitle(record),
       author: recordDisplayAuthor(record) ?? null,
       credits: recordDisplayCredits(record),
@@ -422,7 +423,7 @@ export class LibraryService {
       }
       try {
         const file = await checkPdfFile(raw, { strict: options.strict })
-        if (this.records.has(file.path)) {
+        if (this.records.has(file.path) || this.queued.has(file.path) || this.current === file.path) {
           result.alreadyInLibrary += 1
           existing.push(file.path)
         } else if (!accepted.includes(file.path)) {
@@ -492,8 +493,7 @@ export class LibraryService {
     await writeFile(temporary, data)
     await rename(temporary, target)
     this.coverVersions.delete(record.path)
-    this.revision += 1
-    this.events.changed(this.revision)
+    // Sem aviso de mudança: só a janela da Biblioteca mostra capas, e ela já recebe a URL nova.
     return this.coverURL(record.path) ?? ''
   }
 
