@@ -9,6 +9,10 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   splitting: true,
-  // O domínio compartilhado é TypeScript do workspace e entra no pacote final.
-  noExternal: ['@pregar/core'],
+  // Bundle autossuficiente: a imagem final não precisa de node_modules.
+  noExternal: [/.*/],
+  external: ['pg-native'],
+  banner: {
+    js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
+  },
 })

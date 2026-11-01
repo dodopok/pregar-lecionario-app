@@ -1,0 +1,61 @@
+name: Release do app desktop
+
+# Crie uma tag v1.2.3 (com a mesma versão em apps/desktop/package.json) para gerar instaladores
+# assinados e um rascunho de release no GitHub. A atualização automática do app usa esse release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Instaladores (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # Endereço da API e cliente OAuth do Google embutidos no app (configure em Settings › Secrets and variables).
+      MAIN_VITE_PREGAR_API_URL: ${{ vars.PREGAR_API_URL }}
+      MAIN_VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+      MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      MAIN_VITE_DRIVE_API_KEY: ${{ secrets.DRIVE_API_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build -w @pregar/desktop
+
+      - name: macOS (assinado e notarizado quando os segredos existem)
+        if: runner.os == 'macOS'
+        working-directory: apps/desktop
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' }}
+        run: npx electron-builder --mac --publish always ${{ secrets.APPLE_ID == '' && '-c.mac.notarize=false' || '' }}
+
+      - name: Windows (assinado quando os segredos existem)
+        if: runner.os == 'Windows'
+        working-directory: apps/desktop
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: npx electron-builder --win --publish always
+
+      - name: Linux
+        if: runner.os == 'Linux'
+        working-directory: apps/desktop
+        run: npx electron-builder --linux --publish always

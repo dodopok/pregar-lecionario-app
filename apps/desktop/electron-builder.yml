@@ -1,0 +1,73 @@
+# Empacotamento do Pregar para macOS, Windows e Linux.
+# Todo o código (inclusive dependências) é empacotado pelo electron-vite em out/; o instalador não leva node_modules.
+appId: br.caminhoanglicano.pregar
+productName: Pregar
+copyright: Copyright © 2026 Caminho Anglicano
+directories:
+  buildResources: resources
+  output: release/${version}
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+asar: true
+npmRebuild: false
+electronLanguages: [pt-BR, pt-PT, en-US]
+protocols: []
+publish:
+  provider: github
+  owner: dodopok
+  repo: pregar-lecionario-app
+  releaseType: draft
+
+mac:
+  category: public.app-category.productivity
+  icon: resources/icon.png
+  target:
+    - target: dmg
+      arch: [universal]
+    - target: zip
+      arch: [universal]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  # A notarização usa APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD e APPLE_TEAM_ID (ou APPLE_API_KEY) quando presentes.
+  notarize: true
+  extendInfo:
+    NSHumanReadableCopyright: Copyright © 2026 Caminho Anglicano
+dmg:
+  artifactName: Pregar-${version}-mac.${ext}
+  title: Pregar ${version}
+
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  # Assinatura: CSC_LINK/CSC_KEY_PASSWORD (certificado) ou azureSignOptions via variáveis do Azure Trusted Signing.
+  artifactName: Pregar-Setup-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Pregar
+  uninstallDisplayName: Pregar
+  installerLanguages: [pt_BR, en_US]
+  language: '1046'
+
+linux:
+  executableName: pregar
+  icon: resources/icons
+  category: Office
+  synopsis: Preparação de sermões com o lecionário
+  description: Calendário litúrgico, leituras, editor, biblioteca de comentários e revisão por IA para quem prega.
+  maintainer: Caminho Anglicano <contato@caminhoanglicano.com.br>
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  artifactName: Pregar-${version}-${arch}.${ext}

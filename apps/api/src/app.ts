@@ -51,7 +51,6 @@ export async function buildApp(deps: AppDeps, runner: AIRunner, options: { logge
           },
     trustProxy: config.TRUST_PROXY,
     bodyLimit: 1024 * 1024,
-    disableRequestLogging: false,
     requestIdHeader: 'x-request-id',
     genReqId: () => crypto.randomUUID(),
   })
