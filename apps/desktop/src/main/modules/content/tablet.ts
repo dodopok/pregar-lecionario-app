@@ -26,7 +26,11 @@ export function googleDriveFolder(): string | null {
 }
 
 function safeFileName(value: string): string {
-  const cleaned = value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim()
+  // Caracteres proibidos em nomes de arquivo no Windows e no macOS, inclusive os de controle.
+  const cleaned = Array.from(value, (char) => (char.charCodeAt(0) < 0x20 || '\\/:*?"<>|'.includes(char) ? '-' : char))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim()
   return (cleaned || 'Sermão').slice(0, 120)
 }
 

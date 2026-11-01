@@ -1,6 +1,5 @@
 // Ponta a ponta da Biblioteca e do Arquivo (Playwright + Electron).
 // Uso: PREGAR_OUT=.build-library npx electron-vite build && xvfb-run -a node test/e2e/library.mjs [.build-library] [pasta-das-capturas]
-/* eslint-disable no-console */
 import { _electron as electron } from '@playwright/test'
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'

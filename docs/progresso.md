@@ -1,6 +1,38 @@
 # Progresso de implementação
 
-Atualizado em 30 de outubro de 2026.
+Atualizado em 1º de novembro de 2026.
+
+## Versão multiplataforma (Windows, macOS e Linux)
+
+O app foi refeito em Electron + Vue 3 sobre um domínio em TypeScript (`packages/core`), com uma API própria (`apps/api`) para a assinatura. O plano e as decisões estão em [plano-multiplataforma.md](plano-multiplataforma.md); a operação, em [api-railway.md](api-railway.md), [assinatura-pix.md](assinatura-pix.md) e [release-desktop.md](release-desktop.md). O app Swift descrito nas seções seguintes continua no repositório como legado.
+
+O que existe:
+
+- **Domínio compartilhado.** Referências bíblicas, cliente da Estêvão API, revisão por IA (critérios, prompt, esquema, validação contra trechos literais, mapa de estrutura), perguntas de emergência, pesquisa de materiais, fontes favoritas, Biblioteca (índice e correspondência por passagem), histórico de versões, sessão do Leitor, backup (formato novo e leitura do backup do app Swift) e o contrato da API. Os quatro provedores (Anthropic, OpenAI, Google, Perplexity) informam uso e custo por chamada.
+- **API.** Fastify + PostgreSQL na Railway: login por código de 6 dígitos no email (5 tentativas, 10 minutos), sessões opacas guardadas como hash, conta com exportação e exclusão (LGPD), assinatura mensal ou anual por Pix Automático ou Pix mensal pelo Asaas, webhooks idempotentes com reconciliação periódica, proxy da Estêvão API com cache e proxy de IA com cotas mensais por recurso, teto diário, teto de custo e uma chamada por vez por conta. Imagem Docker autossuficiente, migrações ao iniciar e rotas/CLI de suporte.
+- **App desktop.** Mesa (calendário, leituras, editor TipTap com página, régua, zoom, notas, localizar e substituir; salvamento agrupado e histórico), painel de Materiais/Ideias/Revisão e folhas de revisão, perguntas, tablet (PDF ou Google Doc), histórico, ensaio, Drive, atalhos e busca de comandos; Bíblia comparativa; Leitor com abas de PDF e sites; Biblioteca com índice em processo utilitário, OCR e capas; Arquivo; Preferências em dez seções com conta e assinatura; folha de boas-vindas que guia entre o plano gratuito e o Pro. Segredos cifrados pelo cofre do sistema e nunca expostos à interface; janelas isoladas, IPC tipado que confere a origem e sites do Leitor em visões separadas sem permissões.
+- **Planos.** Gratuito sem conta, com as chaves do usuário (Estêvão e IA). Pro com login: leituras e IA pela API, sem chaves; o assinante pode preferir as próprias chaves.
+- **Migração.** Preferências › Biblioteca › Importar do Pregar para Mac lê o backup do app Swift, valida o pacote inteiro e converte os manuscritos RTF para o novo editor.
+- **Distribuição.** electron-builder gera `.dmg` universal e `.zip` (macOS), NSIS x64/ARM64 (Windows), AppImage e `.deb` (Linux); atualização automática pelos releases do GitHub. CI com lint, tipos, Vitest (com PostgreSQL), roteiros ponta a ponta no Linux e build da imagem da API.
+
+Verificado nesta etapa:
+
+- 618 testes Vitest (core, editor, desktop e API com PostgreSQL real e Asaas falso), lint e tipos limpos.
+- Roteiros ponta a ponta no app compilado (Linux, xvfb): Mesa com login na API falsa, leituras pelo proxy, escrita, salvamento e revisão pelo servidor; Preferências com o fluxo completo da assinatura até "Assinatura ativa", Bíblia e boas-vindas; Biblioteca com importação, índice, OCR real e PDF intacto; Arquivo; Leitor. Capturas revisadas em claro e escuro.
+- Imagem Docker da API construída e executada em modo produção contra PostgreSQL: migrações, `/health`, planos, páginas legais com cabeçalhos de segurança e 401 sem sessão.
+- App empacotado para Linux abre como app instalado.
+- Partida a frio até o editor pronto em cerca de 1,8 s com renderização por software; o editor não espera a rede.
+
+Pendente de verificação real (exige contas e certificados que não existem neste ambiente):
+
+- Cobrança no Asaas de verdade (sandbox e depois produção), inclusive a elegibilidade da conta para Pix Automático.
+- Envio do código por email pela Resend com domínio verificado.
+- Chamadas reais aos provedores de IA pela API com as chaves do servidor.
+- Instaladores assinados e notarizados no macOS e assinados no Windows, e a atualização automática entre duas versões publicadas.
+- Google Drive com o cliente OAuth do app.
+- Importação de um backup real do app Swift (os testes usam um backup sintético no mesmo formato).
+- Rodar no Windows e no macOS de verdade (o CI de release compila nos três sistemas; os testes ponta a ponta rodam no Linux).
+
 
 ## Referência visual
 

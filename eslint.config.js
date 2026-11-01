@@ -11,6 +11,8 @@ export default tseslint.config(
       '**/out/**',
       '**/release/**',
       '**/coverage/**',
+      '**/.build-*/**',
+      '**/screenshots/**',
       'Pregar/**',
       'PregarTests/**',
       'Pregar.xcodeproj/**',
@@ -42,5 +44,10 @@ export default tseslint.config(
       'vue/multiline-html-element-content-newline': 'off',
       'vue/attributes-order': 'off',
     },
+  },
+  {
+    // Roteiros ponta a ponta e ferramentas de linha de comando imprimem o resultado.
+    files: ['**/test/e2e/**', '**/scripts/**'],
+    rules: { 'no-console': 'off' },
   },
 )

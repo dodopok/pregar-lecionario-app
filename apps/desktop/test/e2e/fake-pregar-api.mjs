@@ -1,7 +1,6 @@
 // API do Pregar falsa para testes ponta a ponta: login, conta assinante, proxy da Estêvão e IA.
 import { createServer } from 'node:http'
 
-const today = new Date()
 const key = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 export const usage = () => ({
