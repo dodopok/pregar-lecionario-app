@@ -94,7 +94,7 @@ node test/e2e/smoke.mjs out smoke.png          # abre o app e confere a Mesa
 node test/e2e/mesa.mjs out capturas             # login na API falsa, leituras, escrita e revisão por IA
 ```
 
-Os demais roteiros em `test/e2e/` cobrem Leitor, Biblioteca e Preferências da mesma forma. O CI (`.github/workflows/ci.yml`) roda lint, tipos, Vitest com PostgreSQL, os testes ponta a ponta no Linux e o build da imagem da API.
+Os demais roteiros em `test/e2e/` cobrem Leitor, Biblioteca e Preferências da mesma forma. O CI (`.github/workflows/ci.yml`) roda lint, tipos, Vitest com PostgreSQL, os roteiros ponta a ponta no Linux, no macOS e no Windows, e o build da imagem da API.
 
 ## Instaladores e atualização
 
@@ -108,7 +108,7 @@ As versões públicas saem do workflow de release ao enviar uma tag `v*`. O app 
 
 ## API, Railway e cobrança
 
-- Publicação, variáveis, domínio, webhooks e rotina de suporte: [docs/api-railway.md](docs/api-railway.md).
+- Publicação, variáveis, domínio, webhooks e rotina de suporte: [docs/api-railway.md](docs/api-railway.md). Antes de abrir para assinantes, `node apps/api/dist/admin.js doctor` no shell da Railway confere banco, email, Asaas, Estêvão e IA com chamadas reais.
 - Pix Automático e Pix mensal pelo Asaas, ciclo da assinatura, limites de uso e o que acontece em atraso: [docs/assinatura-pix.md](docs/assinatura-pix.md).
 - IA com chaves próprias no modo gratuito: [docs/ia-byok.md](docs/ia-byok.md).
 

@@ -5,6 +5,8 @@
 import type { PdfMetadata, PdfOutlineItem, PdfPageText, PdfTextSource } from '@pregar/core/library/text-source'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type * as PdfJsModule from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { pageTextFromItems, type PositionedTextItem } from './text-lines'
 
 type PdfJs = typeof PdfJsModule
@@ -25,11 +27,30 @@ export function loadPdfJs(): Promise<PdfJs> {
   return loaded
 }
 
+/**
+ * Entrega os CMaps a partir da pasta indicada pelo processo principal (`PREGAR_PDFJS_CMAPS`), lendo
+ * só arquivos `.bcmap` daquela pasta. Sem a pasta, PDFs CJK sem fonte embutida perdem o texto,
+ * mas o restante da indexação continua.
+ */
+class CMapFileFactory {
+  async fetch({ kind, filename }: { kind: string; filename: string }): Promise<Uint8Array> {
+    const directory = process.env.PREGAR_PDFJS_CMAPS
+    if (kind !== 'cMapUrl' || !directory || !/^[\w.-]+\.bcmap$/.test(filename)) {
+      throw new Error(`Recurso do PDF.js indisponível: ${filename}`)
+    }
+    return new Uint8Array(await readFile(join(directory, filename)))
+  }
+}
+
 /** Abre o PDF a partir dos bytes, sem fontes do sistema, sem `eval` e sem canvas. */
 export async function openPdfDocument(data: Uint8Array): Promise<PDFDocumentProxy> {
   const pdfjs = await loadPdfJs()
   const task = pdfjs.getDocument({
     data,
+    BinaryDataFactory: CMapFileFactory,
+    useWorkerFetch: false,
+    cMapUrl: 'pregar-pdfjs://cmaps/',
+    cMapPacked: true,
     disableFontFace: true,
     useSystemFonts: false,
     isOffscreenCanvasSupported: false,

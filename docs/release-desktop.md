@@ -34,6 +34,10 @@ Sem os certificados, o workflow ainda gera os instaladores, mas sem assinatura. 
 
 Crie no Google Cloud um cliente OAuth do tipo "App para computador", com o escopo `drive.file`, e preencha a tela de consentimento (nome Pregar, links de privacidade e termos da API: `/legal/privacidade` e `/legal/termos`). Como o escopo é restrito aos arquivos criados pelo app, a verificação do Google é a simples. O login usa PKCE com retorno em `127.0.0.1`, sem servidor do Pregar no meio.
 
+## Quando o CI não roda
+
+O CI roda em Linux, macOS e Windows a cada envio. Se todos os jobs falham em um ou dois segundos, sem log e sem runner, o GitHub não chegou a iniciá-los. Em repositório privado isso costuma ser cobrança: pagamento recusado ou limite de gastos do Actions atingido. Confira em Settings › Billing and plans da conta dona do repositório e rode o workflow de novo.
+
 ## Desenvolvimento
 
 ```sh

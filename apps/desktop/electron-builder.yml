@@ -11,6 +11,11 @@ files:
   - package.json
   - '!**/*.map'
 asar: true
+# CMaps do PDF.js para o indexador (processo utilitário lê do disco; PDFs CJK sem fonte embutida).
+extraResources:
+  - from: ../../node_modules/pdfjs-dist/cmaps
+    to: pdfjs-cmaps
+    filter: ['*.bcmap']
 npmRebuild: false
 electronLanguages: [pt-BR, pt-PT, en-US]
 protocols: []

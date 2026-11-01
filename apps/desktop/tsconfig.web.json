@@ -13,5 +13,5 @@
       "@shared/*": ["./src/shared/*"]
     }
   },
-  "include": ["src/renderer/src/**/*", "src/renderer/src/**/*.vue", "src/shared/**/*", "src/preload/api.d.ts", "test/unit/**/*"]
+  "include": ["src/renderer/src/**/*", "src/renderer/src/**/*.vue", "src/shared/**/*", "src/preload/api.d.ts", "src/main/modules/library/pdfjs-worker.d.ts", "test/unit/**/*"]
 }

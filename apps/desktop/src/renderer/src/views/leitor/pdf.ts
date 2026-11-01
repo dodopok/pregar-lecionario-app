@@ -7,6 +7,7 @@ import type * as PdfjsNamespace from 'pdfjs-dist'
 import type * as ViewerNamespace from 'pdfjs-dist/web/pdf_viewer.mjs'
 import type { PdfOutlineItem, PdfTextSource } from '@pregar/core/library'
 import { textFromItems } from './reader-ui'
+import { pdfjsAssetOptions } from '../../lib/pdfjs-assets'
 
 type PdfjsModule = typeof PdfjsNamespace
 type ViewerModule = typeof ViewerNamespace
@@ -34,38 +35,6 @@ export function loadPdfjs(): Promise<PdfjsBundle> {
   return bundle
 }
 
-// Recursos binários do PDF.js (fontes padrão e decodificadores wasm de JBIG2, JPEG 2000 e cores),
-// empacotados pelo Vite e entregues por esta fábrica em vez de uma pasta servida.
-const BINARY_ASSETS: Record<string, () => Promise<{ default: string }>> = {
-  'wasmUrl/openjpeg.wasm': () => import('pdfjs-dist/wasm/openjpeg.wasm?url'),
-  'wasmUrl/jbig2.wasm': () => import('pdfjs-dist/wasm/jbig2.wasm?url'),
-  'wasmUrl/qcms_bg.wasm': () => import('pdfjs-dist/wasm/qcms_bg.wasm?url'),
-  'standardFontDataUrl/FoxitDingbats.pfb': () => import('pdfjs-dist/standard_fonts/FoxitDingbats.pfb?url'),
-  'standardFontDataUrl/FoxitFixed.pfb': () => import('pdfjs-dist/standard_fonts/FoxitFixed.pfb?url'),
-  'standardFontDataUrl/FoxitFixedBold.pfb': () => import('pdfjs-dist/standard_fonts/FoxitFixedBold.pfb?url'),
-  'standardFontDataUrl/FoxitFixedBoldItalic.pfb': () => import('pdfjs-dist/standard_fonts/FoxitFixedBoldItalic.pfb?url'),
-  'standardFontDataUrl/FoxitFixedItalic.pfb': () => import('pdfjs-dist/standard_fonts/FoxitFixedItalic.pfb?url'),
-  'standardFontDataUrl/FoxitSerif.pfb': () => import('pdfjs-dist/standard_fonts/FoxitSerif.pfb?url'),
-  'standardFontDataUrl/FoxitSerifBold.pfb': () => import('pdfjs-dist/standard_fonts/FoxitSerifBold.pfb?url'),
-  'standardFontDataUrl/FoxitSerifBoldItalic.pfb': () => import('pdfjs-dist/standard_fonts/FoxitSerifBoldItalic.pfb?url'),
-  'standardFontDataUrl/FoxitSerifItalic.pfb': () => import('pdfjs-dist/standard_fonts/FoxitSerifItalic.pfb?url'),
-  'standardFontDataUrl/FoxitSymbol.pfb': () => import('pdfjs-dist/standard_fonts/FoxitSymbol.pfb?url'),
-  'standardFontDataUrl/LiberationSans-Bold.ttf': () => import('pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf?url'),
-  'standardFontDataUrl/LiberationSans-BoldItalic.ttf': () => import('pdfjs-dist/standard_fonts/LiberationSans-BoldItalic.ttf?url'),
-  'standardFontDataUrl/LiberationSans-Italic.ttf': () => import('pdfjs-dist/standard_fonts/LiberationSans-Italic.ttf?url'),
-  'standardFontDataUrl/LiberationSans-Regular.ttf': () => import('pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf?url'),
-}
-
-class ReaderBinaryDataFactory {
-  async fetch({ kind, filename }: { kind: string; filename: string }): Promise<Uint8Array> {
-    const loader = BINARY_ASSETS[`${kind}/${filename}`]
-    if (!loader) throw new Error(`Recurso do PDF.js indisponível: ${filename}`)
-    const response = await fetch((await loader()).default)
-    if (!response.ok) throw new Error(`Recurso do PDF.js indisponível: ${filename}`)
-    return new Uint8Array(await response.arrayBuffer())
-  }
-}
-
 interface CachedDocument {
   url: string
   promise: Promise<PDFDocumentProxy>
@@ -87,13 +56,8 @@ export async function openPdfDocument(url: string): Promise<PDFDocumentProxy> {
   const { pdfjs } = await loadPdfjs()
   const task = pdfjs.getDocument({
     url,
-    BinaryDataFactory: ReaderBinaryDataFactory,
-    useWorkerFetch: false,
-    // Fontes padrão vêm da fábrica acima (iguais nos três sistemas), não de fontes do sistema;
-    // a fábrica ignora estes endereços, que o PDF.js só exige que existam.
-    useSystemFonts: false,
-    standardFontDataUrl: 'pregar-pdfjs://fonts/',
-    wasmUrl: 'pregar-pdfjs://wasm/',
+    // Fontes padrão, CMaps e wasm vêm empacotados (iguais nos três sistemas).
+    ...pdfjsAssetOptions,
     // Busca só os trechos necessários (o protocolo pregar-pdf atende Range).
     disableAutoFetch: true,
     enableXfa: false,

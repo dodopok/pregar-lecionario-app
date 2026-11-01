@@ -63,6 +63,37 @@ jobs:
           path: apps/desktop/screenshots
           if-no-files-found: ignore
 
+  desktop-os:
+    name: App desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Testes de domínio, editor e app
+        run: npx vitest run --project core --project editor --project desktop
+      - name: Build
+        run: npm run build -w @pregar/desktop
+      - name: Roteiros ponta a ponta
+        working-directory: apps/desktop
+        run: node test/e2e/run-all.mjs out screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-desktop-${{ matrix.os }}
+          path: apps/desktop/screenshots
+          if-no-files-found: ignore
+
   api-image:
     name: Imagem Docker da API
     runs-on: ubuntu-latest

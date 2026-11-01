@@ -12,6 +12,30 @@ A API (`apps/api`) é um serviço Node com PostgreSQL. Ela cuida das contas, da 
 
 O serviço sobe mesmo sem as chaves de pagamento, de email ou de IA: as rotas que dependem delas respondem 503 com a explicação, e o log avisa o que falta em produção.
 
+## Verificar antes de abrir para assinantes
+
+Com as variáveis cadastradas, abra o shell do serviço na Railway e rode:
+
+```sh
+node apps/api/dist/admin.js doctor
+```
+
+A verificação faz chamadas reais e gratuitas e mostra OK, AVISO ou FALHA para cada item, sem exibir chaves:
+
+| Item | O que confere |
+| --- | --- |
+| Configuração | `NODE_ENV=production`, endereço público em https, `TRUST_PROXY` |
+| Banco de dados | Conexão e migrações aplicadas |
+| Email (Resend) | Chave aceita e domínio do `EMAIL_FROM` verificado |
+| Asaas | Chave aceita e do mesmo ambiente de `ASAAS_ENVIRONMENT` |
+| Asaas · chave Pix | Ao menos uma chave Pix ativa (sem ela o Asaas não gera QR Code) |
+| Asaas · webhook | Webhook ativo para `<PUBLIC_BASE_URL>/v1/webhooks/asaas`, fila não interrompida e os eventos usados pelo modo escolhido |
+| Asaas · Pix Automático | Conta habilitada (só no modo `pix_automatico`) |
+| Estêvão API | Chave do servidor aceita |
+| IA | Chave e modelo de revisão e de pesquisa existem (a Perplexity só tem a chave conferida na primeira pesquisa real) |
+
+O comando termina com código 1 se houver falha. Rode de novo depois de cada ajuste até aparecer "Pronto para produção".
+
 ## Variáveis
 
 | Variável | Obrigatória | Para que serve |

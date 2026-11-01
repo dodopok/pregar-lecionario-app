@@ -1,9 +1,10 @@
 import { Menu, WebContentsView, app, clipboard, session, shell, webContents as allWebContents } from 'electron'
-import type { BrowserWindow, ContextMenuParams, MenuItemConstructorOptions, Session, WebContents } from 'electron'
+import type { BrowserWindow, ContextMenuParams, Session, WebContents } from 'electron'
 import { isValidWebPosition, isWebScheme, type ReaderTab } from '@pregar/core/reader'
 import { SermonReviewMaterialError, makeWebReviewSource, type ReviewMaterialSource } from '@pregar/core/library'
 import { readerShortcut, type ReaderRect, type ReaderShortcutCommand, type ReaderWebAction, type ReaderWebState } from '@shared/ipc-reader'
 import type { ReaderService } from './service'
+import { webContextMenuTemplate } from './web-menu'
 import {
   cleanUserAgent,
   isAllowedTopLevelURL,
@@ -258,34 +259,29 @@ export class ReaderWebManager {
     const contents = runtime.view.webContents
     const window = runtime.window
     if (!window || window.isDestroyed()) return
-    const items: MenuItemConstructorOptions[] = []
-    const link = isWebScheme(params.linkURL) ? params.linkURL : null
-    if (link) {
-      items.push(
-        { label: 'Abrir link em nova aba', click: () => this.service.openLinkFrom(runtime.tabID, link, true) },
-        { label: 'Abrir link no navegador', click: () => void shell.openExternal(link) },
-        { label: 'Copiar endereço do link', click: () => clipboard.writeText(link) },
-        { type: 'separator' },
-      )
-    }
-    if (params.isEditable) {
-      items.push(
-        { label: 'Recortar', enabled: params.editFlags.canCut, click: () => contents.cut() },
-        { label: 'Copiar', enabled: params.editFlags.canCopy, click: () => contents.copy() },
-        { label: 'Colar', enabled: params.editFlags.canPaste, click: () => contents.paste() },
-        { type: 'separator' },
-      )
-    } else {
-      items.push({ label: 'Copiar', enabled: params.selectionText.trim() !== '', click: () => contents.copy() }, { type: 'separator' })
-    }
-    items.push(
-      { label: 'Voltar', enabled: contents.navigationHistory.canGoBack(), click: () => void this.act(runtime.tabID, 'back') },
-      { label: 'Avançar', enabled: contents.navigationHistory.canGoForward(), click: () => void this.act(runtime.tabID, 'forward') },
-      { label: 'Recarregar', click: () => void this.act(runtime.tabID, 'reload') },
-      { type: 'separator' },
-      { label: 'Abrir no navegador', click: () => void this.act(runtime.tabID, 'openExternal') },
+    const template = webContextMenuTemplate(
+      {
+        linkURL: params.linkURL,
+        isEditable: params.isEditable,
+        selectionText: params.selectionText,
+        editFlags: params.editFlags,
+        canGoBack: contents.navigationHistory.canGoBack(),
+        canGoForward: contents.navigationHistory.canGoForward(),
+      },
+      {
+        openLinkInTab: (link) => this.service.openLinkFrom(runtime.tabID, link, true),
+        openLinkInBrowser: (link) => void shell.openExternal(link),
+        copyLink: (link) => clipboard.writeText(link),
+        cut: () => contents.cut(),
+        copy: () => contents.copy(),
+        paste: () => contents.paste(),
+        back: () => void this.act(runtime.tabID, 'back'),
+        forward: () => void this.act(runtime.tabID, 'forward'),
+        reload: () => void this.act(runtime.tabID, 'reload'),
+        openPageInBrowser: () => void this.act(runtime.tabID, 'openExternal'),
+      },
     )
-    Menu.buildFromTemplate(items).popup({ window })
+    Menu.buildFromTemplate(template).popup({ window })
   }
 
   // Rolagem por endereço.

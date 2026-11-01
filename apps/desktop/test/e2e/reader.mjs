@@ -6,10 +6,14 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { watchMainErrors } from './main-errors.mjs'
+import { japanesePdf } from './cjk-fixture.mjs'
 
 const outDir = process.argv[2] ?? '.build-reader'
+// ⌘ no macOS, Ctrl no Windows e no Linux (⌃Tab é Ctrl em todos).
+const MOD = process.platform === 'darwin' ? 'Meta' : 'Control'
+const MOD_EVENT = process.platform === 'darwin' ? 'meta' : 'control'
 const shotsDir = resolve(process.argv[3] ?? mkdtempSync(join(tmpdir(), 'pregar-reader-shots-')))
 mkdirSync(shotsDir, { recursive: true })
 const userData = mkdtempSync(join(tmpdir(), 'pregar-reader-e2e-'))
@@ -314,13 +318,13 @@ try {
   })
   check('⇧⌃Tab seleciona a aba anterior', previous)
   const before = (await readerState(leitor)).tabs.length
-  await leitor.keyboard.press('Control+W')
+  await leitor.keyboard.press(`${MOD}+W`)
   const closed = await until(async () => ((await readerState(leitor)).tabs.length === before - 1 ? true : null))
   check('⌘W fecha a aba', closed)
-  await leitor.keyboard.press('Control+Shift+T')
+  await leitor.keyboard.press(`${MOD}+Shift+T`)
   const reopened = await until(async () => ((await readerState(leitor)).tabs.length === before ? true : null))
   check('⇧⌘T reabre a aba fechada', reopened)
-  await leitor.keyboard.press('Control+T')
+  await leitor.keyboard.press(`${MOD}+T`)
   const sheet = await until(() => leitor.isVisible('[role="dialog"][aria-label="Nova aba"]'))
   check('⌘T abre a folha Nova aba', sheet)
   const hiddenDuringSheet = await app.evaluate(({ BrowserWindow }) => {
@@ -352,12 +356,12 @@ try {
   // ⌘L com o foco na página web leva ao campo de endereço.
   await leitor.click('.reader-tab >> nth=0')
   await until(async () => (await webContentsInfo(app)).some((item) => item.url.endsWith('/one') && !item.loading))
-  await app.evaluate(({ webContents }, prefix) => {
+  await app.evaluate(({ webContents }, [prefix, modifier]) => {
     const target = webContents.getAllWebContents().find((contents) => contents.getURL() === `${prefix}/one`)
     target?.focus()
-    target?.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: ['control'] })
-    target?.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: ['control'] })
-  }, base)
+    target?.sendInputEvent({ type: 'keyDown', keyCode: 'L', modifiers: [modifier] })
+    target?.sendInputEvent({ type: 'keyUp', keyCode: 'L', modifiers: [modifier] })
+  }, [base, MOD_EVENT])
   const addressFocused = await until(() => leitor.evaluate(() => document.activeElement?.classList.contains('web-toolbar__address') ?? false))
   check('⌘L na página web edita o endereço', addressFocused)
   await leitor.keyboard.press('Escape')
@@ -381,7 +385,7 @@ try {
   await leitor.locator('.reader-tab').nth(1).click({ button: 'middle' })
   const middleClosed = await until(async () => ((await readerState(leitor)).tabs.length === countBeforeMiddle - 1 ? true : null))
   check('botão do meio fecha a aba', middleClosed)
-  await leitor.keyboard.press('Control+Shift+T')
+  await leitor.keyboard.press(`${MOD}+Shift+T`)
   await until(async () => ((await readerState(leitor)).tabs.length === countBeforeMiddle ? true : null))
 
   // 4. Pesquisas por sermão.
@@ -450,7 +454,7 @@ try {
   check('seção navega com navegação explícita', explicit)
   const scaleBefore = await leitor.evaluate(() => getComputedStyle(document.querySelector('.pdfViewer')).getPropertyValue('--scale-factor'))
   await leitor.click('.pdf-container')
-  await leitor.keyboard.press('Control+=')
+  await leitor.keyboard.press(`${MOD}+=`)
   const scaleAfter = await until(async () => {
     const value = await leitor.evaluate(() => getComputedStyle(document.querySelector('.pdfViewer')).getPropertyValue('--scale-factor'))
     return value !== scaleBefore ? value : null
@@ -561,6 +565,26 @@ try {
     reopenedView.page === String(restoredPdf.pdfPosition.page) && Math.abs(reopenedView.scale - restoredPdf.pdfPosition.scale * (96 / 72)) < 0.01,
     reopenedView,
   )
+
+  // 8. PDF em japonês com fonte não embutida: o texto depende dos CMaps empacotados no app.
+  const cjkPath = join(dirname(pdfPath), 'Comentario japones.pdf')
+  writeFileSync(cjkPath, japanesePdf())
+  const cjkImported = await mesa2.evaluate((path) => window.pregar.invoke('library:importPaths', { paths: [path] }), cjkPath)
+  check('PDF em japonês registrado na Biblioteca', cjkImported.ok, cjkImported.error)
+  await until(
+    async () => {
+      const works = await mesa2.evaluate(() => window.pregar.invoke('library:works'))
+      return works.ok && works.value.some((work) => work.path.endsWith('Comentario japones.pdf')) ? true : null
+    },
+    { timeout: 30000, interval: 300 },
+  )
+  const cjkOpened = await mesa2.evaluate((path) => window.pregar.invoke('reader:open', { kind: 'pdf', location: path, title: 'Comentário japonês' }), cjkPath)
+  check('reader:open do PDF em japonês', cjkOpened.ok, cjkOpened.error)
+  const cjkText = await until(
+    async () => (((await leitor2.textContent('.pdfViewer .page[data-page-number="1"] .textLayer').catch(() => '')) ?? '').includes('日本語') ? true : null),
+    { timeout: 15000 },
+  )
+  check('texto japonês (CMap, fonte não embutida) na camada de texto', cjkText === true, await leitor2.textContent('.pdfViewer .textLayer').catch(() => null))
 } catch (error) {
   check('execução sem exceções', false, String(error?.stack ?? error))
 } finally {

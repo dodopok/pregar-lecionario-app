@@ -2,7 +2,7 @@ import { utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
 import { existsSync } from 'node:fs'
 import { setPriority } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { SermonReviewMaterialError } from '@pregar/core/library'
 import type { WorkerErrorInfo, WorkerInbound, WorkerOutbound, WorkerRequestType, WorkerRequests } from './worker-protocol'
 
@@ -100,7 +100,12 @@ export class IndexerClient {
 
   private ensureChild(): UtilityProcess {
     if (this.child) return this.child
-    const child = utilityProcess.fork(this.entry, [], { serviceName: 'Pregar · Indexador de PDFs', stdio: 'pipe' })
+    const cMaps = pdfjsCMapDirectory()
+    const child = utilityProcess.fork(this.entry, [], {
+      serviceName: 'Pregar · Indexador de PDFs',
+      stdio: 'pipe',
+      env: { ...process.env, ...(cMaps ? { PREGAR_PDFJS_CMAPS: cMaps } : {}) },
+    })
     child.stdout?.on('data', () => undefined)
     child.stderr?.on('data', (chunk: Buffer) => {
       const text = String(chunk).trim()
@@ -171,6 +176,25 @@ export class IndexerClient {
 }
 
 /** `out/main/indexer.js`, ao lado do bundle principal (ou um nível acima, se este código for para um chunk). */
+/**
+ * Pasta dos CMaps do PDF.js (texto de PDFs em chinês, japonês e coreano sem fonte embutida): nos
+ * recursos do app instalado, ou no node_modules do repositório durante o desenvolvimento e os testes.
+ */
+export function pdfjsCMapDirectory(): string | null {
+  const resources = (process as { resourcesPath?: string }).resourcesPath
+  const packaged = resources ? join(resources, 'pdfjs-cmaps') : null
+  if (packaged && existsSync(packaged)) return packaged
+  let directory = __dirname
+  for (let level = 0; level < 8; level++) {
+    const candidate = join(directory, 'node_modules', 'pdfjs-dist', 'cmaps')
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(directory)
+    if (parent === directory) break
+    directory = parent
+  }
+  return null
+}
+
 function defaultEntry(): string {
   const beside = join(__dirname, 'indexer.js')
   return existsSync(beside) ? beside : join(__dirname, '..', 'indexer.js')

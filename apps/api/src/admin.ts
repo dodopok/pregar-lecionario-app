@@ -1,4 +1,7 @@
-/** Ferramenta de suporte: `npm run admin -- grant email@x.com 30`, `user email@x.com`, `reconcile`. */
+/**
+ * Ferramenta de suporte: `npm run admin -- grant email@x.com 30`, `user email@x.com`, `reconcile` e
+ * `doctor` (verificação de prontidão para produção; sai com código 1 se algo falhar).
+ */
 import { loadConfig } from './config'
 import { createDatabase } from './db'
 import { LogEmailSender } from './lib/email'
@@ -7,6 +10,7 @@ import type { AppDeps } from './lib/context'
 import { grantDays } from './modules/admin/plugin'
 import { BillingService } from './modules/billing/service'
 import { QuotaService } from './modules/ai/quota'
+import { formatDoctorReport, runDoctor } from './modules/admin/doctor'
 
 const [command, ...args] = process.argv.slice(2)
 const config = loadConfig()
@@ -32,10 +36,14 @@ try {
         2,
       ),
     )
+  } else if (command === 'doctor') {
+    const checks = await runDoctor(deps)
+    console.warn(formatDoctorReport(checks))
+    if (checks.some((check) => check.status === 'falha')) process.exitCode = 1
   } else if (command === 'reconcile') {
     console.warn(JSON.stringify(await new BillingService(deps).reconcile(), null, 2))
   } else {
-    console.warn('Uso: admin grant <email> <dias> | admin user <email> | admin reconcile')
+    console.warn('Uso: admin grant <email> <dias> | admin user <email> | admin reconcile | admin doctor')
     process.exitCode = 1
   }
 } finally {
