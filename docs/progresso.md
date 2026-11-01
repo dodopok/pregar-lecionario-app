@@ -18,7 +18,8 @@ O que existe:
 Verificado nesta etapa:
 
 - 618 testes Vitest (core, editor, desktop e API com PostgreSQL real e Asaas falso), lint e tipos limpos.
-- Roteiros ponta a ponta no app compilado (Linux, xvfb): Mesa com login na API falsa, leituras pelo proxy, escrita, salvamento e revisão pelo servidor; Preferências com o fluxo completo da assinatura até "Assinatura ativa", Bíblia e boas-vindas; Biblioteca com importação, índice, OCR real e PDF intacto; Arquivo; Leitor. Capturas revisadas em claro e escuro.
+- Cinco roteiros ponta a ponta no app compilado (Linux, xvfb), também no CI: smoke (isolamento, ponte e texto digitado logo antes de sair que volta ao reabrir); Mesa com login na API falsa, leituras pelo proxy, escrita, salvamento e revisão pelo servidor; Preferências com o fluxo completo da assinatura até "Assinatura ativa", Bíblia e boas-vindas; Leitor (60 verificações: abas web isoladas, downloads e `file:` bloqueados, atalhos, PDF com seções e busca, restauração após reiniciar, sem violações de CSP); Biblioteca com importação, índice, OCR real e PDF intacto, e Arquivo. Todos falham se o processo principal registrar um erro não tratado. Capturas revisadas em claro e escuro.
+- Corrigido durante a verificação: ao sair, o banco fechava antes das janelas, o que perdia o trecho digitado nos últimos 350 ms e abria o diálogo de erro do Electron. Agora o fechamento espera o salvamento da Mesa e do Leitor, e erros não tratados vão para `Logs/erros.log`.
 - Imagem Docker da API construída e executada em modo produção contra PostgreSQL: migrações, `/health`, planos, páginas legais com cabeçalhos de segurança e 401 sem sessão.
 - App empacotado para Linux abre como app instalado.
 - Partida a frio até o editor pronto em cerca de 1,8 s com renderização por software; o editor não espera a rede.
