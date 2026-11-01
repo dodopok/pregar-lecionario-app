@@ -77,13 +77,13 @@ onBeforeUnmount(() => unsubscribe?.())
         <div class="drive__text">
           <span class="drive__title">
             <template v-if="loading">Verificando a conexão…</template>
-            <template v-else-if="unavailable">Google Drive indisponível nesta versão</template>
+            <template v-else-if="unavailable || (status && !status.available)">Google Drive indisponível nesta versão</template>
             <template v-else-if="status?.connected">Conectado ao Google Drive</template>
             <template v-else>Não conectado</template>
           </span>
           <span class="drive__message">
             <template v-if="unavailable">A conexão com o Google Drive chega numa próxima atualização do Pregar.</template>
-            <template v-else>{{ status?.message }}</template>
+            <template v-else>{{ status?.message || (status?.available ? '' : 'O Google Drive não está configurado nesta instalação do Pregar.') }}</template>
           </span>
           <PButton v-if="status?.ideasDocumentURL" variant="link" compact class="drive__link" @click="openExternal(status.ideasDocumentURL)">
             Abrir o documento de ideias <ExternalLink :size="11" aria-hidden="true" />
@@ -103,9 +103,6 @@ onBeforeUnmount(() => unsubscribe?.())
       O navegador vai abrir a página do Google. Escolha a sua conta, autorize o Pregar e volte para cá.
     </p>
     <Notice v-if="error" tone="error">{{ error }}</Notice>
-    <Notice v-if="status && !status.available && !unavailable" tone="info">
-      O Google Drive não está configurado nesta instalação do Pregar.
-    </Notice>
 
     <PrefGroup label="O que o Pregar pode ver">
       <ul class="facts">

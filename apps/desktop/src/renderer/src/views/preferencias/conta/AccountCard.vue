@@ -73,9 +73,12 @@ async function logout(): Promise<void> {
         <PButton variant="primary" compact type="submit" :busy="saving">Salvar</PButton>
         <PButton compact @click="editing = false">Cancelar</PButton>
       </form>
-      <div v-else class="account-card__name-row">
-        <span class="account-card__name" :class="{ 'account-card__name--empty': !name }">{{ name || 'Sem nome' }}</span>
+      <div v-else-if="name" class="account-card__name-row">
+        <span class="account-card__name">{{ name }}</span>
         <PButton variant="icon" compact label="Editar nome" @click="startEditing"><Pencil :size="13" /></PButton>
+      </div>
+      <div v-else class="account-card__name-row">
+        <PButton variant="link" class="account-card__add-name" @click="startEditing"><Pencil :size="13" aria-hidden="true" />Adicionar seu nome</PButton>
       </div>
       <p v-if="error" class="account-card__error" role="alert">{{ error }}</p>
       <span class="account-card__email selectable">{{ email }}</span>
@@ -128,9 +131,9 @@ async function logout(): Promise<void> {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.account-card__name--empty {
-  color: var(--muted);
-  font-weight: 500;
+.account-card__add-name {
+  margin-left: -6px;
+  font-size: 13px;
 }
 .account-card__edit {
   display: flex;

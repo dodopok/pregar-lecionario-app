@@ -47,7 +47,9 @@ const updateText = computed(() => {
     case 'unsupported':
       return status.message ?? 'Não foi possível procurar atualizações.'
     default:
-      return 'O Pregar procura atualizações sozinho ao abrir.'
+      return app.settings.updates.automatic
+        ? 'O Pregar procura atualizações sozinho ao abrir.'
+        : 'A busca automática está desligada. Clique para procurar uma versão nova.'
   }
 })
 

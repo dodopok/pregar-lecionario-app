@@ -179,7 +179,7 @@ onMounted(() => {
         <UsagePanel :usage="account.usage" />
       </PrefGroup>
 
-      <PrefGroup v-if="subscription" label="Pagamentos">
+      <PrefGroup v-if="subscription && subscription.status !== 'pending'" label="Pagamentos">
         <PaymentsPanel :refresh-key="paymentsKey" />
       </PrefGroup>
 

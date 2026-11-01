@@ -37,7 +37,7 @@ export const PREFERENCES_SECTIONS: readonly PreferencesSection[] = [
   {
     id: 'conta',
     title: 'Conta e assinatura',
-    subtitle: 'Entre com o seu email para assinar ou acompanhar a assinatura.',
+    subtitle: 'Sua conta do Pregar, a assinatura por Pix e o uso do mês.',
     footer: 'A conta fica no servidor do Pregar; os sermões ficam neste computador.',
     icon: UserRound,
     component: AccountSection,

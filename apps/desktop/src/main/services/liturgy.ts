@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { LiturgicalClient, LiturgicalAPIError } from '@pregar/core/liturgy/client'
 import type { LiturgicalTransport } from '@pregar/core/liturgy/client'
 import type { BiblePassageText, BibleVersion, LiturgicalDay, PrayerBookCatalogEntry } from '@pregar/core/liturgy/types'
@@ -62,13 +63,27 @@ export class LiturgyService {
     return `${prayerBook}|${language}|${bible}|${readingType}`
   }
 
+  /**
+   * Credencial que produziu a resposta (modo e impressão curta da chave). Trocar a chave ou entrar
+   * na assinatura invalida o cache, para que "Salvar e testar" sempre consulte a API de verdade.
+   */
+  private credentialStamp(): string {
+    const access = this.access()
+    if (access.mode === 'direct') {
+      const key = this.deps.secrets.get('estevao') ?? ''
+      return `direct:${createHash('sha256').update(key).digest('hex').slice(0, 16)}`
+    }
+    return access.mode
+  }
+
   /** Busca com cache: devolve o cache válido; sem rede, devolve o cache vencido. */
   private async cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
-    const fresh = this.deps.cache.get<{ value: T; at: number }>(key)
-    if (fresh && Date.now() - fresh.at < ttlMs) return fresh.value
+    const fresh = this.deps.cache.get<{ value: T; at: number; via?: string }>(key)
+    const via = this.credentialStamp()
+    if (fresh && fresh.via === via && Date.now() - fresh.at < ttlMs) return fresh.value
     try {
       const value = await load()
-      this.deps.cache.set(key, { value, at: Date.now() })
+      this.deps.cache.set(key, { value, at: Date.now(), via })
       return value
     } catch (error) {
       if (fresh && !(error instanceof LiturgicalAPIError && error.status !== undefined && error.status < 500)) {

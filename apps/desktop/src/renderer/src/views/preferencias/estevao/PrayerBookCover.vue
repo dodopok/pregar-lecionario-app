@@ -83,12 +83,12 @@ watch(
 .cover__kicker {
   position: absolute;
   top: 8px;
-  left: 0;
-  right: 0;
-  font-size: 5.5px;
+  left: 4px;
+  right: 4px;
+  font-size: 4.8px;
   font-weight: 600;
-  letter-spacing: 0.04em;
   white-space: nowrap;
+  overflow: hidden;
 }
 .cover__monogram {
   font-family: var(--font-serif);

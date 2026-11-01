@@ -7,6 +7,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ChevronsUpDown, ExternalLink, KeyRound, Trash2 } from 'lucide-vue-next'
 import { ESTEVAO_API_BASE_URL, prayerBookDescription, prayerBookSubtitle } from '@pregar/core/liturgy/types'
 import type { BibleVersion, PrayerBookCatalogEntry } from '@pregar/core/liturgy/types'
+import type { AppSettings } from '@shared/settings'
 import PButton from '@/components/PButton.vue'
 import { errorMessage, invoke, platform } from '@/lib/api'
 import { useAppStore } from '@/stores/app'
@@ -105,7 +106,7 @@ async function removeKey(): Promise<void> {
   }
 }
 
-function update(patch: Partial<typeof app.settings.liturgy>): void {
+function update(patch: Partial<AppSettings['liturgy']>): void {
   void app.updateSettings({ liturgy: patch })
 }
 
@@ -162,13 +163,16 @@ onMounted(loadCatalogues)
       </Notice>
       <Notice v-if="result" :tone="result.tone">{{ result.text }}</Notice>
 
-      <p class="help">
-        A chave é pessoal e fica só neste computador; a tela nunca a mostra de volta.
-        <PButton variant="link" compact @click="openExternal(ESTEVAO_SITE)">Pedir uma chave no site da Estêvão API <ExternalLink :size="11" aria-hidden="true" /></PButton>
-        <template v-if="!subscriptionAvailable">
-          · Prefere não lidar com chaves? <RouterLink to="/preferencias/conta" replace>Assine o Pregar</RouterLink>.
-        </template>
-      </p>
+      <div class="help">
+        <p>A chave é pessoal e fica só neste computador; a tela nunca a mostra de volta.</p>
+        <p>
+          Não tem chave?
+          <a href="#" @click.prevent="openExternal(ESTEVAO_SITE)">Peça a sua no site da Estêvão API<ExternalLink :size="11" aria-hidden="true" class="help__icon" /></a>.
+          <template v-if="!subscriptionAvailable">
+            Prefere não lidar com chaves? <RouterLink to="/preferencias/conta" replace>Assine o Pregar</RouterLink>.
+          </template>
+        </p>
+      </div>
     </template>
 
     <PrefGroup label="Contexto litúrgico">
@@ -259,10 +263,20 @@ onMounted(loadCatalogues)
   color: var(--danger);
 }
 .help {
-  margin: -8px 0 0;
+  margin-top: -8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 12px;
   color: var(--muted);
   line-height: 1.6;
+}
+.help p {
+  margin: 0;
+}
+.help__icon {
+  margin-left: 3px;
+  vertical-align: -1px;
 }
 .book-button {
   width: 100%;

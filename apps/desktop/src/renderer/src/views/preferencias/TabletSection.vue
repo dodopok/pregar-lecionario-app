@@ -2,6 +2,7 @@
 /** Cópia de leitura para o tablet: tipografia, notas, formato (PDF ou Google Doc) e pasta. */
 import { computed, onMounted, ref } from 'vue'
 import { Folder, Minus, Plus } from 'lucide-vue-next'
+import type { AppSettings } from '@shared/settings'
 import PButton from '@/components/PButton.vue'
 import Segmented from '@/components/Segmented.vue'
 import Toggle from '@/components/Toggle.vue'
@@ -21,7 +22,7 @@ const tablet = computed(() => app.settings.tablet)
 const fontOptions = computed(() => (FONTS.includes(tablet.value.fontFamily) ? FONTS : [tablet.value.fontFamily, ...FONTS]))
 const folder = computed(() => tablet.value.lastExportFolder ?? suggestedFolder.value)
 
-function update(patch: Partial<typeof app.settings.tablet>): void {
+function update(patch: Partial<AppSettings['tablet']>): void {
   void app.updateSettings({ tablet: patch })
 }
 

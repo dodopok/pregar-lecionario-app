@@ -47,6 +47,7 @@ const proAvailable = computed(() => app.account.loggedIn && Boolean(app.account.
 const usingSubscription = computed(() => proAvailable.value && !ai.value.preferOwnKeys)
 const vaultMissing = computed(() => app.secrets !== null && !app.secrets.encryptionAvailable && platform() === 'linux')
 const hasKey = (provider: AIProvider) => app.secrets?.[provider] === true
+const anyKey = computed(() => AI_PROVIDERS.some(hasKey))
 const reviewModels = computed(() => modelOptions(ai.value.reviewProvider, { claudeModels: claudeModels.value, selectedModel: ai.value.reviewModel }))
 const researchModels = computed(() =>
   modelOptions(ai.value.researchProvider, { claudeModels: claudeModels.value, selectedModel: ai.value.researchModel }),
@@ -169,13 +170,16 @@ onMounted(() => {
         <RouterLink v-else-if="!proAvailable" class="mode__link" to="/preferencias/conta" replace>Assinar o Pregar</RouterLink>
         <span v-else class="mode__state mode__state--off">Disponível na sua conta</span>
       </section>
-      <section class="mode" :class="{ 'mode--active': !usingSubscription }" aria-labelledby="mode-byok">
+      <section class="mode" :class="{ 'mode--active': !usingSubscription && anyKey }" aria-labelledby="mode-byok">
         <div class="mode__icon" aria-hidden="true"><UserRound :size="16" /></div>
         <h3 id="mode-byok" class="mode__title">Com suas chaves (grátis)</h3>
         <p class="mode__text">
           Você cria uma chave num provedor e paga a ele direto pelo uso. O texto vai do seu computador ao provedor, sem passar pelo Pregar.
         </p>
-        <span v-if="!usingSubscription" class="mode__state">Em uso</span>
+        <template v-if="!usingSubscription">
+          <span v-if="anyKey" class="mode__state">Em uso</span>
+          <span v-else class="mode__state mode__state--off">Falta salvar uma chave abaixo</span>
+        </template>
       </section>
     </div>
 

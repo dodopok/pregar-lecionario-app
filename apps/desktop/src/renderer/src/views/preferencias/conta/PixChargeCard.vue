@@ -69,7 +69,7 @@ async function copy(): Promise<void> {
         </PButton>
       </div>
       <label class="pix__payload-label" for="pix-payload">Código Pix (copia e cola)</label>
-      <textarea id="pix-payload" class="pix__payload selectable" readonly rows="2" :value="charge.payload" @focus="($event.target as HTMLTextAreaElement).select()" />
+      <textarea id="pix-payload" class="pix__payload selectable" readonly rows="4" :value="charge.payload" @focus="($event.target as HTMLTextAreaElement).select()" />
       <p v-if="waiting && !expired" class="pix__waiting" role="status">
         <Spinner :size="13" label="Aguardando pagamento" />
         Aguardando a confirmação do banco. Pode levar alguns segundos depois do pagamento.
@@ -171,6 +171,8 @@ async function copy(): Promise<void> {
   background: color-mix(in srgb, var(--ink) 4%, var(--surface));
   color: var(--muted);
   word-break: break-all;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 .pix__waiting {
   margin: 0;

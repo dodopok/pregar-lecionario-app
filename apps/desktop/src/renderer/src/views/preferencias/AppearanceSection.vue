@@ -68,7 +68,7 @@ function onKeydown(event: KeyboardEvent): void {
       <PrefRow label="Cor de acento">
         <span class="accent">
           <span class="accent__swatch" aria-hidden="true" />
-          Segue a cor litúrgica do dia selecionado na Mesa (hoje, {{ colorName }}).
+          Segue a cor litúrgica do dia selecionado na Mesa (agora, {{ colorName }}).
         </span>
       </PrefRow>
     </PrefGroup>
