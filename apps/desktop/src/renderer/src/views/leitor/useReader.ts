@@ -1,14 +1,13 @@
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue'
 import type { ReaderCommand, ReaderMenuRequest, ReaderSnapshot, ReaderTabView, ReaderWebAction, ReaderWebState } from '@shared/ipc-reader'
 import { errorMessage, invoke, on } from '@/lib/api'
-import { useToasts } from '@/stores/toasts'
 
 /**
  * Estado do Leitor na janela: o processo principal é a fonte; a janela envia comandos e recebe
- * o estado novo por `reader:stateChanged`.
+ * o estado novo por `reader:stateChanged`. Erros vão para `report` (aviso na barra da pesquisa,
+ * que as páginas web nativas não cobrem).
  */
-export function useReader() {
-  const toasts = useToasts()
+export function useReader(report: (message: string) => void) {
   const snapshot = shallowRef<ReaderSnapshot | null>(null)
   const webStates = ref<Record<string, ReaderWebState>>({})
   const ready = ref(false)
@@ -26,11 +25,9 @@ export function useReader() {
 
   function accept(next: ReaderSnapshot): void {
     if (snapshot.value && next.revision < snapshot.value.revision) return
+    // As abas de outras pesquisas não vêm no estado, mas suas páginas continuam abertas:
+    // os estados web ficam guardados por aba.
     snapshot.value = next
-    // Estados de abas fechadas não servem mais.
-    const ids = new Set(next.tabs.map((tab) => tab.id))
-    const kept = Object.fromEntries(Object.entries(webStates.value).filter(([id]) => ids.has(id)))
-    if (Object.keys(kept).length !== Object.keys(webStates.value).length) webStates.value = kept
   }
 
   const stops = [
@@ -47,7 +44,7 @@ export function useReader() {
       accept(state)
       webStates.value = Object.fromEntries(web.map((item) => [item.tabID, item]))
     } catch (error) {
-      toasts.show(errorMessage(error), 'error')
+      report(errorMessage(error))
     } finally {
       ready.value = true
     }
@@ -57,7 +54,7 @@ export function useReader() {
     try {
       await invoke('reader:command', value)
     } catch (error) {
-      toasts.show(errorMessage(error), 'error')
+      report(errorMessage(error))
     }
   }
 
@@ -65,7 +62,7 @@ export function useReader() {
     try {
       await invoke('reader:web', { tabID, action, url })
     } catch (error) {
-      toasts.show(errorMessage(error), 'error')
+      report(errorMessage(error))
     }
   }
 
@@ -73,7 +70,7 @@ export function useReader() {
     try {
       await invoke('reader:activateSermon', { dateKey })
     } catch (error) {
-      toasts.show(errorMessage(error), 'error')
+      report(errorMessage(error))
     }
   }
 
@@ -81,12 +78,12 @@ export function useReader() {
     try {
       await invoke('reader:setReviewInclusion', { tabID, included })
     } catch (error) {
-      toasts.show(errorMessage(error), 'error')
+      report(errorMessage(error))
     }
   }
 
   function menu(request: ReaderMenuRequest): void {
-    void invoke('reader:menu', request).catch((error: unknown) => toasts.show(errorMessage(error), 'error'))
+    void invoke('reader:menu', request).catch((error: unknown) => report(errorMessage(error)))
   }
 
   return { snapshot, webStates, ready, tabs, selectedTab, selectedWebState, load, command, web, activateSermon, setReviewInclusion, menu }

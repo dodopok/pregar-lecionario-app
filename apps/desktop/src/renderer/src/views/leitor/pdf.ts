@@ -3,11 +3,13 @@
  * recentes ficam abertos) e fonte de texto para calcular seções quando a Biblioteca não as tem.
  */
 import type { PDFDocumentProxy } from 'pdfjs-dist'
+import type * as PdfjsNamespace from 'pdfjs-dist'
+import type * as ViewerNamespace from 'pdfjs-dist/web/pdf_viewer.mjs'
 import type { PdfOutlineItem, PdfTextSource } from '@pregar/core/library'
 import { textFromItems } from './reader-ui'
 
-type PdfjsModule = typeof import('pdfjs-dist')
-type ViewerModule = typeof import('pdfjs-dist/web/pdf_viewer.mjs')
+type PdfjsModule = typeof PdfjsNamespace
+type ViewerModule = typeof ViewerNamespace
 
 export interface PdfjsBundle {
   pdfjs: PdfjsModule
@@ -67,6 +69,7 @@ class ReaderBinaryDataFactory {
 interface CachedDocument {
   url: string
   promise: Promise<PDFDocumentProxy>
+  destroy: () => Promise<void>
   used: number
 }
 
@@ -86,14 +89,16 @@ export async function openPdfDocument(url: string): Promise<PDFDocumentProxy> {
     url,
     BinaryDataFactory: ReaderBinaryDataFactory,
     useWorkerFetch: false,
-    // A fábrica acima ignora estes endereços; o PDF.js só exige que existam.
+    // Fontes padrão vêm da fábrica acima (iguais nos três sistemas), não de fontes do sistema;
+    // a fábrica ignora estes endereços, que o PDF.js só exige que existam.
+    useSystemFonts: false,
     standardFontDataUrl: 'pregar-pdfjs://fonts/',
     wasmUrl: 'pregar-pdfjs://wasm/',
     // Busca só os trechos necessários (o protocolo pregar-pdf atende Range).
     disableAutoFetch: true,
     enableXfa: false,
   })
-  const entry: CachedDocument = { url, promise: task.promise, used: ++clock }
+  const entry: CachedDocument = { url, promise: task.promise, destroy: () => task.destroy(), used: ++clock }
   documents.set(url, entry)
   task.promise.catch(() => documents.delete(url))
   evict(url)
@@ -104,7 +109,7 @@ export async function openPdfDocument(url: string): Promise<PDFDocumentProxy> {
 export function forgetPdfDocument(url: string): void {
   const cached = documents.get(url)
   documents.delete(url)
-  void cached?.promise.then((document) => document.destroy()).catch(() => undefined)
+  void cached?.destroy().catch(() => undefined)
 }
 
 function evict(keep: string): void {

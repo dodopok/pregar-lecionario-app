@@ -53,18 +53,14 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y xvfb
       - name: Build
         run: npm run build -w @pregar/desktop
-      - name: Smoke e Mesa
+      - name: Roteiros ponta a ponta (Mesa, Preferências, Leitor, Biblioteca)
         working-directory: apps/desktop
-        run: |
-          xvfb-run -a node test/e2e/smoke.mjs out smoke.png
-          xvfb-run -a node test/e2e/mesa.mjs out screenshots
+        run: xvfb-run -a node test/e2e/run-all.mjs out screenshots
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: capturas-desktop
-          path: |
-            apps/desktop/screenshots
-            apps/desktop/*.png
+          path: apps/desktop/screenshots
           if-no-files-found: ignore
 
   api-image:

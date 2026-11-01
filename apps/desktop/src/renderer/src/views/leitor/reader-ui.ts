@@ -3,6 +3,22 @@
  */
 import type { PdfSectionLocation, ReaderPdfPosition } from '@pregar/core/reader'
 import type { ReaderRect, ReaderTabView } from '@shared/ipc-reader'
+import type { LibrarySectionRow } from '@shared/ipc-library'
+
+/** Linha de seção da Biblioteca (`library:sectionsForPath`) no modelo do Leitor. */
+export function sectionFromRow(row: Pick<LibrarySectionRow, 'title' | 'context' | 'startPage' | 'endPage' | 'method'>): PdfSectionLocation {
+  const section: PdfSectionLocation = { title: row.title, startPage: row.startPage, endPage: row.endPage, findingMethod: row.method }
+  if (row.context) section.context = row.context
+  return section
+}
+
+/** Aviso na barra da pesquisa do Leitor. */
+export interface ReaderNotice {
+  id: number
+  message: string
+  kind: 'info' | 'success' | 'error'
+  action?: { label: string; run: () => void }
+}
 
 /** Escala mínima e máxima do visor (as do PDFKit no Swift). */
 export const PDF_MIN_SCALE = 0.1
