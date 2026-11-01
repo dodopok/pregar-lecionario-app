@@ -35,11 +35,15 @@ const alias = {
   '@shared': resolve(__dirname, 'src/shared'),
 }
 
+// Pasta de saída única para os três alvos (PREGAR_OUT=.build-x permite builds paralelos de verificação).
+const outBase = resolve(__dirname, process.env.PREGAR_OUT ?? 'out')
+
 export default defineConfig({
   main: {
     resolve: { alias },
     build: {
       ...bundleEverything,
+      outDir: resolve(outBase, 'main'),
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
@@ -52,6 +56,7 @@ export default defineConfig({
     resolve: { alias },
     build: {
       ...bundleEverything,
+      outDir: resolve(outBase, 'preload'),
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') },
         output: { format: 'cjs', entryFileNames: '[name].cjs' },
@@ -68,6 +73,8 @@ export default defineConfig({
     },
     plugins: [vue(), contentSecurityPolicy()],
     build: {
+      outDir: resolve(outBase, 'renderer'),
+      emptyOutDir: true,
       rollupOptions: { input: { index: resolve(__dirname, 'src/renderer/index.html') } },
       chunkSizeWarningLimit: 2500,
     },

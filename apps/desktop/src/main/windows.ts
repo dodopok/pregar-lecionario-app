@@ -1,4 +1,5 @@
-import { BrowserWindow, nativeTheme, screen } from 'electron'
+import { BrowserWindow, Menu, nativeTheme, screen } from 'electron'
+import type { MenuItemConstructorOptions } from 'electron'
 import type { Rectangle } from 'electron'
 import { join } from 'node:path'
 import type { EventChannel, EventChannels } from '@shared/ipc'
@@ -91,6 +92,31 @@ export class WindowManager {
     })
     this.windows.set(kind, window)
     window.once('ready-to-show', () => window.show())
+    window.webContents.on('context-menu', (_event, params) => {
+      // Sugestões de ortografia e edição básica, que o Electron não oferece por padrão.
+      const items: MenuItemConstructorOptions[] = []
+      if (params.misspelledWord) {
+        for (const suggestion of params.dictionarySuggestions.slice(0, 6)) {
+          items.push({ label: suggestion, click: () => window.webContents.replaceMisspelling(suggestion) })
+        }
+        if (params.dictionarySuggestions.length === 0) items.push({ label: 'Sem sugestões', enabled: false })
+        items.push(
+          { label: 'Adicionar ao dicionário', click: () => window.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord) },
+          { type: 'separator' },
+        )
+      }
+      if (params.isEditable) {
+        items.push(
+          { role: 'cut', label: 'Recortar', enabled: params.editFlags.canCut },
+          { role: 'copy', label: 'Copiar', enabled: params.editFlags.canCopy },
+          { role: 'paste', label: 'Colar', enabled: params.editFlags.canPaste },
+          { role: 'selectAll', label: 'Selecionar tudo' },
+        )
+      } else if (params.selectionText.trim()) {
+        items.push({ role: 'copy', label: 'Copiar' })
+      }
+      if (items.length > 0) Menu.buildFromTemplate(items).popup({ window })
+    })
     const saveBounds = () => {
       if (!window.isDestroyed() && !window.isMinimized() && !window.isFullScreen()) this.bounds.set(kind, window.getNormalBounds())
     }

@@ -11,6 +11,8 @@ delete env.NODE_OPTIONS
 const app = await electron.launch({ args: [`${outDir}/main/index.js`, `--user-data-dir=${userData}`, '--no-sandbox'], env, timeout: 30000 })
 try {
   const window = await app.firstWindow({ timeout: 20000 })
+  // O Playwright força o tema claro por padrão; o app decide o tema pelas Preferências.
+  await window.emulateMedia({ colorScheme: null })
   window.on('pageerror', (error) => console.log('[pageerror]', error.message))
   await window.waitForSelector('.window-header', { timeout: 15000 })
   const isolated = await window.evaluate(() => typeof require === 'undefined' && typeof process === 'undefined')
