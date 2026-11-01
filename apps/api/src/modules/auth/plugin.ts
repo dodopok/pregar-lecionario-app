@@ -4,7 +4,7 @@ import type { AppDeps } from '../../lib/context'
 import { errors } from '../../lib/errors'
 import { parseInput } from '../../lib/validate'
 import type { AuthContext } from './service'
-import { AuthService } from './service'
+import type { AuthService } from './service'
 
 declare module 'fastify' {
   interface FastifyRequest {

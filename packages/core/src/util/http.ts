@@ -1,5 +1,5 @@
-import { IntegrationLog, secretsFromRequest, silentIntegrationLog } from '../log/integration'
-import type { IntegrationName } from '../log/integration'
+import { secretsFromRequest, silentIntegrationLog } from '../log/integration'
+import type { IntegrationName, IntegrationLog } from '../log/integration'
 
 /** Assinatura mínima de `fetch`, injetada para permitir testes e o `net.fetch` do Electron. */
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
@@ -58,7 +58,13 @@ export async function loggedRequest(
   const signal = combineSignals([context.signal, init.signal ?? undefined, timeoutSignal])
   const secrets = [...secretsFromRequest(url, init.headers), ...(options.secrets ?? [])]
   const method = (init.method ?? 'GET').toUpperCase()
-  const base = { integration: options.integration, operation: options.operation, method, url: url.toString(), secrets }
+  const base = {
+    integration: options.integration,
+    operation: options.operation,
+    method,
+    url: url.toString(),
+    secrets,
+  }
   let response: Response
   try {
     response = await context.fetch(url, { ...init, signal })

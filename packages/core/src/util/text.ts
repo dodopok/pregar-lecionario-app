@@ -31,7 +31,7 @@ export function escapeRegExp(value: string): string {
 
 /** Conta palavras como o editor: sequências separadas por espaço que contenham letra ou número. */
 export function countWords(text: string): number {
-  const matches = text.match(/[\p{L}\p{N}][\p{L}\p{N}'’\-]*/gu)
+  const matches = text.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)
   return matches ? matches.length : 0
 }
 
