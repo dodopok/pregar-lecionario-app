@@ -19,3 +19,6 @@ apps/desktop/resources/tessdata/
 
 # Builds privados de verificação
 .build-*/
+
+# Capturas dos roteiros ponta a ponta (npm run verify / CI)
+apps/desktop/screenshots/
