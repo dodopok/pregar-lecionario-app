@@ -1,16 +1,14 @@
 import { app, session, shell } from 'electron'
 import type { WebContents } from 'electron'
+import { join } from 'node:path'
+import { makeAppURLCheck } from './app-url'
 
-/** Origens das janelas do app (arquivo empacotado ou servidor do Vite em desenvolvimento). */
+let appURLCheck: ((url: string) => boolean) | null = null
+
+/** Origens das janelas do app (arquivos da interface empacotada ou servidor do Vite em desenvolvimento). */
 export function isAppURL(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol === 'file:') return true
-    const devServer = process.env.ELECTRON_RENDERER_URL
-    return Boolean(devServer && url.startsWith(devServer))
-  } catch {
-    return false
-  }
+  appURLCheck ??= makeAppURLCheck(join(__dirname, '../renderer'), process.env.ELECTRON_RENDERER_URL)
+  return appURLCheck(url)
 }
 
 const SAFE_EXTERNAL = new Set(['https:', 'mailto:'])

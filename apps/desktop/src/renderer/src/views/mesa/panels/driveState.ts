@@ -39,7 +39,12 @@ export function ensureDriveStatus(): Promise<void> {
   statusRequest = invoke('drive:status')
     .then(applyStatus)
     .catch(() => {
-      driveStatus.value = { available: false, connected: false, ideasDocumentURL: null, message: 'Não foi possível verificar o Google Drive.' }
+      driveStatus.value = {
+        available: false,
+        connected: false,
+        ideasDocumentURL: null,
+        message: 'Não foi possível verificar o Google Drive.',
+      }
     })
     .finally(() => {
       driveStatusLoading.value = false

@@ -60,7 +60,12 @@ export const SHORTCUT_TABLES: ShortcutTable[] = [
   },
 ]
 
-const MODIFIERS: Record<string, 'Ctrl' | 'Alt' | 'Shift'> = { '⌘': 'Ctrl', '⌃': 'Ctrl', '⌥': 'Alt', '⇧': 'Shift' }
+const MODIFIERS: Record<string, 'Ctrl' | 'Alt' | 'Shift'> = {
+  '⌘': 'Ctrl',
+  '⌃': 'Ctrl',
+  '⌥': 'Alt',
+  '⇧': 'Shift',
+}
 
 function convertCombo(combo: string): string {
   const found = new Set<string>()
@@ -129,27 +134,97 @@ export interface MesaCommand {
 }
 
 export const MESA_COMMANDS: MesaCommand[] = [
-  { id: 'review', title: 'Nova revisão…', group: 'Preparação', shortcut: '⇧⌥⌘R', keywords: 'revisar ia critérios apontamentos' },
-  { id: 'structure', title: 'Checar estrutura', group: 'Preparação', keywords: 'mapa do sermão introdução conclusão ideia dominante' },
+  {
+    id: 'review',
+    title: 'Nova revisão…',
+    group: 'Preparação',
+    shortcut: '⇧⌥⌘R',
+    keywords: 'revisar ia critérios apontamentos',
+  },
+  {
+    id: 'structure',
+    title: 'Checar estrutura',
+    group: 'Preparação',
+    keywords: 'mapa do sermão introdução conclusão ideia dominante',
+  },
   { id: 'questions', title: 'Perguntas de emergência…', group: 'Preparação', keywords: 'ia dúvidas' },
-  { id: 'rehearsal', title: 'Ensaio', group: 'Preparação', shortcut: '⇧⌥⌘E', keywords: 'cronômetro tempo leitura em voz alta' },
-  { id: 'tablet', title: 'Cópia para o tablet…', group: 'Preparação', shortcut: '⇧⌘T', keywords: 'pdf google doc exportar pregar' },
-  { id: 'history', title: 'Histórico de versões', group: 'Preparação', shortcut: '⇧⌥⌘H', keywords: 'restaurar comparar versão' },
+  {
+    id: 'rehearsal',
+    title: 'Ensaio',
+    group: 'Preparação',
+    shortcut: '⇧⌥⌘E',
+    keywords: 'cronômetro tempo leitura em voz alta',
+  },
+  {
+    id: 'tablet',
+    title: 'Cópia para o tablet…',
+    group: 'Preparação',
+    shortcut: '⇧⌘T',
+    keywords: 'pdf google doc exportar pregar',
+  },
+  {
+    id: 'history',
+    title: 'Histórico de versões',
+    group: 'Preparação',
+    shortcut: '⇧⌥⌘H',
+    keywords: 'restaurar comparar versão',
+  },
   { id: 'drive', title: 'Google Drive…', group: 'Preparação', keywords: 'conectar ideias nuvem' },
   { id: 'save', title: 'Salvar agora', group: 'Preparação', shortcut: '⌘S' },
-  { id: 'shortcuts', title: 'Atalhos de teclado', group: 'Preparação', shortcut: '⌘/', keywords: 'ajuda teclas' },
-  { id: 'focusMode', title: 'Modo de escrita', group: 'Painéis', shortcut: '⇧⌘F', keywords: 'foco concentração' },
+  {
+    id: 'shortcuts',
+    title: 'Atalhos de teclado',
+    group: 'Preparação',
+    shortcut: '⌘/',
+    keywords: 'ajuda teclas',
+  },
+  {
+    id: 'focusMode',
+    title: 'Modo de escrita',
+    group: 'Painéis',
+    shortcut: '⇧⌘F',
+    keywords: 'foco concentração',
+  },
   { id: 'toggleCalendar', title: 'Mostrar ou ocultar calendário', group: 'Painéis', shortcut: '⇧⌥⌘1' },
   { id: 'toggleReadings', title: 'Mostrar ou ocultar leituras', group: 'Painéis', shortcut: '⇧⌥⌘2' },
   { id: 'toggleMaterials', title: 'Mostrar ou ocultar materiais', group: 'Painéis', shortcut: '⇧⌥⌘3' },
-  { id: 'tabMaterials', title: 'Ver materiais da passagem', group: 'Painéis', keywords: 'pdf sites artigos comentários' },
+  {
+    id: 'tabMaterials',
+    title: 'Ver materiais da passagem',
+    group: 'Painéis',
+    keywords: 'pdf sites artigos comentários',
+  },
   { id: 'tabIdeas', title: 'Ver ideias do celular', group: 'Painéis', keywords: 'notas google drive' },
   { id: 'tabReview', title: 'Ver revisões do manuscrito', group: 'Painéis', keywords: 'apontamentos mapa' },
-  { id: 'openBible', title: 'Abrir Bíblia', group: 'Janelas', shortcut: '⌘1', keywords: 'traduções comparar' },
+  {
+    id: 'openBible',
+    title: 'Abrir Bíblia',
+    group: 'Janelas',
+    shortcut: '⌘1',
+    keywords: 'traduções comparar',
+  },
   { id: 'openReader', title: 'Abrir Leitor', group: 'Janelas', shortcut: '⌘2', keywords: 'abas pdf sites' },
-  { id: 'openLibrary', title: 'Abrir Biblioteca de PDFs', group: 'Janelas', shortcut: '⌘3', keywords: 'importar indexar' },
-  { id: 'openArchive', title: 'Abrir Arquivo de sermões', group: 'Janelas', shortcut: '⌘4', keywords: 'buscar sermões antigos' },
-  { id: 'openPreferences', title: 'Abrir Preferências', group: 'Janelas', shortcut: '⌘,', keywords: 'configurações chaves conta' },
+  {
+    id: 'openLibrary',
+    title: 'Abrir Biblioteca de PDFs',
+    group: 'Janelas',
+    shortcut: '⌘3',
+    keywords: 'importar indexar',
+  },
+  {
+    id: 'openArchive',
+    title: 'Abrir Arquivo de sermões',
+    group: 'Janelas',
+    shortcut: '⌘4',
+    keywords: 'buscar sermões antigos',
+  },
+  {
+    id: 'openPreferences',
+    title: 'Abrir Preferências',
+    group: 'Janelas',
+    shortcut: '⌘,',
+    keywords: 'configurações chaves conta',
+  },
   { id: 'bold', title: 'Negrito', group: 'Escrita', shortcut: '⌘B' },
   { id: 'italic', title: 'Itálico', group: 'Escrita', shortcut: '⌘I' },
   { id: 'underline', title: 'Sublinhado', group: 'Escrita', shortcut: '⌘U' },

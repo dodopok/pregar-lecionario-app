@@ -5,7 +5,15 @@
  * Cada trecho é um botão que seleciona a passagem correspondente no manuscrito.
  */
 import { computed } from 'vue'
-import { CircleAlert, CircleCheck, CircleDashed, CircleDot, CircleX, History, ScanText } from 'lucide-vue-next'
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CircleX,
+  History,
+  ScanText,
+} from 'lucide-vue-next'
 import {
   STRUCTURE_ANCHOR_STATUS_TITLES,
   STRUCTURE_IDEA_STATUS_TITLES,
@@ -19,16 +27,25 @@ import {
 import type { SermonStructureAssessment, StructurePage, StructureSection } from '@pregar/core/ai'
 import SectionLabel from '@/components/SectionLabel.vue'
 
-const props = withDefaults(defineProps<{ structure: SermonStructureAssessment; stale?: boolean; compact?: boolean }>(), {
-  stale: false,
-  compact: false,
-})
+const props = withDefaults(
+  defineProps<{ structure: SermonStructureAssessment; stale?: boolean; compact?: boolean }>(),
+  {
+    stale: false,
+    compact: false,
+  },
+)
 const emit = defineEmits<{ select: [quote: string] }>()
 
-const verdictTone = computed(() => ({ solid: 'accent', attention: 'warning', fragile: 'danger' })[props.structure.verdict])
+const verdictTone = computed(
+  () => ({ solid: 'accent', attention: 'warning', fragile: 'danger' })[props.structure.verdict],
+)
 
 function sectionTone(section: StructureSection): 'accent' | 'warning' | 'danger' {
-  return section.assessment === 'fulfills' ? 'accent' : section.assessment === 'partial' ? 'warning' : 'danger'
+  return section.assessment === 'fulfills'
+    ? 'accent'
+    : section.assessment === 'partial'
+      ? 'warning'
+      : 'danger'
 }
 
 function pageTone(page: StructurePage): 'accent' | 'warning' | 'muted' {
@@ -36,7 +53,9 @@ function pageTone(page: StructurePage): 'accent' | 'warning' | 'muted' {
 }
 
 function pageHelp(page: StructurePage): string {
-  return page.quote ? `${STRUCTURE_PAGE_TITLES[page.page]}: ir ao trecho` : `${STRUCTURE_PAGE_TITLES[page.page]}: não localizada`
+  return page.quote
+    ? `${STRUCTURE_PAGE_TITLES[page.page]}: ir ao trecho`
+    : `${STRUCTURE_PAGE_TITLES[page.page]}: não localizada`
 }
 
 const anchors = computed(() => [
@@ -65,11 +84,17 @@ const anchors = computed(() => [
   <section class="map" :class="{ 'map--compact': compact }" aria-label="Mapa do sermão">
     <header class="map__header">
       <h3 class="serif map__title">Mapa do sermão</h3>
-      <span class="map__verdict" :class="`tone-bg--${verdictTone}`" :aria-label="`Veredito: ${STRUCTURE_VERDICT_TITLES[structure.verdict]}`">
+      <span
+        class="map__verdict"
+        :class="`tone-bg--${verdictTone}`"
+        :aria-label="`Veredito: ${STRUCTURE_VERDICT_TITLES[structure.verdict]}`"
+      >
         {{ STRUCTURE_VERDICT_TITLES[structure.verdict] }}
       </span>
     </header>
-    <p v-if="stale" class="map__stale"><History :size="12" aria-hidden="true" /> O texto mudou depois deste mapa.</p>
+    <p v-if="stale" class="map__stale">
+      <History :size="12" aria-hidden="true" /> O texto mudou depois deste mapa.
+    </p>
     <p v-if="structure.summary" class="map__summary">{{ structure.summary }}</p>
 
     <ul class="map__sections" role="list">
@@ -82,7 +107,9 @@ const anchors = computed(() => [
         <div class="map__section-body">
           <div class="map__row">
             <span class="map__section-title">{{ STRUCTURE_SECTION_TITLES[section.kind] }}</span>
-            <span class="map__status" :class="`tone--${sectionTone(section)}`">{{ STRUCTURE_PRESENCE_TITLES[section.assessment] }}</span>
+            <span class="map__status" :class="`tone--${sectionTone(section)}`">{{
+              STRUCTURE_PRESENCE_TITLES[section.assessment]
+            }}</span>
             <span class="spacer" />
             <button
               v-if="section.startQuote"
@@ -105,7 +132,9 @@ const anchors = computed(() => [
       <div class="map__anchor">
         <div class="map__row">
           <SectionLabel :title="anchor.title" tag="h4" />
-          <span class="map__status" :class="anchor.positive ? 'tone--accent' : 'tone--warning'">{{ anchor.status }}</span>
+          <span class="map__status" :class="anchor.positive ? 'tone--accent' : 'tone--warning'">{{
+            anchor.status
+          }}</span>
           <span class="spacer" />
           <button
             v-if="anchor.quote"
@@ -119,7 +148,13 @@ const anchors = computed(() => [
           </button>
         </div>
         <p v-if="anchor.statement" class="serif map__statement">{{ anchor.statement }}</p>
-        <button v-if="anchor.quote" type="button" class="map__quote" title="Selecionar este trecho no manuscrito" @click="emit('select', anchor.quote)">
+        <button
+          v-if="anchor.quote"
+          type="button"
+          class="map__quote"
+          title="Selecionar este trecho no manuscrito"
+          @click="emit('select', anchor.quote)"
+        >
           “{{ anchor.quote }}”
         </button>
         <p v-if="anchor.note" class="map__note">{{ anchor.note }}</p>

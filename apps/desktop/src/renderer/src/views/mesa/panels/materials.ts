@@ -4,7 +4,12 @@
  * duplicados, textos de vazio e linhas de metadados. Sem Vue nem IPC, para os testes.
  */
 import type { AIResearchSource } from '@pregar/core/ai'
-import type { FavoriteSite, FavoriteSiteArticle, FavoriteSiteMatch, FavoriteSiteSearchGroup } from '@pregar/core/sources'
+import type {
+  FavoriteSite,
+  FavoriteSiteArticle,
+  FavoriteSiteMatch,
+  FavoriteSiteSearchGroup,
+} from '@pregar/core/sources'
 import type { ReaderTab, ReaderTabKind } from '@pregar/core/reader'
 import type { LibrarySectionMatch } from '@shared/ipc-library'
 
@@ -122,7 +127,9 @@ export function uniqueArticles(articles: readonly FavoriteSiteArticle[]): Favori
   return order.map((key) => best.get(key)!)
 }
 
-export function siteArticles(groups: readonly FavoriteSiteSearchGroup[] | null | undefined): FavoriteSiteArticle[] {
+export function siteArticles(
+  groups: readonly FavoriteSiteSearchGroup[] | null | undefined,
+): FavoriteSiteArticle[] {
   return uniqueArticles((groups ?? []).flatMap((group) => group.articles))
 }
 
@@ -136,7 +143,12 @@ export function groupMaterials(
   filter: MaterialFilter,
 ): MaterialGroup[] {
   const pdfItems: PdfMaterial[] = showsPDFs(filter)
-    ? sortedPdfMatches(pdfs).map((match) => ({ kind: 'pdf', id: `pdf:${pdfMaterialId(match)}`, group: match.kind, match }))
+    ? sortedPdfMatches(pdfs).map((match) => ({
+        kind: 'pdf',
+        id: `pdf:${pdfMaterialId(match)}`,
+        group: match.kind,
+        match,
+      }))
     : []
   const articleItems: ArticleMaterial[] = showsSites(filter)
     ? uniqueArticles(articles).map((article) => ({
@@ -148,12 +160,17 @@ export function groupMaterials(
     : []
   return MATCH_GROUPS.map((group) => ({
     ...group,
-    items: [...pdfItems.filter((item) => item.group === group.id), ...articleItems.filter((item) => item.group === group.id)],
+    items: [
+      ...pdfItems.filter((item) => item.group === group.id),
+      ...articleItems.filter((item) => item.group === group.id),
+    ],
   })).filter((group) => group.items.length > 0)
 }
 
 /** Sites sem artigo correspondente: viram "Fontes para consultar" (inclui o Working Preacher). */
-export function sitesToConsult(groups: readonly FavoriteSiteSearchGroup[] | null | undefined): FavoriteSiteSearchGroup[] {
+export function sitesToConsult(
+  groups: readonly FavoriteSiteSearchGroup[] | null | undefined,
+): FavoriteSiteSearchGroup[] {
   return (groups ?? []).filter((group) => group.articles.length === 0)
 }
 
@@ -168,7 +185,9 @@ export interface EmptyMessageInput {
 export function materialsEmptyMessage({ filter, libraryWorks, favoriteSites }: EmptyMessageInput): string {
   const parts: string[] = []
   if (showsPDFs(filter)) {
-    parts.push(libraryWorks === 0 ? 'Nenhum PDF importado ainda.' : 'Nenhum PDF indexado trata desta passagem.')
+    parts.push(
+      libraryWorks === 0 ? 'Nenhum PDF importado ainda.' : 'Nenhum PDF indexado trata desta passagem.',
+    )
   }
   if (showsSites(filter)) {
     parts.push(
@@ -182,7 +201,9 @@ export function materialsEmptyMessage({ filter, libraryWorks, favoriteSites }: E
 
 /** "física 102" ou "físicas 96–101". */
 export function pageRangeLabel(section: { startPage: number; endPage: number }): string {
-  return section.startPage === section.endPage ? `física ${section.startPage}` : `físicas ${section.startPage}–${section.endPage}`
+  return section.startPage === section.endPage
+    ? `física ${section.startPage}`
+    : `físicas ${section.startPage}–${section.endPage}`
 }
 
 function cleanParts(parts: readonly (string | null | undefined)[]): string[] {
@@ -240,7 +261,11 @@ export function articleLines(article: FavoriteSiteArticle): string[] {
     : null
   return cleanParts([
     joinParts([article.author, article.site.title]),
-    joinParts([siteEditorialContext(article.site), shortDate(article.publishedAt as Date | string | null), passage]),
+    joinParts([
+      siteEditorialContext(article.site),
+      shortDate(article.publishedAt as Date | string | null),
+      passage,
+    ]),
   ])
 }
 
@@ -306,7 +331,10 @@ export function findReaderTab(
 ): ReaderTab | undefined {
   const target = normalizedLocation(kind, location)
   return tabs.find(
-    (tab) => tab.kind === kind && tab.sermonDateKey === sermonDateKey && normalizedLocation(kind, tab.location) === target,
+    (tab) =>
+      tab.kind === kind &&
+      tab.sermonDateKey === sermonDateKey &&
+      normalizedLocation(kind, tab.location) === target,
   )
 }
 

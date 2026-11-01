@@ -2,7 +2,8 @@
 /**
  * Cartão único de material (seção de PDF, artigo, fonte para consultar ou resultado da pesquisa).
  * Clique abre no Leitor; botão do meio, ⌘clique (Ctrl+clique fora do Mac) abrem nova aba ao
- * fundo, e ⇧ seleciona a nova aba.
+ * fundo, e ⇧ seleciona a nova aba. Com a aba aberta para esta passagem, a caixa "na revisão"
+ * marca o material para seguir com a revisão (Fidelidade).
  */
 import { ArrowUpRight, Check, FileText, Globe } from 'lucide-vue-next'
 import { isMac } from '@/lib/api'
@@ -20,7 +21,8 @@ const props = withDefaults(
     actionLabel?: string
     isOpen?: boolean
     busy?: boolean
-    inReview?: boolean
+    /** Estado da marcação para a revisão; `null` quando o material não está aberto para esta passagem. */
+    review?: boolean | null
     compactTitle?: boolean
   }>(),
   {
@@ -31,11 +33,11 @@ const props = withDefaults(
     actionLabel: 'Abrir',
     isOpen: false,
     busy: false,
-    inReview: false,
+    review: null,
     compactTitle: false,
   },
 )
-const emit = defineEmits<{ open: [mode: OpenMode] }>()
+const emit = defineEmits<{ open: [mode: OpenMode]; review: [included: boolean] }>()
 
 const newTabHint = isMac() ? 'botão do meio ou ⌘clique' : 'botão do meio ou Ctrl+clique'
 
@@ -60,8 +62,17 @@ function onAuxClick(event: MouseEvent): void {
       </span>
       <div class="material__text">
         <p class="serif material__title" :class="{ 'material__title--compact': compactTitle }">{{ title }}</p>
-        <p v-for="(line, index) in lines" :key="index" class="material__line" :class="{ 'material__line--first': index === 0 }">{{ line }}</p>
-        <p v-if="matchLabel" class="material__match" :class="`material__match--${matchTone}`">{{ matchLabel }}</p>
+        <p
+          v-for="(line, index) in lines"
+          :key="index"
+          class="material__line"
+          :class="{ 'material__line--first': index === 0 }"
+        >
+          {{ line }}
+        </p>
+        <p v-if="matchLabel" class="material__match" :class="`material__match--${matchTone}`">
+          {{ matchLabel }}
+        </p>
         <p v-if="note" class="material__line">{{ note }}</p>
       </div>
     </div>
@@ -72,14 +83,29 @@ function onAuxClick(event: MouseEvent): void {
         :class="{ 'material__open--open': isOpen }"
         :disabled="busy"
         :aria-busy="busy || undefined"
-        :title="isOpen ? 'Este material já está aberto no Leitor' : `Abrir no Leitor · ${newTabHint} abre nova aba em segundo plano`"
+        :title="
+          isOpen
+            ? 'Este material já está aberto no Leitor'
+            : `Abrir no Leitor · ${newTabHint} abre nova aba em segundo plano`
+        "
         @click="onClick"
       >
         <Check v-if="isOpen" :size="12" aria-hidden="true" />
         <ArrowUpRight v-else :size="12" aria-hidden="true" />
         {{ actionLabel }}
       </button>
-      <span v-if="inReview" class="material__review" title="Marcado no Leitor para entrar na revisão">na revisão</span>
+      <label
+        v-if="review !== null"
+        class="material__review"
+        title="Enviar este material junto com a revisão de Fidelidade"
+      >
+        <input
+          type="checkbox"
+          :checked="review"
+          @change="emit('review', ($event.target as HTMLInputElement).checked)"
+        />
+        na revisão
+      </label>
     </div>
   </article>
 </template>
@@ -178,7 +204,14 @@ function onAuxClick(event: MouseEvent): void {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .material__review {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 10px;
   color: var(--muted);
+}
+.material__review input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 </style>

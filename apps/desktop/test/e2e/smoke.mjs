@@ -14,10 +14,18 @@ try {
   // O Playwright força o tema claro por padrão; o app decide o tema pelas Preferências.
   await window.emulateMedia({ colorScheme: null })
   window.on('pageerror', (error) => console.log('[pageerror]', error.message))
-  await window.waitForSelector('.window-header', { timeout: 15000 })
+  await window.waitForSelector('.mesa', { timeout: 15000 })
   const isolated = await window.evaluate(() => typeof require === 'undefined' && typeof process === 'undefined')
-  await window.screenshot({ path: process.argv[3] ?? 'smoke.png' })
+  // A ponte só responde a páginas do próprio app; aqui ela precisa funcionar.
+  const info = await window.evaluate(() => window.pregar.invoke('app:info'))
+  if (!isolated || !info?.ok) throw new Error(`Isolamento ou ponte do app com problema: ${JSON.stringify({ isolated, info })}`)
+  await window.screenshot({ path: process.argv[3] ?? 'smoke.png', timeout: 20000 })
   console.log(JSON.stringify({ title: await window.title(), isolated }))
+} catch (error) {
+  console.error(error)
+  process.exitCode = 1
 } finally {
   app.process().kill()
 }
+// Processos auxiliares do Chromium podem manter o Playwright aberto; o resultado já foi impresso.
+process.exit(process.exitCode ?? 0)

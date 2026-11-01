@@ -20,12 +20,16 @@ export interface CriterionCount {
 }
 
 /** Uma linha por critério, com os apontamentos ainda abertos do relatório (zero sem relatório). */
-export function criterionCounts(report: Pick<SermonReviewReport, 'findings'> | null | undefined): CriterionCount[] {
+export function criterionCounts(
+  report: Pick<SermonReviewReport, 'findings'> | null | undefined,
+): CriterionCount[] {
   return SERMON_REVIEW_CRITERIA.map((criterion) => ({
     criterion,
     title: CRITERION_TITLES[criterion],
     guidance: CRITERION_GUIDANCE[criterion],
-    count: report?.findings.filter((finding) => finding.criterion === criterion && finding.status === 'open').length ?? 0,
+    count:
+      report?.findings.filter((finding) => finding.criterion === criterion && finding.status === 'open')
+        .length ?? 0,
   }))
 }
 
@@ -42,7 +46,10 @@ export interface FindingGroup {
 export function groupFindingsByCriterion(findings: readonly SermonReviewFinding[]): FindingGroup[] {
   return SERMON_REVIEW_CRITERIA.map((criterion) => {
     const items = findings.filter((finding) => finding.criterion === criterion)
-    const ordered = [...items.filter((item) => item.severity === 'attention'), ...items.filter((item) => item.severity !== 'attention')]
+    const ordered = [
+      ...items.filter((item) => item.severity === 'attention'),
+      ...items.filter((item) => item.severity !== 'attention'),
+    ]
     return { criterion, title: CRITERION_TITLES[criterion], findings: ordered }
   }).filter((group) => group.findings.length > 0)
 }
@@ -65,7 +72,9 @@ export function sortedCriteria(criteria: Iterable<string>): SermonReviewCriterio
 }
 
 /** A assinatura conta "Checar estrutura" à parte quando Estrutura é o único critério. */
-export function operationForCriteria(criteria: readonly string[]): Extract<AIOperationKind, 'review' | 'structure'> {
+export function operationForCriteria(
+  criteria: readonly string[],
+): Extract<AIOperationKind, 'review' | 'structure'> {
   return criteria.length === 1 && criteria[0] === 'structure' ? 'structure' : 'review'
 }
 
@@ -134,7 +143,12 @@ export interface PayloadInput {
 }
 
 /** O que será enviado, e a quem, ao clicar em "Enviar revisão" (texto do app Swift para chaves próprias). */
-export function reviewPayloadDescription({ mode, providerName, includesSources, hasMaterials }: PayloadInput): string {
+export function reviewPayloadDescription({
+  mode,
+  providerName,
+  includesSources,
+  hasMaterials,
+}: PayloadInput): string {
   const parts: string[] = []
   if (includesSources) {
     parts.push('a leitura bíblica e as traduções disponíveis')

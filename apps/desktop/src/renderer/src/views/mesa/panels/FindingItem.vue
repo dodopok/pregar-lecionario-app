@@ -9,11 +9,19 @@ import type { SermonReviewFinding, SermonReviewFindingStatus } from '@pregar/cor
 import PButton from '@/components/PButton.vue'
 import { FINDING_STATUS_TEXT } from './review'
 
-withDefaults(defineProps<{ finding: SermonReviewFinding; showCriterion?: boolean; showStatusActions?: boolean; busy?: boolean }>(), {
-  showCriterion: true,
-  showStatusActions: false,
-  busy: false,
-})
+withDefaults(
+  defineProps<{
+    finding: SermonReviewFinding
+    showCriterion?: boolean
+    showStatusActions?: boolean
+    busy?: boolean
+  }>(),
+  {
+    showCriterion: true,
+    showStatusActions: false,
+    busy: false,
+  },
+)
 const emit = defineEmits<{ select: [quote: string]; status: [status: SermonReviewFindingStatus] }>()
 
 function sourceLine(finding: SermonReviewFinding): string {
@@ -24,8 +32,12 @@ function sourceLine(finding: SermonReviewFinding): string {
 <template>
   <article class="finding" :aria-label="`Apontamento de ${CRITERION_TITLES[finding.criterion]}`">
     <div class="finding__head">
-      <span v-if="showCriterion" class="finding__criterion">{{ CRITERION_TITLES[finding.criterion].toUpperCase() }}</span>
-      <span v-if="finding.severity === 'attention'" class="finding__severity finding__severity--attention">verificar</span>
+      <span v-if="showCriterion" class="finding__criterion">{{
+        CRITERION_TITLES[finding.criterion].toUpperCase()
+      }}</span>
+      <span v-if="finding.severity === 'attention'" class="finding__severity finding__severity--attention"
+        >verificar</span
+      >
       <span v-else-if="!showStatusActions" class="finding__severity">nota</span>
       <span class="spacer" />
       <template v-if="showStatusActions">
@@ -66,7 +78,14 @@ function sourceLine(finding: SermonReviewFinding): string {
       <p class="finding__evidence selectable">“{{ finding.evidenceQuote }}”</p>
       <p v-if="sourceLine(finding)" class="finding__source">{{ sourceLine(finding) }}</p>
     </template>
-    <PButton v-if="finding.manuscriptQuote" variant="link" compact class="finding__go" title="Selecionar este trecho no manuscrito" @click="emit('select', finding.manuscriptQuote)">
+    <PButton
+      v-if="finding.manuscriptQuote"
+      variant="link"
+      compact
+      class="finding__go"
+      title="Selecionar este trecho no manuscrito"
+      @click="emit('select', finding.manuscriptQuote)"
+    >
       <ScanText :size="13" /> Ir ao trecho
     </PButton>
   </article>

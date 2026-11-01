@@ -8,7 +8,10 @@ import { useAppStore } from '@/stores/app'
  * Como a IA será chamada agora (assinatura, chaves próprias ou indisponível), consultado no
  * processo principal e atualizado quando a conta ou as preferências de IA mudam.
  */
-export function useAIAccess(purpose: 'review' | 'research'): { access: Ref<AIAccess | null>; refresh: () => Promise<void> } {
+export function useAIAccess(purpose: 'review' | 'research'): {
+  access: Ref<AIAccess | null>
+  refresh: () => Promise<void>
+} {
   const app = useAppStore()
   const access = ref<AIAccess | null>(null)
   let request = 0
