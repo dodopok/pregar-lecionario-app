@@ -1,193 +1,178 @@
 # Pregar
 
-App nativo para macOS, de uso pessoal, para preparar sermões: calendário do LOC 2027 com as leituras do dia, Bíblia comparativa, editor de manuscrito em texto rico, biblioteca de comentários em PDF, leitor de PDFs e sites, revisão por IA com chaves próprias (BYOK), modo ensaio e cópia para o tablet via PDF ou Google Docs.
+App para preparar sermões no Windows, macOS e Linux: calendário do LOC 2027 com as leituras do dia, Bíblia comparativa, editor de manuscrito em texto rico, biblioteca de comentários em PDF, leitor de PDFs e sites, revisão por IA, modo ensaio e cópia para o tablet via PDF ou Google Docs.
 
-O propósito, as decisões de produto e o referencial homilético estão em [docs/plano-produto.md](docs/plano-produto.md). O que já existe, com limites e pendências de verificação, está em [docs/progresso.md](docs/progresso.md).
+Há dois jeitos de usar:
+
+| | Gratuito | Pro (assinatura Pix) |
+| --- | --- | --- |
+| Conta | Não precisa | Login por código no email |
+| Leituras e Bíblia | Com a sua chave da Estêvão API | Pela API do Pregar, sem chave |
+| Revisão, perguntas e pesquisa por IA | Com as suas chaves (OpenAI, Anthropic, Google, Perplexity) | Pela API do Pregar, sem chave, com limites mensais |
+| Manuscritos | Só no computador | Só no computador (a API não guarda manuscritos) |
+
+O assinante pode continuar usando as próprias chaves se preferir (Preferências › Inteligência artificial). Limites, preço e cobrança estão em [docs/assinatura-pix.md](docs/assinatura-pix.md).
+
+O propósito e o referencial homilético estão em [docs/plano-produto.md](docs/plano-produto.md). O plano da versão multiplataforma, com as decisões de arquitetura, está em [docs/plano-multiplataforma.md](docs/plano-multiplataforma.md). O que já existe e o que falta verificar está em [docs/progresso.md](docs/progresso.md).
+
+## Estrutura do repositório
+
+```
+packages/core/      domínio em TypeScript, sem dependência de plataforma: referências bíblicas,
+                    calendário e cliente da Estêvão API, revisão por IA (prompt, esquema, validação),
+                    perguntas, pesquisa, fontes favoritas, biblioteca, histórico, backup, contrato da API
+packages/editor/    modelo do documento (TipTap), conversões RTF ⇄ documento, exportações
+apps/desktop/       app Electron + Vue 3
+  src/main/           processo principal: janelas, menus, IPC, SQLite, segredos, módulos (IA, conteúdo,
+                      biblioteca, leitor), atualização automática
+  src/preload/        ponte mínima e tipada entre a interface e o processo principal
+  src/renderer/       interface: Mesa, Bíblia, Leitor, Biblioteca, Arquivo, Preferências, boas-vindas
+  test/e2e/           testes ponta a ponta com Playwright sobre o app compilado
+apps/api/           API do Pregar (Fastify + PostgreSQL), publicada na Railway
+  src/modules/        auth (código por email), conta (LGPD), cobrança (Asaas Pix), IA, Estêvão, admin
+docs/               produto, plano, operação da API, cobrança, release, análises
+Pregar/, PregarTests/   app legado para macOS em Swift (veja o fim deste arquivo)
+```
 
 ## Requisitos
 
 | Item | Versão |
 | --- | --- |
-| macOS | 14 (Sonoma) ou mais recente |
-| Xcode | 15 ou mais recente (Swift 5.9) |
-| XcodeGen | opcional, só para regenerar o projeto a partir de `project.yml` |
+| Node.js | 22.13 ou mais recente (o app usa o Node 24 embutido no Electron) |
+| npm | 10 ou mais recente |
+| PostgreSQL | 16, só para rodar a API e os testes dela |
+| Docker | opcional, para testar a imagem da API |
 
-Não há dependências externas: o projeto usa apenas SwiftUI, AppKit, SwiftData, PDFKit, WebKit e Vision.
-
-## Subir o app
-
-1. Clone o repositório e abra `Pregar.xcodeproj` no Xcode.
-2. Escolha o scheme **Pregar** e o destino **My Mac**.
-3. Ajuste a assinatura, se necessário. O projeto vem com assinatura manual no time `R573HPN65Q`. Se você não pertence a esse time, em *Signing & Capabilities* troque para *Automatically manage signing* e selecione o seu. Mantenha a mesma identidade entre builds: o app guarda chaves no Acesso às Chaves, e uma identidade diferente faz o macOS pedir autorização de novo.
-4. Pressione ⌘R.
-
-Pela linha de comando, na raiz do repositório:
+## Rodar em desenvolvimento
 
 ```sh
-xcodebuild -project Pregar.xcodeproj -scheme Pregar -configuration Debug \
-  -destination 'platform=macOS' -derivedDataPath build build
-open build/Build/Products/Debug/Pregar.app
+npm ci
+npm run dev:desktop
 ```
 
-Para compilar com outro time sem editar o projeto, acrescente `CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=SEU_TEAM` ao fim do comando.
+Sem conta, o app funciona no modo gratuito: cole a chave da Estêvão API na tela de boas-vindas ou em Preferências.
 
-Se alterar `project.yml` (novos arquivos, targets ou configurações), regenere o projeto antes de abrir:
+Para testar a assinatura localmente, suba a API e aponte o app para ela:
 
 ```sh
-brew install xcodegen   # uma vez
-xcodegen generate
+docker run -d --name pregar-db -e POSTGRES_USER=pregar -e POSTGRES_PASSWORD=pregar \
+  -e POSTGRES_DB=pregar -p 5432:5432 postgres:16
+cp apps/api/.env.example apps/api/.env
+# no .env: NODE_ENV=development, DATABASE_URL=postgres://pregar:pregar@127.0.0.1:5432/pregar
+# e AUTH_SECRET=$(openssl rand -base64 48)
+npm run migrate:dev -w @pregar/api
+npm run dev:api
+MAIN_VITE_PREGAR_API_URL=http://127.0.0.1:3000 npm run dev:desktop
 ```
 
-O `project.pbxproj` lista os arquivos-fonte explicitamente. Um arquivo Swift novo só entra na build depois de regenerar o projeto ou de adicioná-lo pelo Xcode.
+Sem `RESEND_API_KEY`, o código de login aparece no log da API (só fora de produção). Sem `ASAAS_API_KEY`, o checkout responde que a cobrança não está configurada; use `npm run admin -w @pregar/api -- grant email@exemplo.com 30` para liberar o plano a uma conta de teste.
 
-## Configurar na primeira abertura
+Variáveis do app (em `apps/desktop/.env` ou no ambiente do build):
 
-Tudo fica em **Preferências** (⌘,), numa barra lateral com sete seções.
-
-- **Estêvão API.** O app consome `https://api.caminhoanglicano.com.br` (host fixo) para calendário, leituras, coletas e textos bíblicos. Cole a chave da API; ela fica no Acesso às Chaves. Livro de oração (LOC 2027 por padrão), idioma e tradução principal (NVT) são preferências locais.
-- **Inteligência artificial.** Chaves próprias de OpenAI, Anthropic, Google e Perplexity, também no Acesso às Chaves, e a escolha de provedor e modelo para revisão e para pesquisa de materiais. Nada é enviado sem um comando explícito. Detalhes em [docs/ia-byok.md](docs/ia-byok.md).
-- **Aparência.** Automático, claro ou escuro, para todas as janelas. A cor de acento segue a cor litúrgica do dia.
-- **Tablet.** Tipografia e formato da cópia de leitura.
-- **Biblioteca.** Pasta dos PDFs e backup/restauração local de tudo o que o app guarda.
-- **Fontes.** Sites e autores favoritos consultados por passagem.
-- **Registros.** O registro das chamadas externas, para diagnosticar erros (veja abaixo).
-
-Google Drive é opcional e fica dentro da própria preparação (folha Tablet e aba Ideias). Exige um OAuth Client ID de app para desktop criado no Google Cloud; o passo a passo está em [docs/google-drive-setup.md](docs/google-drive-setup.md). A importação de uma pasta pública do Drive para a Biblioteca usa uma chave de API da Drive API, separada do OAuth.
+| Variável | Uso |
+| --- | --- |
+| `MAIN_VITE_PREGAR_API_URL` | Endereço da API (padrão: o de produção) |
+| `MAIN_VITE_GOOGLE_CLIENT_ID`, `MAIN_VITE_GOOGLE_CLIENT_SECRET` | Cliente OAuth "App para computador" do Google Drive ([docs/google-drive-setup.md](docs/google-drive-setup.md)) |
+| `MAIN_VITE_DRIVE_API_KEY` | Chave da Drive API para importar pastas públicas (opcional) |
 
 ## Testar
 
-A suíte fica no target **PregarTests** e roda dentro do app (test host). No Xcode, com o scheme **Pregar** selecionado, pressione ⌘U. Pela linha de comando:
-
 ```sh
-xcodebuild test -project Pregar.xcodeproj -scheme Pregar \
-  -destination 'platform=macOS' -derivedDataPath build
+npm run lint
+npm run typecheck
+TEST_DATABASE_URL=postgres://pregar:pregar@127.0.0.1:5432/pregar_test npx vitest run
 ```
 
-Para rodar uma classe ou um teste só:
+O Vitest roda os projetos `core`, `editor`, `desktop` e `api`. Os testes da API usam um PostgreSQL real (o banco de teste é limpo a cada arquivo) e um Asaas falso; nenhum teste chama serviços externos.
+
+Os testes ponta a ponta abrem o app compilado com Playwright. No Linux sem tela, use `xvfb-run -a`:
 
 ```sh
-xcodebuild test -project Pregar.xcodeproj -scheme Pregar -destination 'platform=macOS' \
-  -only-testing:PregarTests/SermonReviewTests
-xcodebuild test -project Pregar.xcodeproj -scheme Pregar -destination 'platform=macOS' \
-  -only-testing:PregarTests/SermonReviewTests/testStructureMapIsValidatedAgainstTheManuscriptAndSuggestionLanguage
+npm run build -w @pregar/desktop
+cd apps/desktop
+node test/e2e/smoke.mjs out smoke.png          # abre o app e confere a Mesa
+node test/e2e/mesa.mjs out capturas             # login na API falsa, leituras, escrita e revisão por IA
 ```
 
-Quando o processo detecta que está hospedando testes, ele se isola do seu uso real: UserDefaults em um suite temporário, SwiftData em memória, nenhuma chave lida do Acesso às Chaves e nenhuma consulta de rede automática. Os testes padrão são determinísticos e passam sem chaves nem internet.
+Os demais roteiros em `test/e2e/` cobrem Leitor, Biblioteca e Preferências da mesma forma. O CI (`.github/workflows/ci.yml`) roda lint, tipos, Vitest com PostgreSQL, os testes ponta a ponta no Linux e o build da imagem da API.
 
-Três provas de integração são opcionais e ficam desligadas por padrão. Cada uma precisa de uma variável de ambiente e, nos casos de IA, da chave salva nas Preferências. Elas usam apenas passagens públicas ou texto sintético, nunca um manuscrito real.
+## Instaladores e atualização
 
-| Variável | O que ativa |
+```sh
+npm run dist:mac -w @pregar/desktop     # .dmg universal e .zip
+npm run dist:win -w @pregar/desktop     # instalador NSIS x64 e ARM64
+npm run dist:linux -w @pregar/desktop   # AppImage e .deb
+```
+
+As versões públicas saem do workflow de release ao enviar uma tag `v*`. O app instalado se atualiza sozinho a partir dos releases do GitHub. Certificados, notarização e variáveis do repositório estão em [docs/release-desktop.md](docs/release-desktop.md).
+
+## API, Railway e cobrança
+
+- Publicação, variáveis, domínio, webhooks e rotina de suporte: [docs/api-railway.md](docs/api-railway.md).
+- Pix Automático e Pix mensal pelo Asaas, ciclo da assinatura, limites de uso e o que acontece em atraso: [docs/assinatura-pix.md](docs/assinatura-pix.md).
+- IA com chaves próprias no modo gratuito: [docs/ia-byok.md](docs/ia-byok.md).
+
+## Onde os dados ficam
+
+Tudo fica na pasta de dados do app:
+
+| Sistema | Pasta |
 | --- | --- |
-| `PREGAR_LIVE_SITE_TESTS=1` | Consulta real aos sites favoritos com uma referência pública |
-| `PREGAR_LIVE_ANTHROPIC_TEST=1` | Uma revisão real com a chave Anthropic salva e texto sintético |
-| `PREGAR_LIVE_PERPLEXITY_TEST=1` | Uma pesquisa real com a chave Perplexity salva |
+| macOS | `~/Library/Application Support/Pregar` |
+| Windows | `%APPDATA%\Pregar` |
+| Linux | `~/.config/Pregar` |
 
-No Xcode, defina a variável em *Edit Scheme › Test › Arguments › Environment Variables*. Na linha de comando, o `xcodebuild` só repassa ao processo de teste variáveis com o prefixo `TEST_RUNNER_`:
+- **Manuscritos, histórico de versões, relatórios de revisão, preferências e índice da Biblioteca** em `pregar.sqlite` (SQLite com busca de texto completo).
+- **Chaves e sessão** (Estêvão API, provedores de IA, sessão da conta, token do Google) em `secrets.bin`, cifrado pelo cofre do sistema: Keychain no macOS, DPAPI no Windows, libsecret no Linux. As chaves nunca chegam à interface; ela só sabe se cada uma está cadastrada.
+- **PDFs** continuam nos caminhos originais; capas e PDFs baixados do Drive ficam em `Library/`.
+- **Registro de integrações** em `Logs/`, sem corpos de requisição nem chaves (Preferências › Registros mostra e copia as últimas linhas).
 
-```sh
-TEST_RUNNER_PREGAR_LIVE_SITE_TESTS=1 xcodebuild test -project Pregar.xcodeproj \
-  -scheme Pregar -destination 'platform=macOS' -only-testing:PregarTests/FavoriteSiteSearchTests
-```
+Preferências › Biblioteca cria e restaura um backup local de tudo isso, exceto as chaves.
 
-## Diagnosticar um erro de integração
+## Migrar do Pregar para Mac (Swift)
 
-Toda chamada à Estêvão API, aos provedores de IA, às fontes favoritas e ao Google Drive é registrada em `Logs/integracoes.log`, dentro da pasta de suporte acima. Cada linha traz data e hora, OK ou ERRO, a integração, a operação (por exemplo "revisão · Anthropic · claude-opus-5-5"), método e caminho, código HTTP e duração. Nas falhas, a resposta do serviço vem logo abaixo, cortada em 4 KB. Rejeições da validação local da revisão aparecem como AVISO.
+1. No app antigo, em Preferências › Biblioteca, crie um backup.
+2. No app novo, em Preferências › Biblioteca, use **Importar do Pregar para Mac** e escolha a pasta do backup.
 
-Chaves, tokens e segredos em formato conhecido são removidos antes de gravar. O corpo das requisições nunca é gravado, então o manuscrito não vai para o arquivo. O arquivo gira em 1 MB; a versão anterior fica em `integracoes-anterior.log`.
+Manuscritos (RTF convertidos para o novo editor, com títulos, listas, citações e notas), histórico de versões, relatórios de revisão, Biblioteca, abas do Leitor, vínculos de seções e preferências entram no app novo. As chaves não fazem parte do backup: cadastre-as de novo ou entre com a conta Pro. O pacote é validado antes de qualquer gravação; um arquivo alterado ou fora do manifesto cancela a importação sem mexer nos dados atuais.
 
-Para ver ou enviar um erro:
+## Atalhos
 
-1. Abra Preferências › Registros. As últimas linhas aparecem ali, com os botões Copiar registro e Mostrar no Finder.
-2. Ou use Ajuda › Registro de integrações no Finder.
-3. As mesmas linhas também vão para o Console do macOS, no subsistema `br.caminhoanglicano.pregar`, categoria `integracoes`.
-
-## Editor e atalhos
-
-O manuscrito usa um editor local no estilo Google Docs: menus de documento, barra fixa de formatação, régua em centímetros, zoom e página centralizada. Novos textos começam em Arial 11 com entrelinha de 1,15; fontes e formatação de manuscritos antigos são preservadas. A escrita funciona sem login Google. Os menus do editor usam cores neutras, independentemente da cor litúrgica. A largura do texto se ajusta à página visível em cada nível de zoom.
-
-Digitação, cursor e desfazer/refazer ficam no `NSTextView`. A conversão para RTF e o salvamento ocorrem após uma pausa curta, com um limite de dois segundos durante a digitação contínua. Mudar de documento ou janela, abrir revisão/exportação e fechar o app força o salvamento. O cabeçalho distingue “Salvando…” de “Salvo neste Mac” e oferece nova tentativa se houver erro.
-
-Os atalhos de texto seguem a [referência do Google Docs para Mac](https://support.google.com/docs/answer/179738?hl=pt-BR) enquanto o manuscrito tem foco.
-
-| Atalho | Ação |
-| --- | --- |
-| ⌘B · ⌘I · ⌘U · ⇧⌘X | Negrito · Itálico · Sublinhado · Tachado |
-| ⌘Z · ⇧⌘Z | Desfazer · Refazer |
-| ⌥⌘0 · ⌥⌘1…6 | Texto normal · Título 1 a 6 |
-| ⇧⌘L · ⇧⌘E · ⇧⌘R · ⇧⌘J | Alinhar à esquerda · Centralizar · À direita · Justificar |
-| ⇧⌘7 · ⇧⌘8 · ⇧⌘9 | Lista numerada · Marcadores · Verificação |
-| ⌘[ · ⌘] | Diminuir · Aumentar recuo |
-| ⌘K · ⌥⌘F | Link · Nota de rodapé |
-| ⌘. · ⌘, | Sobrescrito · Subscrito |
-| ⌥⌘C · ⌥⌘V · ⌘\ | Copiar formatação · Colar formatação · Limpar formatação |
-| ⇧⌘V | Colar sem formatação |
-| ⌘F · ⇧⌘H | Localizar · Localizar e substituir |
-| ⌘S · ⌘P | Salvar agora · Imprimir |
-| ⌥/ · ⌘/ | Pesquisar comandos · Ver atalhos |
-| ⌘+ · ⌘− · ⌘0 | Aumentar zoom · Diminuir zoom · Zoom 100% |
-
-Atalhos da preparação:
+No Windows e no Linux, leia ⌘ como Ctrl e ⌥ como Alt.
 
 | Atalho | Ação |
 | --- | --- |
 | ⌘0 · ⌘1 · ⌘2 · ⌘3 · ⌘4 | Mesa · Bíblia · Leitor · Biblioteca · Arquivo |
 | ⌘, | Preferências |
-| ⇧⌥⌘1 · ⇧⌥⌘2 · ⇧⌥⌘3 | Mostrar ou ocultar calendário, leituras e materiais |
-| ⇧⌘F | Modo de escrita |
+| ⌘B · ⌘I · ⌘U · ⇧⌘X | Negrito · Itálico · Sublinhado · Tachado |
+| ⌥⌘0 · ⌥⌘1…6 | Texto normal · Título 1 a 6 |
+| ⇧⌘7 · ⇧⌘8 | Lista numerada · Marcadores |
+| ⌘K · ⌥⌘F | Link · Nota de rodapé |
+| ⌘F · ⇧⌘H | Localizar · Localizar e substituir |
+| ⌘S · ⌘P | Salvar agora · Imprimir |
+| ⌘+ · ⌘− | Aumentar · Diminuir zoom |
 | ⇧⌥⌘R · ⇧⌥⌘E · ⇧⌘T · ⇧⌥⌘H | Revisar · Ensaio · Tablet · Histórico de versões |
+| ⌘T · ⌘W · ⇧⌘T | No Leitor: nova aba · fechar aba · reabrir a última |
 
-Os atalhos que antes conflitavam com alinhamento e estilos de parágrafo foram movidos. Os painéis da Mesa continuam redimensionáveis e lembram suas larguras entre sessões.
+## Segurança, em resumo
 
-## Pesquisa: PDFs e sites
-
-Cada sermão mantém suas abas, a aba selecionada e a posição da leitura. Ao voltar a um PDF, o Leitor restaura o ponto dentro da página e o zoom; sites mantêm a rolagem ao trocar de aba e ao reabrir o app. O menu de pesquisa permite consultar os conjuntos salvos de outros sermões. Abas antigas sem sermão associado ficam em **Pesquisa geral**.
-
-O botão do meio abre materiais, seções e links em uma nova aba ao fundo. ⌘clique também funciona nas listas de materiais e seções e nos links web. Acrescente ⇧ para selecionar a nova aba. O botão do meio sobre uma aba a fecha. As abas diminuem até uma largura mínima; depois, a barra permite rolagem horizontal. Também é possível arrastar para reordenar e usar o menu de todas as abas para encontrar um material.
-
-| Atalho no Leitor | Ação |
-| --- | --- |
-| ⌘T · ⌘W | Nova aba · Fechar aba |
-| ⇧⌘T | Reabrir a última aba fechada neste sermão |
-| ⌃Tab · ⇧⌃Tab | Próxima aba · Aba anterior |
-| ⌘[ · ⌘] | Voltar · Avançar |
-| ⌘L · ⌘R | Editar endereço do site · Recarregar |
-| ⌘+ · ⌘− | Aumentar · Diminuir zoom do PDF |
-
-O menu de contexto de uma aba oferece duplicar, fechar outras abas e fechar as abas à direita. Os painéis de seções e informações podem ser ocultados para ampliar a leitura. As marcações de materiais para revisão ficam associadas ao sermão; navegar para outra página web pede uma nova marcação.
-
-## Onde os dados ficam
-
-- **Manuscritos** em SwiftData, no armazenamento padrão do app, em RTF. Esse RTF é a fonte das exportações: estilos de título em metadados do próprio RTF, citação com recuo de 34 pt, listas com marcadores explícitos e notas em sobrescrito. RTFs anteriores continuam compatíveis.
-- **Biblioteca, índices de PDF, histórico de versões, relatórios de revisão, sessão do Leitor e registro de integrações** em `~/Library/Application Support/br.caminhoanglicano.pregar`. Os PDFs importados continuam nos caminhos originais; os baixados de pasta pública do Drive ficam numa subpasta própria.
-- **Chaves** (Estêvão API, provedores de IA, refresh token do Google, chave da Drive API) no Acesso às Chaves do macOS.
-- **Preferências** em UserDefaults.
-
-Preferências › Biblioteca cria e restaura um backup local de tudo isso, exceto as chaves.
-
-## Estrutura do repositório
-
-```
-Pregar/                 fontes do app (um target, sem subpastas)
-  PregarApp.swift         cenas, janelas, menus e atalhos globais
-  PreparationWorkspace    Mesa: calendário, leituras, editor, materiais
-  WorkspaceChrome         painéis da Mesa, mapa do sermão, barra flutuante
-  WorkspaceSheets         folhas: Bíblia, revisão, perguntas, Drive, tablet, ensaio
-  RichTextEditor          NSTextView com os comandos e atalhos de escrita
-  SermonReview            critérios, prompt, esquema estruturado e validação local
-  LiturgicalAPI           cliente da Estêvão API v2
-  PDFLibraryIndex         importação, bookmarks, cabeçalhos e OCR
-  ReaderSession           janela do Leitor (PDFs e sites)
-  LibraryArchiveViews     janelas Biblioteca e Arquivo
-  GoogleDrive             OAuth, Docs e pasta pública
-  PrototypeStyle          sistema de design: cores adaptativas, escalas e estilos
-PregarTests/            XCTest, hospedado no app
-docs/                   plano de produto, progresso, IA BYOK, Google Drive, análises
-project.yml             fonte do projeto para o XcodeGen
-```
+- Interface isolada (`contextIsolation`, `sandbox`, sem Node na página), CSP restrita e IPC tipado que confere a origem de cada chamada. Sites abertos no Leitor rodam em visões separadas, sem acesso à ponte do app.
+- Segredos cifrados pelo sistema e nunca expostos à interface nem aos registros.
+- Na API: sessões opacas guardadas só como hash, código de login com tentativas limitadas, limites por IP e por conta, webhooks do Asaas com token e idempotência, cabeçalhos de segurança, nenhum manuscrito gravado, exportação e exclusão da conta (LGPD).
 
 ## Convenções
 
 - Interface e documentação em português do Brasil.
-- Cores, espaçamentos, raios e estilos de botão vêm de `PrototypeStyle`; não use `.bordered`, cores literais nem `preferredColorScheme`.
+- Cores, espaçamentos e raios vêm dos tokens de `apps/desktop/src/renderer/src/styles`; o acento segue a cor litúrgica do dia.
 - A IA aponta e fundamenta, nunca escreve ou sugere frases. Toda resposta é validada contra trechos literais do manuscrito antes de aparecer.
+- Regras de domínio ficam em `packages/core`, com testes; o app e a API só as usam.
 - Mudanças de comportamento entram em `docs/progresso.md`, com o que ficou pendente de verificação.
+
+## App legado para macOS (Swift)
+
+O app nativo original continua em `Pregar/` e `PregarTests/` até a migração dos usuários. Ele não recebe novos recursos.
+
+- Abra `Pregar.xcodeproj` no Xcode 15 ou mais recente, scheme **Pregar**, destino **My Mac**, e pressione ⌘R. A assinatura padrão é manual no time `R573HPN65Q`; com outro time, use *Automatically manage signing*.
+- Testes: `xcodebuild test -project Pregar.xcodeproj -scheme Pregar -destination 'platform=macOS' -derivedDataPath build`. Ao hospedar testes, o app usa armazenamento temporário e não lê chaves nem acessa a rede.
+- Se alterar `project.yml`, regenere com `xcodegen generate`.
+- Dados em `~/Library/Application Support/br.caminhoanglicano.pregar`, chaves no Acesso às Chaves.

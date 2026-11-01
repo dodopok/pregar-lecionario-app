@@ -23,6 +23,7 @@ const { app, services } = await buildApp(deps, createAIRunner(deps))
 if (deps.email instanceof LogEmailSender) {
   if (config.isProduction) app.log.error('RESEND_API_KEY ausente: os códigos de login não serão enviados.')
   deps.email.log = app.log
+  deps.email.revealContent = !config.isProduction
 }
 if (applied.length > 0) app.log.info({ applied }, 'Migrações aplicadas')
 

@@ -8,12 +8,12 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
     "build": "tsup",
     "start": "node dist/server.js",
     "migrate": "node dist/migrate.js",
-    "migrate:dev": "tsx src/migrate.ts",
-    "admin": "tsx src/admin.ts",
+    "migrate:dev": "tsx --env-file-if-exists=.env src/migrate.ts",
+    "admin": "tsx --env-file-if-exists=.env src/admin.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -37,11 +37,16 @@ export class ResendEmailSender implements EmailSender {
 export class LogEmailSender implements EmailSender {
   readonly sent: EmailMessage[] = []
 
-  constructor(public log?: FastifyBaseLogger) {}
+  /** Em produção o corpo (com o código de login) nunca vai para o log. */
+  constructor(
+    public log?: FastifyBaseLogger,
+    public revealContent = true,
+  ) {}
 
   async send(message: EmailMessage): Promise<void> {
     this.sent.push(message)
-    this.log?.warn({ to: message.to, subject: message.subject }, `Email não enviado (sem RESEND_API_KEY):\n${message.text}`)
+    const body = this.revealContent ? `:\n${message.text}` : ' (conteúdo omitido em produção)'
+    this.log?.warn({ subject: message.subject }, `Email não enviado (sem RESEND_API_KEY)${body}`)
   }
 }
 
