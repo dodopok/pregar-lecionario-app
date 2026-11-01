@@ -17,8 +17,11 @@ import { AccountService } from './services/account'
 import { LiturgyService } from './services/liturgy'
 import { UpdaterService } from './services/updater'
 import { registerExtensions } from './extensions'
+import { installCrashGuards } from './crash-guard'
+import { join } from 'node:path'
 
 app.setName('Pregar')
+installCrashGuards(join(app.getPath('userData'), 'Logs'))
 // Protocolos próprios precisam ser declarados antes do app ficar pronto.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'pregar-pdf', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
@@ -114,6 +117,12 @@ async function start(): Promise<void> {
     if (process.platform !== 'darwin') app.quit()
   })
   app.on('before-quit', () => {
+    windows.quitting = true
+  })
+  // O banco só fecha depois que todas as janelas fecharam (e salvaram o que estava pendente).
+  app.on('will-quit', (event) => {
+    // Um módulo adiou a saída para terminar de salvar; o banco fecha na próxima tentativa.
+    if (event.defaultPrevented) return
     try {
       database.close()
     } catch {

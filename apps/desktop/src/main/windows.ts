@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, nativeTheme, screen } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, screen } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import type { Rectangle } from 'electron'
 import { join } from 'node:path'
@@ -30,7 +30,23 @@ export class WindowManager {
   /** Chamado quando as preferências mudam (aplica aparência). */
   onSettingsChanged: (() => void) | null = null
 
+  /** Janelas (webContents) que pedem para salvar antes de fechar, como a Mesa. */
+  private readonly closeGuarded = new Set<number>()
+  private readonly pendingClose = new Map<number, () => void>()
+  /** O app está saindo: depois de salvar, a saída interrompida é retomada. */
+  quitting = false
+
   constructor(private readonly bounds: KeyValueStore) {}
+
+  setCloseGuard(contents: Electron.WebContents, enabled: boolean): void {
+    if (enabled) this.closeGuarded.add(contents.id)
+    else this.closeGuarded.delete(contents.id)
+  }
+
+  /** A janela terminou de salvar: conclui o fechamento que estava esperando. */
+  closeReady(contents: Electron.WebContents): void {
+    this.pendingClose.get(contents.id)?.()
+  }
 
   get(kind: WindowKind): BrowserWindow | undefined {
     const window = this.windows.get(kind)
@@ -118,12 +134,42 @@ export class WindowManager {
       if (items.length > 0) Menu.buildFromTemplate(items).popup({ window })
     })
     const saveBounds = () => {
-      if (!window.isDestroyed() && !window.isMinimized() && !window.isFullScreen()) this.bounds.set(kind, window.getNormalBounds())
+      if (window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return
+      try {
+        this.bounds.set(kind, window.getNormalBounds())
+      } catch {
+        // Posição da janela é conveniência; nunca impede o fechamento.
+      }
     }
     window.on('resized', saveBounds)
     window.on('moved', saveBounds)
-    window.on('close', saveBounds)
-    window.on('closed', () => this.windows.delete(kind))
+    const contentsID = window.webContents.id
+    let saved = false
+    window.on('close', (event) => {
+      saveBounds()
+      const contents = window.webContents
+      if (saved || !this.closeGuarded.has(contentsID) || contents.isDestroyed() || contents.isCrashed()) return
+      // Pede à janela que salve o que está pendente e espera a resposta (no máximo 2 s).
+      event.preventDefault()
+      if (this.pendingClose.has(contentsID)) return
+      const resumeQuit = this.quitting
+      const finish = () => {
+        if (!this.pendingClose.has(contentsID)) return
+        this.pendingClose.delete(contentsID)
+        clearTimeout(timer)
+        saved = true
+        if (resumeQuit) app.quit()
+        else if (!window.isDestroyed()) window.close()
+      }
+      const timer = setTimeout(finish, 2000)
+      this.pendingClose.set(contentsID, finish)
+      this.send(window, 'app:willClose', undefined)
+    })
+    window.on('closed', () => {
+      this.windows.delete(kind)
+      this.closeGuarded.delete(contentsID)
+      this.pendingClose.delete(contentsID)
+    })
 
     const hash = `/${kind}${route ? `?${new URLSearchParams({ to: route })}` : ''}`
     const devServer = process.env.ELECTRON_RENDERER_URL

@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { buildPdf, wrightPages, WRIGHT_OUTLINE } from './library-fixture.mjs'
+import { watchMainErrors, describeMainErrors } from './main-errors.mjs'
 
 const outDir = process.argv[2] ?? '.build-library'
 const shotsDir = resolve(process.argv[3] ?? join(tmpdir(), 'pregar-library-e2e'))
@@ -64,6 +65,7 @@ const app = await electron.launch({
   env,
   timeout: 30_000,
 })
+const mainErrors = watchMainErrors(app)
 const watchdog = setTimeout(() => {
   console.error('Tempo total esgotado.')
   app.process().kill()
@@ -348,5 +350,9 @@ try {
 } finally {
   clearTimeout(watchdog)
   app.process().kill()
+}
+if (describeMainErrors(mainErrors)) {
+  console.error('FALHOU:', describeMainErrors(mainErrors))
+  failed = true
 }
 process.exit(failed ? 1 : 0)

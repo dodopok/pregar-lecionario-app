@@ -40,6 +40,12 @@ export function registerCoreHandlers(context: MainContext): void {
   handle('app:setTitle', ({ title }, event) => {
     BrowserWindow.fromWebContents(event.sender)?.setTitle(String(title).slice(0, 200))
   })
+  handle('app:guardClose', ({ enabled }, event) => {
+    context.windows.setCloseGuard(event.sender, enabled === true)
+  })
+  handle('app:closeReady', (_request, event) => {
+    context.windows.closeReady(event.sender)
+  })
 
   handle('settings:get', () => context.settings.get())
   handle('settings:update', (patch) => {

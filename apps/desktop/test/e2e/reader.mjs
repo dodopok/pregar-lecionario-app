@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { watchMainErrors } from './main-errors.mjs'
 
 const outDir = process.argv[2] ?? '.build-reader'
 const shotsDir = resolve(process.argv[3] ?? mkdtempSync(join(tmpdir(), 'pregar-reader-shots-')))
@@ -110,7 +111,13 @@ writeFileSync(pdfPath, buildPdf())
 
 const env = { ...process.env }
 delete env.NODE_OPTIONS
-const launch = () => electron.launch({ args: [`${outDir}/main/index.js`, `--user-data-dir=${userData}`, '--no-sandbox'], env, timeout: 30000 })
+/** Erros não tratados do processo principal, de todas as execuções do app neste roteiro. */
+const watchedMainErrors = []
+const launch = async () => {
+  const launched = await electron.launch({ args: [`${outDir}/main/index.js`, `--user-data-dir=${userData}`, '--no-sandbox'], env, timeout: 30000 })
+  watchedMainErrors.push(watchMainErrors(launched))
+  return launched
+}
 
 /** Estado das páginas web servidas pelo servidor de teste, lido no processo principal. */
 const webContentsInfo = (app) =>
@@ -564,6 +571,7 @@ try {
 check('sem violações de CSP no Leitor (PDF.js, fontes e wasm)', cspViolations.length === 0, cspViolations.slice(0, 3))
 const relevantErrors = pageErrors.filter((message) => !/Failed to load resource|favicon/i.test(message))
 check('sem erros de página', relevantErrors.length === 0, relevantErrors.slice(0, 5))
+check('sem exceções não tratadas no processo principal', watchedMainErrors.flat().length === 0, watchedMainErrors.flat().slice(0, 2))
 const failed = results.filter((result) => !result.ok)
 console.log(JSON.stringify({ passed: results.length - failed.length, failed: failed.length, shots: shotsDir }))
 process.exit(failed.length ? 1 : 0)

@@ -89,6 +89,7 @@ async function loadDocument(): Promise<void> {
   if (!current || current.kind !== 'pdf') return
   if (pdfDocumentLocation.value !== current.location) {
     pdfDocument.value = null
+    pdfDetails.value = { author: null, labels: null }
     pdfStatus.value = 'loading'
   }
   try {

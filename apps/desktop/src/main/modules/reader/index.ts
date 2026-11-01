@@ -48,15 +48,33 @@ export function registerReader(context: MainContext): void {
     hooked.add(window)
     window.on('close', () => {
       service.flush()
-      void web.captureAll().finally(() => service.flush())
+      track(web.captureAll())
     })
-    window.on('closed', () => {
-      void web.closeAll().finally(() => service.flush())
-    })
+    window.on('closed', () => track(web.closeAll()))
   }
 
-  // A Biblioteca registra antes do Leitor; o banco fecha num `before-quit` registrado depois deste.
+  /** Salvamentos assíncronos do fechamento (posições das páginas); a saída do app espera por eles. */
+  const closing = new Set<Promise<void>>()
+  function track(task: Promise<void>): void {
+    const tracked = task
+      .catch(() => undefined)
+      .finally(() => {
+        closing.delete(tracked)
+        service.flush()
+      })
+    closing.add(tracked)
+  }
+
   app.on('before-quit', () => service.flush())
+  // Registrado antes do `will-quit` que fecha o banco: espera os salvamentos pendentes e retoma a saída.
+  app.on('will-quit', (event) => {
+    if (closing.size === 0) {
+      service.flush()
+      return
+    }
+    event.preventDefault()
+    void Promise.allSettled([...closing]).then(() => app.quit())
+  })
 
   handle('reader:open', async (request) => {
     const { selected } = await service.open(request)

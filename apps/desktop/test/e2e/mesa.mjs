@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startFakeAPI } from './fake-pregar-api.mjs'
+import { watchMainErrors, describeMainErrors } from './main-errors.mjs'
 
 const outDir = process.argv[2] ?? 'out'
 const shots = process.argv[3] ?? 'screenshots'
@@ -13,6 +14,7 @@ const userData = mkdtempSync(join(tmpdir(), 'pregar-mesa-'))
 const env = { ...process.env }
 delete env.NODE_OPTIONS
 const app = await electron.launch({ args: [`${outDir}/main/index.js`, `--user-data-dir=${userData}`, '--no-sandbox'], env, timeout: 30000 })
+const mainErrors = watchMainErrors(app)
 const failures = []
 const check = (condition, message) => {
   if (!condition) failures.push(message)
@@ -76,5 +78,6 @@ try {
   app.process().kill()
   api.server.close()
 }
+if (describeMainErrors(mainErrors)) failures.push(describeMainErrors(mainErrors))
 console.log(failures.length === 0 ? 'MESA OK' : `FALHAS:\n- ${failures.join('\n- ')}`)
 process.exit(failures.length === 0 ? 0 : 1)

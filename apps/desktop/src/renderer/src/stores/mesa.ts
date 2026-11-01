@@ -323,6 +323,13 @@ export const useMesaStore = defineStore('mesa', () => {
     on('account:changed', () => {
       if (!day.value) void loadDay()
     })
+    // Ao fechar a janela ou sair do app, o processo principal espera este salvamento (até 2 s).
+    void invoke('app:guardClose', { enabled: true }).catch(() => undefined)
+    on('app:willClose', () => {
+      void flush()
+        .catch(() => undefined)
+        .finally(() => void invoke('app:closeReady').catch(() => undefined))
+    })
     window.addEventListener('beforeunload', () => void flush())
   }
 

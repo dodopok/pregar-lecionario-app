@@ -291,8 +291,9 @@ export class ReaderWebManager {
   // Rolagem por endereço.
 
   private async capture(runtime: WebRuntime): Promise<void> {
-    const contents = runtime.view.webContents
-    if (runtime.hidden || contents.isDestroyed() || runtime.state.loading || runtime.state.error || Date.now() < runtime.restoringUntil) return
+    // Depois que a janela fecha, a vista pode já não ter webContents.
+    const contents = runtime.view.webContents as Electron.WebContents | undefined
+    if (!contents || runtime.hidden || contents.isDestroyed() || runtime.state.loading || runtime.state.error || Date.now() < runtime.restoringUntil) return
     const result = (await withTimeout(contents.executeJavaScriptInIsolatedWorld(ISOLATED_WORLD, [{ code: CAPTURE_SCRIPT }]), 600).catch(
       () => null,
     )) as { url?: unknown; x?: unknown; y?: unknown; restoring?: unknown } | null
@@ -394,8 +395,8 @@ export class ReaderWebManager {
   private destroy(runtime: WebRuntime): void {
     this.detach(runtime)
     this.runtimes.delete(runtime.tabID)
-    const contents = runtime.view.webContents
-    if (!contents.isDestroyed()) contents.close()
+    const contents = runtime.view.webContents as Electron.WebContents | undefined
+    if (contents && !contents.isDestroyed()) contents.close()
   }
 
   /** Fecha as vistas das abas que não existem mais e reposiciona. */

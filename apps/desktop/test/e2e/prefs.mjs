@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { crc32, deflateSync } from 'node:zlib'
+import { watchMainErrors, describeMainErrors } from './main-errors.mjs'
 
 const outDir = process.argv[2] ?? '.build-prefs'
 const shots = process.argv[3] ?? 'screenshots/prefs'
@@ -279,6 +280,7 @@ const userData = mkdtempSync(join(tmpdir(), 'pregar-prefs-'))
 const env = { ...process.env }
 delete env.NODE_OPTIONS
 const app = await electron.launch({ args: [`${outDir}/main/index.js`, `--user-data-dir=${userData}`, '--no-sandbox'], env, timeout: 30000 })
+const mainErrors = watchMainErrors(app)
 const failures = []
 const notes = []
 const check = (condition, message) => {
@@ -545,6 +547,7 @@ try {
   api.server.close()
 }
 
+if (describeMainErrors(mainErrors)) failures.push(describeMainErrors(mainErrors))
 for (const note of notes) console.warn(`nota: ${note}`)
 console.warn(failures.length === 0 ? `PREFERÊNCIAS OK · capturas em ${shots}` : `FALHAS:\n- ${failures.join('\n- ')}`)
 process.exit(failures.length === 0 ? 0 : 1)

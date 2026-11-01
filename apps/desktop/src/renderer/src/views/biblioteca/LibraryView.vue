@@ -264,14 +264,17 @@ async function reindexAll(): Promise<void> {
   }
 }
 
-async function openInReader(work: LibraryWork, page: number, reference: string | undefined, options = { background: false, select: false }): Promise<void> {
+async function openInReader(work: LibraryWork, page: number, options = { background: false, select: false }): Promise<void> {
   try {
     await invoke('reader:open', {
       kind: 'pdf',
       location: work.path,
       title: work.title,
       physicalPage: page,
-      ...(reference ? { reference } : {}),
+      // Entra na pesquisa ativa do Leitor (o sermão em preparo) e vai direto à seção escolhida.
+      // O título da seção não serve de passagem: a aba fica com a passagem do sermão.
+      useActiveContext: true,
+      preservePosition: false,
       ...(options.background ? { background: true } : {}),
       ...(options.select ? { select: true } : {}),
     })
@@ -282,7 +285,7 @@ async function openInReader(work: LibraryWork, page: number, reference: string |
 
 function openSection(row: LibrarySectionRow, options: { background: boolean; select: boolean }): void {
   if (!selected.value) return
-  void openInReader(selected.value, row.startPage, row.isReference ? row.title : undefined, options)
+  void openInReader(selected.value, row.startPage, options)
 }
 
 function readerModifiers(event: MouseEvent): { background: boolean; select: boolean } {
@@ -617,8 +620,8 @@ const statusLabel = computed(() => {
             <PButton
               :disabled="!selected.available"
               title="Abrir no leitor (⌘/Ctrl-clique ou botão do meio: nova aba ao fundo)"
-              @click="openInReader(selected, 1, undefined, readerModifiers($event))"
-              @auxclick.prevent="$event.button === 1 && openInReader(selected, 1, undefined, readerModifiers($event))"
+              @click="openInReader(selected, 1, readerModifiers($event))"
+              @auxclick.prevent="$event.button === 1 && openInReader(selected, 1, readerModifiers($event))"
             >
               <BookOpen :size="14" aria-hidden="true" /> Abrir no leitor
             </PButton>

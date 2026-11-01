@@ -40,6 +40,9 @@ export interface CoreInvokeChannels {
   'app:chooseFolder': { req: { title: string }; res: string | null }
   'app:chooseFiles': { req: { title: string; extensions: string[]; multiple: boolean }; res: string[] }
   'app:setTitle': { req: { title: string }; res: void }
+  /** A janela salva antes de fechar: o processo principal espera `app:closeReady` (até 2 s). */
+  'app:guardClose': { req: { enabled: boolean }; res: void }
+  'app:closeReady': { req: void; res: void }
 
   'settings:get': { req: void; res: AppSettings }
   'settings:update': { req: SettingsPatch; res: AppSettings }
@@ -116,6 +119,8 @@ export interface CoreEventChannels {
   /** Comando de menu ou atalho global encaminhado à janela em foco. */
   'menu:command': { command: string; payload?: unknown }
   'navigate': { route: string }
+  /** A janela vai fechar: salve o que estiver pendente e responda com `app:closeReady`. */
+  'app:willClose': undefined
 }
 
 export type InvokeChannels = CoreInvokeChannels & ExtraInvokeChannels
