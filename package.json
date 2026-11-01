@@ -1,0 +1,40 @@
+{
+  "name": "pregar-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pregar: preparação de sermões multiplataforma (desktop Electron), API própria e domínio compartilhado.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "dev:api": "npm run dev -w @pregar/api",
+    "dev:desktop": "npm run dev -w @pregar/desktop",
+    "build:api": "npm run build -w @pregar/api",
+    "build:desktop": "npm run build -w @pregar/desktop"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "@vitest/coverage-v8": "^3.2.7",
+    "eslint": "^10.14.0",
+    "eslint-plugin-vue": "^10.12.0",
+    "globals": "^17.13.0",
+    "happy-dom": "^21.0.4",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^3.2.7",
+    "vue-eslint-parser": "^10.4.1"
+  }
+}

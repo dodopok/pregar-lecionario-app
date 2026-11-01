@@ -1,0 +1,27 @@
+{
+  "name": "@pregar/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Domínio compartilhado do Pregar: referências bíblicas, Estêvão API, revisão por IA, fontes, Drive, histórico, backup e índice de PDFs.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ai": "./src/ai/index.ts",
+    "./backup": "./src/backup/index.ts",
+    "./drive": "./src/drive/index.ts",
+    "./history": "./src/history/index.ts",
+    "./library": "./src/library/index.ts",
+    "./liturgy": "./src/liturgy/index.ts",
+    "./plans": "./src/plans/index.ts",
+    "./reader": "./src/reader/index.ts",
+    "./sources": "./src/sources/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "zod": "^4.6.7"
+  }
+}

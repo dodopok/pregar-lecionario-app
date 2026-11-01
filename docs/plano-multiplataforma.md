@@ -1,6 +1,6 @@
 # Plano multiplataforma e assinatura
 
-Proposta registrada em 1 de novembro de 2026. Complementa o [plano de produto](plano-produto.md), que previa plataforma e componente de edição como decisões posteriores, e a [IA com BYOK](ia-byok.md). Nada aqui está aprovado; as decisões que dependem do dono do produto estão na seção 9.
+Proposta registrada em 1 de novembro de 2026 e aprovada para execução no mesmo dia, com as decisões da seção 10. Complementa o [plano de produto](plano-produto.md), que previa plataforma e componente de edição como decisões posteriores, e a [IA com BYOK](ia-byok.md). Nada aqui está aprovado; as decisões que dependem do dono do produto estão na seção 9.
 
 ## 1. Recomendação
 
@@ -145,3 +145,47 @@ Nenhuma bloqueia a fase 0.
 - [ ] Manter o app Swift depois da paridade? Recomendação: não.
 - [ ] Nome e marca: Pregar como produto próprio ou dentro do Caminho Anglicano.
 - [ ] Linux no lançamento ou depois?
+
+## 10. Decisões de execução
+
+Tomadas em 1 de novembro de 2026, quando o dono do produto pediu a execução completa: app multiplataforma, API própria na Railway, assinatura com Pix recorrente e BYOK para o plano gratuito.
+
+| Decisão | Escolha | Motivo |
+| --- | --- | --- |
+| Backend | Um único serviço Node (Fastify + PostgreSQL) na Railway | Um deploy só; compartilha o pacote de revisão com o app; a Estêvão API em Rails continua intocada |
+| Login | Código de 6 dígitos por email, sessão por dispositivo | Sem senha para leigos; sem link mágico que dependa de abrir o app pelo navegador |
+| Pagamento | Asaas, Pix Automático com `paymentCreationMode: SUBSCRIPTION` | Débito recorrente autorizado uma vez no app do banco |
+| Alternativa de pagamento | Assinatura Asaas com `billingType: PIX`, um QR por mês | O Pix Automático exige conta PJ com CNPJ ativo há seis meses; a alternativa funciona em qualquer conta |
+| Plano gratuito | Sem conta, BYOK para IA e chave própria da Estêvão API | Nada passa pelo servidor do produto |
+| Plano pago | IA e Estêvão API pelo servidor, sem chave nenhuma | O assinante só entra com o email |
+| Banco local do app | SQLite embutido do Node (`node:sqlite`) com FTS5 | Electron 45 traz Node 24; sem módulos nativos, a build dos três sistemas fica simples |
+| Editor | TipTap 3 com nota de rodapé, citação com atribuição e ids de bloco | Documento em JSON; exportações para HTML, Google Docs e PDF |
+| PDFs e OCR | PDF.js e tesseract.js com os dados de idioma baixados sob demanda | Funciona igual nos três sistemas, sem serviço externo |
+
+### Limites do plano pago
+
+Todos configuráveis por variável de ambiente; os padrões abaixo cobrem com folga o uso relatado de duas ou três revisões por sermão semanal.
+
+| Limite | Padrão | Por quê |
+| --- | --- | --- |
+| Revisões completas por mês | 40 | Até três por sermão em quatro ou cinco domingos, com margem |
+| Checagens de estrutura por mês | 40 | Mais baratas; contam separadamente |
+| Perguntas de emergência por mês | 60 | Uso pontual |
+| Pesquisas de materiais por mês | 60 | Uso pontual |
+| Chamadas de IA por dia | 20 | Evita esgotar o mês num dia ou abuso de conta compartilhada |
+| Chamadas de IA simultâneas | 1 por conta | Uma revisão por vez, como no app |
+| Teto de custo de modelo por mês | US$ 8 por conta | Proteção contra entradas muito grandes; medido pelos tokens que o provedor informa |
+| Estêvão API | 120 consultas por minuto, com cache no servidor | O calendário e as leituras mudam pouco |
+
+## 11. Fases de execução
+
+Cada fase termina com testes automatizados verdes. O que depende de conta, certificado ou credencial real fica listado como verificação pendente, sem bloquear a fase.
+
+1. **E0 · Monorepo.** Workspaces npm com `packages/core`, `packages/editor`, `apps/api` e `apps/desktop`; TypeScript estrito, Vitest, ESLint e Prettier.
+2. **E1 · Domínio compartilhado.** Porte para TypeScript, com os testes Swift traduzidos: referências bíblicas, cliente da Estêvão API, revisão por IA nos quatro provedores, perguntas, pesquisa, fontes favoritas, Google Drive e Docs, histórico, backup e índice de PDFs.
+3. **E2 · Editor.** Esquema TipTap equivalente ao editor atual, exportação HTML, texto com âncoras para a revisão, requisições do Google Docs, PDF do tablet e importação de RTF do app Swift.
+4. **E3 · API.** Contas, sessões, planos, Asaas com webhooks idempotentes e reconciliação, proxy de IA com cotas e custo, proxy da Estêvão com cache, LGPD (exportar e apagar conta), limites de requisição, cabeçalhos de segurança, Dockerfile e `railway.json`.
+5. **E4 · App desktop.** Processo principal seguro, IPC tipado, banco local, segredos no cofre do sistema, Mesa, editor, Bíblia, Leitor, Biblioteca, Arquivo, Preferências, folhas de revisão, perguntas, tablet, histórico e ensaio, Google Drive, conta e assinatura com QR Pix e medidor de uso.
+6. **E5 · Empacotamento e CI.** electron-builder para dmg, nsis e AppImage/deb; GitHub Actions com testes e builds nos três sistemas; atualização automática pelo GitHub Releases; assinatura e notarização por segredos do repositório.
+7. **E6 · Migração.** Importação do backup do app Swift no app novo, com conversão do RTF dos manuscritos e do histórico.
+8. **E7 · Validação.** Testes ponta a ponta do app com Playwright, testes da API com PostgreSQL real, revisão de segurança e checagens de desempenho.

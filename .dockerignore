@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/out
+**/release
+**/coverage
+.git
+Pregar
+PregarTests
+Pregar.xcodeproj
+docs
+apps/desktop/resources
+**/*.log
+.env
+.env.*

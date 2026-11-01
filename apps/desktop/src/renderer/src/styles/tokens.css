@@ -1,0 +1,113 @@
+/* Sistema visual do Pregar (porte do PrototypeStyle): papel que vira tinta no escuro,
+   serifada nos títulos, escalas fixas de espaço, raio e altura de controle. */
+:root {
+  color-scheme: light dark;
+  --canvas: rgb(245 243 238);
+  --sidebar: rgb(236 233 226);
+  --paper: rgb(251 250 247);
+  --manuscript: rgb(255 254 251);
+  --editor-surface: rgb(235 232 225);
+  --surface: rgb(255 255 255);
+  --ink: rgb(31 29 25);
+  --green: rgb(46 122 81);
+  --soft-green: rgb(227 236 227);
+  --muted: rgb(112 110 103);
+  --line: rgb(31 29 25 / 0.1);
+  --line-strong: rgb(31 29 25 / 0.18);
+  --warning: rgb(184 112 20);
+  --danger: rgb(184 56 51);
+  --success: rgb(46 122 81);
+
+  --doc-canvas: rgb(248 249 250);
+  --doc-toolbar: rgb(237 242 250);
+  --doc-paper: rgb(255 255 255);
+  --doc-ink: rgb(32 33 36);
+  --doc-muted: rgb(95 99 104);
+  --doc-blue: rgb(26 115 232);
+  --doc-selection: rgb(211 227 253);
+  --doc-border: rgb(32 33 36 / 0.14);
+
+  --accent: var(--green);
+  --accent-contrast: rgb(255 255 255);
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-softer: color-mix(in srgb, var(--accent) 8%, transparent);
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-xxl: 24px;
+
+  --radius-control: 6px;
+  --radius-button: 8px;
+  --radius-card: 10px;
+  --radius-sheet: 12px;
+
+  --header-height: 52px;
+  --icon-button: 34px;
+  --control: 28px;
+  --control-compact: 24px;
+  --window-controls-inset: 0px;
+
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-serif: 'Iowan Old Style', 'New York', Charter, 'Bitstream Charter', Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --shadow-sheet: 0 18px 48px rgb(0 0 0 / 0.18), 0 2px 8px rgb(0 0 0 / 0.08);
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.14);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: rgb(30 29 27);
+    --sidebar: rgb(25 24 22);
+    --paper: rgb(37 36 33);
+    --manuscript: rgb(42 41 38);
+    --editor-surface: rgb(26 25 23);
+    --surface: rgb(50 48 45);
+    --ink: rgb(236 233 226);
+    --green: rgb(92 168 122);
+    --soft-green: rgb(43 66 51);
+    --muted: rgb(168 166 158);
+    --line: rgb(236 233 226 / 0.1);
+    --line-strong: rgb(236 233 226 / 0.2);
+    --warning: rgb(237 168 77);
+    --danger: rgb(230 107 102);
+    --success: rgb(92 168 122);
+
+    --doc-canvas: rgb(27 30 34);
+    --doc-toolbar: rgb(44 50 59);
+    --doc-paper: rgb(40 44 49);
+    --doc-ink: rgb(231 234 239);
+    --doc-muted: rgb(169 177 187);
+    --doc-blue: rgb(138 180 247);
+    --doc-selection: rgb(56 85 130);
+    --doc-border: rgb(231 234 239 / 0.14);
+
+    --accent-contrast: rgb(20 20 18);
+    --shadow-sheet: 0 18px 48px rgb(0 0 0 / 0.5), 0 2px 8px rgb(0 0 0 / 0.3);
+  }
+}
+
+/* Cores litúrgicas (aplicadas em :root via data-liturgical). */
+:root[data-liturgical='green'] { --accent: var(--green); }
+:root[data-liturgical='purple'] { --accent: rgb(120 87 171); }
+:root[data-liturgical='red'] { --accent: rgb(194 64 59); }
+:root[data-liturgical='rose'] { --accent: rgb(212 110 145); }
+:root[data-liturgical='white'],
+:root[data-liturgical='gold'] { --accent: rgb(184 150 71); }
+:root[data-liturgical='black'] { --accent: rgb(100 100 104); }
+:root[data-liturgical='blue'] { --accent: rgb(52 104 176); }
+@media (prefers-color-scheme: dark) {
+  :root[data-liturgical='purple'] { --accent: rgb(168 140 217); }
+  :root[data-liturgical='red'] { --accent: rgb(230 107 102); }
+  :root[data-liturgical='rose'] { --accent: rgb(237 148 179); }
+  :root[data-liturgical='white'],
+  :root[data-liturgical='gold'] { --accent: rgb(219 189 107); }
+  :root[data-liturgical='black'] { --accent: rgb(170 170 175); }
+  :root[data-liturgical='blue'] { --accent: rgb(122 166 230); }
+}
+
+:root[data-platform='darwin'] { --window-controls-inset: 88px; }

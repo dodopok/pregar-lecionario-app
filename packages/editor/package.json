@@ -1,0 +1,28 @@
+{
+  "name": "@pregar/editor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Esquema do manuscrito (TipTap), extensões e exportações: HTML, texto com âncoras, Google Docs e importação de RTF.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@pregar/core": "0.1.0",
+    "@tiptap/core": "^3.32.2",
+    "@tiptap/extension-highlight": "^3.32.2",
+    "@tiptap/extension-list": "^3.32.2",
+    "@tiptap/extension-subscript": "^3.32.2",
+    "@tiptap/extension-superscript": "^3.32.2",
+    "@tiptap/extension-text-align": "^3.32.2",
+    "@tiptap/extension-text-style": "^3.32.2",
+    "@tiptap/extensions": "^3.32.2",
+    "@tiptap/html": "^3.32.2",
+    "@tiptap/pm": "^3.32.2",
+    "@tiptap/starter-kit": "^3.32.2"
+  }
+}

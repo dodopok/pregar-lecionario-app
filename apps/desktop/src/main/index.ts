@@ -1,0 +1,119 @@
+import { app, BrowserWindow, nativeTheme, session } from 'electron'
+import { appPaths } from './paths'
+import { LocalDatabase } from './storage/db'
+import { SettingsRepository } from './storage/settings'
+import { SermonRepository } from './storage/sermons'
+import { SecretStore } from './secrets'
+import { FileIntegrationLog } from './log'
+import { WindowManager } from './windows'
+import { installGlobalSecurity } from './security'
+import { installRouter } from './ipc/router'
+import { registerCoreHandlers } from './ipc/core-handlers'
+import { buildMenu } from './menu'
+import { makeHttp, makeKV } from './context'
+import type { MainContext } from './context'
+import { PregarAPIClient, resolveAPIBaseURL } from './services/pregar-api'
+import { AccountService } from './services/account'
+import { LiturgyService } from './services/liturgy'
+import { UpdaterService } from './services/updater'
+import { registerExtensions } from './extensions'
+
+app.setName('Pregar')
+app.setAppUserModelId('br.caminhoanglicano.pregar')
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  void start()
+}
+
+async function start(): Promise<void> {
+  await app.whenReady()
+  installGlobalSecurity()
+  installRouter()
+
+  const paths = appPaths()
+  const database = new LocalDatabase(paths.database)
+  const kv = makeKV(database)
+  const settings = new SettingsRepository(database)
+  const integrationLog = new FileIntegrationLog(paths.logs)
+  const secrets = new SecretStore(paths.secrets)
+  const windows = new WindowManager(kv('window-bounds'))
+  const http = makeHttp(integrationLog)
+  const apiBaseURL = () => resolveAPIBaseURL(settings.get().apiBaseURL)
+  const api = new PregarAPIClient(() => http(), apiBaseURL, () => secrets.get('pregarSession'))
+  const account = new AccountService(api, secrets, kv('account'), apiBaseURL, (state) => windows.broadcast('account:changed', state))
+  const liturgy = new LiturgyService({
+    http: () => http(),
+    settings: () => settings.get(),
+    secrets,
+    account,
+    cache: kv('liturgy-cache'),
+    apiBaseURL,
+  })
+  const updater = new UpdaterService((status) => windows.broadcast('updates:status', status))
+
+  const context: MainContext = {
+    paths,
+    database,
+    settings,
+    sermons: new SermonRepository(database),
+    secrets,
+    integrationLog,
+    windows,
+    api,
+    account,
+    liturgy,
+    updater,
+    apiBaseURL,
+    http,
+    kv,
+    currentSettings: () => settings.get(),
+  }
+
+  const applyAppearance = () => {
+    nativeTheme.themeSource = settings.get().appearance
+  }
+  applyAppearance()
+  if (process.platform !== 'darwin') session.defaultSession.setSpellCheckerLanguages(['pt-BR', 'en-US'])
+
+  registerCoreHandlers(context)
+  registerExtensions(context)
+
+  buildMenu({
+    openWindow: (kind) => windows.open(kind),
+    command: (command) => {
+      if (!windows.sendToFocused('menu:command', { command })) windows.open('mesa')
+    },
+    revealLog: () => void import('electron').then(({ shell }) => shell.showItemInFolder(integrationLog.ensureFile())),
+    checkUpdates: () => void updater.check(),
+    privacyURL: () => {
+      try {
+        return `${apiBaseURL()}/legal/privacidade`
+      } catch {
+        return 'https://caminhoanglicano.com.br'
+      }
+    },
+  })
+
+  windows.open('mesa')
+  void account.refresh(false).catch(() => undefined)
+  if (settings.get().updates.automatic) setTimeout(() => void updater.check(), 15_000)
+
+  app.on('second-instance', () => windows.open('mesa'))
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) windows.open('mesa')
+  })
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+  app.on('before-quit', () => {
+    try {
+      database.close()
+    } catch {
+      // Já fechado.
+    }
+  })
+  // Mudanças de aparência nas Preferências valem para todas as janelas.
+  windows.onSettingsChanged = applyAppearance
+}

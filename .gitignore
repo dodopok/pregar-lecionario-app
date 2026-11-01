@@ -4,3 +4,15 @@ build/
 .build/
 *.xcuserstate
 xcuserdata/
+
+# Node / monorepo
+node_modules/
+dist/
+out/
+release/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+apps/desktop/resources/tessdata/
