@@ -78,6 +78,9 @@ Variáveis do app (em `apps/desktop/.env` ou no ambiente do build):
 ## Testar
 
 ```sh
+npm run verify   # tudo de uma vez, como o CI: lint, tipos, testes, build e roteiros
+
+# ou por partes:
 npm run lint
 npm run typecheck
 TEST_DATABASE_URL=postgres://pregar:pregar@127.0.0.1:5432/pregar_test npx vitest run
@@ -104,7 +107,7 @@ npm run dist:win -w @pregar/desktop     # instalador NSIS x64 e ARM64
 npm run dist:linux -w @pregar/desktop   # AppImage e .deb
 ```
 
-As versões públicas saem do workflow de release ao enviar uma tag `v*`. O app instalado se atualiza sozinho a partir dos releases do GitHub. Certificados, notarização e variáveis do repositório estão em [docs/release-desktop.md](docs/release-desktop.md).
+As versões públicas saem do workflow de release ao enviar uma tag `v*`, ou do seu computador com `npm run release -w @pregar/desktop` (sem depender do GitHub Actions). O app instalado se atualiza sozinho a partir dos releases do GitHub. Certificados, notarização e variáveis do repositório estão em [docs/release-desktop.md](docs/release-desktop.md).
 
 ## API, Railway e cobrança
 

@@ -1,6 +1,6 @@
 # Instaladores e atualização do app desktop
 
-Os instaladores saem do workflow `.github/workflows/release-desktop.yml`, que roda em macOS, Windows e Linux quando uma tag `v*` é enviada. Ele publica um rascunho de release no GitHub; o app instalado se atualiza sozinho a partir dos releases publicados.
+Os instaladores saem do workflow `.github/workflows/release-desktop.yml`, que roda em macOS, Windows e Linux quando uma tag `v*` é enviada, ou do seu computador com `npm run release -w @pregar/desktop` (veja "Publicar do seu computador"). Ele publica um rascunho de release no GitHub; o app instalado se atualiza sozinho a partir dos releases publicados.
 
 ## Publicar uma versão
 
@@ -37,6 +37,19 @@ Crie no Google Cloud um cliente OAuth do tipo "App para computador", com o escop
 ## Quando o CI não roda
 
 O CI roda em Linux, macOS e Windows a cada envio. Se todos os jobs falham em um ou dois segundos, sem log e sem runner, o GitHub não chegou a iniciá-los. Em repositório privado isso costuma ser cobrança: pagamento recusado ou limite de gastos do Actions atingido. Confira em Settings › Billing and plans da conta dona do repositório e rode o workflow de novo.
+
+Enquanto o Actions estiver parado, `npm run verify` na raiz roda a mesma verificação no seu computador: lint, tipos, testes (os da API precisam de um PostgreSQL em `TEST_DATABASE_URL`), build e os cinco roteiros ponta a ponta. `npm run verify -- --quick` pula o build e os roteiros.
+
+## Publicar do seu computador (sem o GitHub Actions)
+
+Cada sistema gera os próprios instaladores: rode no Mac para o macOS, num PC com Windows para o Windows e em Linux (ou num contêiner Linux) para o Linux.
+
+1. Em `apps/desktop`, copie `.env.example` para `.env.production.local` (fica fora do git) e preencha `MAIN_VITE_PREGAR_API_URL` com o endereço da API na Railway e, se houver, o cliente do Google Drive.
+2. Exporte no terminal os segredos de assinatura do sistema, os mesmos da tabela acima, com os nomes que o electron-builder espera: `CSC_LINK` e `CSC_KEY_PASSWORD` (certificado em base64 ou caminho do .p12/.pfx) e, no Mac, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` e `APPLE_TEAM_ID`. Sem eles o instalador sai sem assinatura, e o script avisa.
+3. Para só gerar os arquivos: `npm run release -w @pregar/desktop`. Ele roda `npm run verify` antes (use `-- --skip-verify` para pular) e deixa tudo em `apps/desktop/release/<versão>/`.
+4. Para publicar: `GH_TOKEN=<token> npm run release -w @pregar/desktop -- --publish`. O token precisa de permissão de escrita em releases do repositório. O envio cria ou completa um rascunho com a versão de `apps/desktop/package.json`; rode nos três sistemas e publique o rascunho no GitHub quando os três tiverem enviado. Por segurança, `--publish` recusa endereço de API que não seja https ou que aponte para localhost ou domínio de teste.
+
+A atualização automática lê os releases publicados no GitHub, inclusive os arquivos `latest*.yml` que o envio inclui. Se o GitHub também ficar indisponível para releases, gere sem `--publish` e distribua os instaladores por outro meio; a atualização automática volta a funcionar no primeiro release publicado.
 
 ## Desenvolvimento
 

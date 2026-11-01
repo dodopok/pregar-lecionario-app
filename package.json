@@ -21,7 +21,8 @@
     "dev:api": "npm run dev -w @pregar/api",
     "dev:desktop": "npm run dev -w @pregar/desktop",
     "build:api": "npm run build -w @pregar/api",
-    "build:desktop": "npm run build -w @pregar/desktop"
+    "build:desktop": "npm run build -w @pregar/desktop",
+    "verify": "node scripts/verify.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
