@@ -330,3 +330,24 @@ describe('selectQuote', () => {
     expect(editor.commands.selectQuote('texto inexistente')).toBe(false)
   })
 })
+
+describe('selectionFormatting', () => {
+  it('publica o estado da seleção para a barra', async () => {
+    const { selectionFormatting } = await import('../src')
+    editor = createEditor('<h2 style="text-align: center"><strong>Título</strong></h2><ol><li><p>Item</p></li></ol>')
+    editor.commands.setTextSelection(3)
+    expect(selectionFormatting(editor)).toMatchObject({
+      paragraphStyle: 'heading2',
+      fontFamily: 'Arial',
+      fontSizePt: 16,
+      alignment: 'center',
+      lineHeight: 1.15,
+      list: 'none',
+      bold: true,
+      quote: false,
+      hasCopiedFormatting: false,
+    })
+    selectText(editor, 'Item')
+    expect(selectionFormatting(editor)).toMatchObject({ paragraphStyle: 'normal', fontSizePt: 11, list: 'ordered', bold: false })
+  })
+})

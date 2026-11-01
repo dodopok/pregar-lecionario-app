@@ -156,6 +156,50 @@ export class SermonRepository {
     })
   }
 
+  /** Todos os sermões completos (backup). */
+  all(): SermonRecord[] {
+    return this.database.all<SermonRow>('select * from sermons order by date_key').map(toRecord)
+  }
+
+  /** Substitui todos os sermões (restauração de backup), reconstruindo o índice de busca. */
+  replaceAll(records: SermonRecord[]): void {
+    this.database.transaction(() => {
+      this.database.run('delete from sermons')
+      this.database.run('delete from sermons_fts')
+      for (const record of records) {
+        this.database.run(
+          `insert into sermons (date_key, title, liturgical_occasion, liturgical_celebration, liturgical_season, prayer_book_id,
+            main_reading_reference, main_reading_slot, doc, plain_text, word_count, tablet_pdf_path, tablet_pdf_updated_at,
+            drive_draft_key, drive_document_id, drive_revision_id, drive_synced_at, drive_synced_content_hash, drive_sync_error,
+            created_at, modified_at)
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          record.dateKey,
+          record.title,
+          record.liturgicalOccasion,
+          record.liturgicalCelebration,
+          record.liturgicalSeason,
+          record.prayerBookId,
+          record.mainReadingReference,
+          record.mainReadingSlot,
+          record.doc,
+          record.plainText,
+          record.wordCount || countWords(record.plainText),
+          record.tabletPdfPath,
+          record.tabletPdfUpdatedAt,
+          record.drive.draftKey,
+          record.drive.documentId,
+          record.drive.revisionId,
+          record.drive.syncedAt,
+          record.drive.syncedContentHash,
+          record.drive.syncError,
+          record.createdAt,
+          record.modifiedAt,
+        )
+        this.database.run('insert into sermons_fts (date_key, title, body) values (?, ?, ?)', record.dateKey, record.title, record.plainText)
+      }
+    })
+  }
+
   list(): SermonSummary[] {
     return this.database
       .all<SermonRow>(`select ${SUMMARY_COLUMNS} from sermons where word_count > 0 or title <> '' order by date_key desc`)

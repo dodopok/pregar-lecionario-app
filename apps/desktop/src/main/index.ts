@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, session } from 'electron'
+import { app, BrowserWindow, nativeTheme, protocol, session } from 'electron'
 import { appPaths } from './paths'
 import { LocalDatabase } from './storage/db'
 import { SettingsRepository } from './storage/settings'
@@ -19,6 +19,11 @@ import { UpdaterService } from './services/updater'
 import { registerExtensions } from './extensions'
 
 app.setName('Pregar')
+// Protocolos próprios precisam ser declarados antes do app ficar pronto.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'pregar-pdf', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
+  { scheme: 'pregar-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
+])
 app.setAppUserModelId('br.caminhoanglicano.pregar')
 
 if (!app.requestSingleInstanceLock()) {
@@ -69,6 +74,7 @@ async function start(): Promise<void> {
     http,
     kv,
     currentSettings: () => settings.get(),
+    modules: {},
   }
 
   const applyAppearance = () => {

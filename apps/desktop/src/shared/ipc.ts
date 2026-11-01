@@ -12,6 +12,10 @@ import type {
   LiturgicalDay,
   PrayerBookCatalogEntry,
 } from '@pregar/core/liturgy/types'
+import type { AIEventChannels, AIInvokeChannels } from './ipc-ai'
+import type { ContentEventChannels, ContentInvokeChannels } from './ipc-content'
+import type { LibraryEventChannels, LibraryInvokeChannels } from './ipc-library'
+import type { ReaderEventChannels, ReaderInvokeChannels } from './ipc-reader'
 import type { AppSettings, SettingsPatch } from './settings'
 import type {
   AppInfo,
@@ -117,11 +121,9 @@ export interface CoreEventChannels {
 export type InvokeChannels = CoreInvokeChannels & ExtraInvokeChannels
 export type EventChannels = CoreEventChannels & ExtraEventChannels
 
-// Extensões declaradas por módulos (IA, Biblioteca, Leitor, Drive, Backup...).
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface ExtraInvokeChannels {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface ExtraEventChannels {}
+// Canais dos módulos (IA, conteúdo, Leitor, Biblioteca), declarados em arquivos próprios.
+export interface ExtraInvokeChannels extends AIInvokeChannels, ContentInvokeChannels, ReaderInvokeChannels, LibraryInvokeChannels {}
+export interface ExtraEventChannels extends AIEventChannels, ContentEventChannels, ReaderEventChannels, LibraryEventChannels {}
 
 export type InvokeChannel = keyof InvokeChannels
 export type InvokeRequest<C extends InvokeChannel> = InvokeChannels[C]['req']

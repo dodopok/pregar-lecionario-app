@@ -88,7 +88,8 @@ export const Footnote = Node.create<FootnoteOptions>({
   },
 
   parseHTML() {
-    return [{ tag: 'sup[data-footnote]' }]
+    // Prioridade acima da marca de sobrescrito, que também lê <sup>.
+    return [{ tag: 'sup[data-footnote]', priority: 100 }]
   },
 
   renderHTML({ HTMLAttributes }) {

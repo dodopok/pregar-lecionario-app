@@ -59,7 +59,7 @@ function runCSS(run: RichRun, context: ParagraphContext): string {
 }
 
 function runHTML(run: RichRun, context: ParagraphContext): string {
-  let inline = run.hardBreak ? '<br>' : escapeHTML(run.text).replace(/[\u2028\u000b\n]/g, '<br>')
+  let inline = run.hardBreak ? '<br>' : escapeHTML(run.text).replace(/[\u2028\v\n]/g, '<br>')
   if (run.link && isSafeLinkHref(run.link)) {
     inline = `<a href="${escapeHTML(run.link)}" style="color:inherit;text-decoration:inherit">${inline}</a>`
   }

@@ -43,7 +43,7 @@ export function isSafeLinkHref(value: unknown): value is string {
   if (typeof value !== 'string') return false
   const trimmed = value.trim()
   // Caracteres de controle podem esconder um esquema ("java\tscript:").
-  if (!trimmed || /[\u0000-\u001f\u007f]/.test(trimmed)) return false
+  if (!trimmed || [...trimmed].some((character) => character.charCodeAt(0) < 0x20 || character.charCodeAt(0) === 0x7f)) return false
   const match = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)
   if (!match?.[1]) return false
   const scheme = match[1].toLowerCase()

@@ -13,6 +13,38 @@ import type { AccountService } from './services/account'
 import type { LiturgyService } from './services/liturgy'
 import type { PregarAPIClient } from './services/pregar-api'
 import type { UpdaterService } from './services/updater'
+import type { ReviewMaterialSource } from '@pregar/core/library'
+
+/** Acesso da revisão e do Leitor à Biblioteca (implementado pelo módulo da Biblioteca). */
+export interface LibraryAccess {
+  /** Extrai o texto da seção do PDF marcada para revisão (limites de 24 KB e 36 páginas). */
+  extractReviewSources(input: { path: string; title: string; reference: string | null; physicalPage: number }): Promise<ReviewMaterialSource[]>
+  /** O PDF está na Biblioteca (somente esses são servidos ao Leitor). */
+  isRegisteredPath(path: string): boolean
+  /** URL do protocolo pregar-pdf para abrir o arquivo no visor. */
+  pdfURL(path: string): string
+  /** Importa e indexa PDFs já gravados em disco (usado pela importação de pasta pública do Drive). */
+  importFiles(paths: string[]): Promise<void>
+  /** Registros da Biblioteca no JSON do domínio (encodeLibraryRecord), para o backup. */
+  exportRecords(): unknown[]
+  /** Substitui todos os registros (restauração de backup); reindexa em segundo plano o que precisar. */
+  replaceRecords(records: unknown[]): Promise<void>
+  /** Páginas lembradas por "caminho|referência", para o backup. */
+  exportSectionLinks(): Record<string, number>
+  replaceSectionLinks(links: Record<string, number>): void
+}
+
+/** Materiais da preparação marcados para revisão no Leitor (implementado pelo módulo do Leitor). */
+export interface ReviewMaterialsProvider {
+  /** Lista os materiais marcados, sem extrair texto. */
+  marked(dateKey: string): { id: string; kind: 'pdf' | 'web'; title: string; citation: string }[]
+  /** Extrai o texto dos materiais marcados; lança erro com mensagem em português se algum falhar. */
+  collect(dateKey: string, mainReference: string): Promise<ReviewMaterialSource[]>
+  /** Arquivo do Leitor no JSON do domínio (encodeReaderArchive), para o backup. */
+  exportArchive(): unknown
+  /** Substitui o arquivo do Leitor (restauração de backup) e atualiza a janela aberta. */
+  replaceArchive(archive: unknown): void
+}
 
 /** Serviços do processo principal, montados uma vez em `index.ts` e passados aos módulos de IPC. */
 export interface MainContext {
@@ -31,6 +63,8 @@ export interface MainContext {
   http(signal?: AbortSignal): HttpContext
   kv(namespace: string): KeyValueStore
   currentSettings(): AppSettings
+  /** Preenchidos pelos módulos ao registrar seus canais. */
+  modules: { library?: LibraryAccess; reviewMaterials?: ReviewMaterialsProvider }
 }
 
 /** fetch do Chromium (proxy e certificados do sistema), com o registro de integrações. */

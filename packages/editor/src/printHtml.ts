@@ -47,7 +47,7 @@ function scaled(size: number, base: number): number {
 function runHTML(run: RichRun, base: number, defaultSize: number, includeFootnotes: boolean): string {
   if (run.footnote !== undefined) return includeFootnotes ? `<sup class="note-ref">${run.footnote}</sup>` : ''
   if (run.hardBreak) return '<br>'
-  let inline = escapeHTML(run.text).replace(/[\u2028\u000b\n]/g, '<br>')
+  let inline = escapeHTML(run.text).replace(/[\u2028\v\n]/g, '<br>')
   const css: string[] = []
   if (run.bold) css.push('font-weight:700')
   if (run.italic) css.push('font-style:italic')

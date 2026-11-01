@@ -4,7 +4,7 @@
  */
 import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { Plugin, PluginKey, TextSelection, type EditorState } from '@tiptap/pm/state'
+import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 
 export interface FindMatch {
@@ -139,7 +139,7 @@ export const FindReplace = Extension.create({
   },
 
   addCommands() {
-    const select = (tr: import('@tiptap/pm/state').Transaction, match: FindMatch | undefined) => {
+    const select = (tr: Transaction, match: FindMatch | undefined) => {
       if (match) tr.setSelection(TextSelection.create(tr.doc, match.from, match.to)).scrollIntoView()
     }
     return {

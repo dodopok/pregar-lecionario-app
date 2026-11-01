@@ -505,13 +505,13 @@ export function parseRtf(input: string | Uint8Array): ParsedRtf {
         char.subscript = false
         return
       case 'up':
-        char.superscript = (param ?? 6) > 0
-        if (char.superscript) char.subscript = false
+      case 'dn': {
+        // Deslocamento da linha de base em meios-pontos; negativo inverte o sentido.
+        const amount = (param ?? 6) * (word === 'dn' ? -1 : 1)
+        char.superscript = amount > 0
+        char.subscript = amount < 0
         return
-      case 'dn':
-        char.subscript = (param ?? 6) > 0
-        if (char.subscript) char.superscript = false
-        return
+      }
       case 'fs':
         char.fontSize = param ?? 24
         return
@@ -727,7 +727,12 @@ interface Marker {
   /** Posição no texto do trecho. */
   index: number
   length: number
-  number: number
+  /** Tipo e número: "u3" para ³ (Unicode), "a3" para 3 sobrescrito (antigo). */
+  key: string
+}
+
+function markerKey(marker: string): string {
+  return `${/^\d/.test(marker) ? 'a' : 'u'}${superscriptToNumber(marker)}`
 }
 
 const SUPERSCRIPT_DIGITS = '⁰¹²³⁴⁵⁶⁷⁸⁹'
@@ -750,7 +755,7 @@ function findMarkers(paragraph: RtfParagraph, paragraphIndex: number): Marker[] 
   paragraph.runs.forEach((run, runIndex) => {
     const pattern = run.format.superscript ? /[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\d+/g : /[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g
     for (const match of run.text.matchAll(pattern)) {
-      markers.push({ paragraph: paragraphIndex, run: runIndex, index: match.index ?? 0, length: match[0].length, number: superscriptToNumber(match[0]) })
+      markers.push({ paragraph: paragraphIndex, run: runIndex, index: match.index ?? 0, length: match[0].length, key: markerKey(match[0]) })
     }
   })
   return markers
@@ -806,22 +811,22 @@ export function rtfToTiptap(input: string | Uint8Array, options: RtfToTiptapOpti
   const generateId = options.generateId ?? defaultIdGenerator
   const { paragraphs, styles } = parsed
 
-  // Notas: parágrafos "¹ texto" cujo número já apareceu sobrescrito antes.
-  const seen = new Map<number, Marker>()
-  const notes = new Map<number, string>()
+  // Notas: parágrafos "¹ texto" cuja chamada (do mesmo tipo e número) já apareceu antes.
+  const seen = new Map<string, Marker>()
+  const notes = new Map<string, string>()
   const noteParagraphs = new Set<number>()
   paragraphs.forEach((paragraph, index) => {
     const text = paragraphText(paragraph)
     const match = NOTE_PATTERN.exec(text)
     if (match?.[1]) {
-      const number = superscriptToNumber(match[1])
-      if (seen.has(number) && !notes.has(number)) {
-        notes.set(number, (match[2] ?? '').trim())
+      const key = markerKey(match[1])
+      if (seen.has(key) && !notes.has(key)) {
+        notes.set(key, (match[2] ?? '').trim())
         noteParagraphs.add(index)
         return
       }
     }
-    for (const marker of findMarkers(paragraph, index)) if (!seen.has(marker.number)) seen.set(marker.number, marker)
+    for (const marker of findMarkers(paragraph, index)) if (!seen.has(marker.key)) seen.set(marker.key, marker)
   })
   // A linha em branco que o Swift insere antes de cada nota sai junto com ela.
   for (const index of [...noteParagraphs]) {
@@ -847,9 +852,9 @@ export function rtfToTiptap(input: string | Uint8Array, options: RtfToTiptapOpti
       }
     }
     const footnotes: ParagraphPlan['footnotes'] = []
-    for (const [number, marker] of seen) {
-      if (marker.paragraph !== index || !notes.has(number)) continue
-      footnotes.push({ run: marker.run, index: marker.index, length: marker.length, note: notes.get(number) ?? '' })
+    for (const [key, marker] of seen) {
+      if (marker.paragraph !== index || !notes.has(key)) continue
+      footnotes.push({ run: marker.run, index: marker.index, length: marker.length, note: notes.get(key) ?? '' })
     }
     const plan: ParagraphPlan = {
       source: paragraph,
@@ -983,7 +988,7 @@ function textblock(plan: ParagraphPlan, parsed: ParsedRtf, generateId: IdGenerat
 /** Texto com quebras internas (\line, U+2028, \v) convertidas em hardBreak. */
 function pushText(content: JSONContent[], text: string, marks: JSONMark[]): void {
   if (!text) return
-  text.split(/[\u2028\u000b]/).forEach((part, index) => {
+  text.split(/[\u2028\v]/).forEach((part, index) => {
     if (index > 0) content.push({ type: 'hardBreak' })
     if (!part) return
     const node: JSONContent = { type: 'text', text: part }

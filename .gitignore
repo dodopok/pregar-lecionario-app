@@ -16,3 +16,6 @@ coverage/
 .env.*
 !.env.example
 apps/desktop/resources/tessdata/
+
+# Builds privados de verificação
+.build-*/
