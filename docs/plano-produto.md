@@ -271,3 +271,4 @@ Distribuição pública, colaboração, assinaturas e editores completos para ce
 - BYOK: validar os modelos intermediários disponíveis na implementação e medir custo de duas ou três revisões por preparação, incluindo os comentários associados. A simulação inicial está em `ia-byok.md`.
 - Ampliar a validação da biblioteca além das amostras examinadas, incluindo PDF digitalizado, limites de seção e qualidade de extração por autor.
 - Plataforma e componente de edição após as validações, ainda sem compromisso de implementação.
+- Multiplataforma e assinatura: proposta em [plano-multiplataforma.md](plano-multiplataforma.md), ainda sem compromisso de implementação.
