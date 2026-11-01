@@ -1,6 +1,7 @@
 {
   "name": "@pregar/desktop",
   "productName": "Pregar",
+  "desktopName": "pregar.desktop",
   "version": "0.1.0",
   "private": true,
   "description": "Pregar para Windows, macOS e Linux.",
@@ -17,7 +18,7 @@
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
     "dist:win": "electron-vite build && electron-builder --win --publish never",
     "dist:linux": "electron-vite build && electron-builder --linux --publish never",
-    "e2e": "playwright test"
+    "e2e": "node test/e2e/run-all.mjs out screenshots"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

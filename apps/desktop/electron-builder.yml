@@ -60,6 +60,7 @@ nsis:
 
 linux:
   executableName: pregar
+  syncDesktopName: true
   icon: resources/icons
   category: Office
   synopsis: Preparação de sermões com o lecionário
