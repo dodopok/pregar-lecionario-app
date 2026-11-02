@@ -26,7 +26,8 @@ const schema = z.object({
   EMAIL_FROM: z.string().default('Pregar <nao-responda@pregar.app>'),
 
   ESTEVAO_API_URL: z.url().default('https://api.caminhoanglicano.com.br'),
-  ESTEVAO_API_KEY: z.string().optional(),
+  /** Identificador interno enviado no header X-App-Internal-Id, como no Ordo. */
+  ESTEVAO_APP_INTERNAL_ID: z.string().optional(),
   /** Libera o proxy da Estêvão API também para contas sem assinatura. */
   ESTEVAO_PROXY_FOR_FREE: bool.default(false),
 
@@ -85,7 +86,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   const raw = parsed.data
   if (raw.NODE_ENV === 'production') {
-    const missing = (['ASAAS_API_KEY', 'ASAAS_WEBHOOK_TOKEN', 'RESEND_API_KEY', 'ESTEVAO_API_KEY'] as const).filter(
+    const missing = (['ASAAS_API_KEY', 'ASAAS_WEBHOOK_TOKEN', 'RESEND_API_KEY', 'ESTEVAO_APP_INTERNAL_ID'] as const).filter(
       (key) => !raw[key],
     )
     if (missing.length > 0) {

@@ -57,7 +57,7 @@ describe('admin doctor', () => {
       ...PRODUCTION,
       ASAAS_API_KEY: '$aact_hmlg_chave_de_sandbox_123456',
       BILLING_PIX_MODE: 'pix_automatico',
-      ESTEVAO_API_KEY: 'chave-estevao-errada',
+      ESTEVAO_APP_INTERNAL_ID: 'identificador-estevao-errado',
     })
     const { fake } = context
     fake.on('GET', /^\/domains$/, () => ({ data: [{ name: 'pregar.test', status: 'pending' }] }))
@@ -83,12 +83,12 @@ describe('admin doctor', () => {
   })
 
   it('sem chaves: diz qual variável falta, sem chamar os serviços', async () => {
-    context = await createTestContext({ ASAAS_API_KEY: '', ESTEVAO_API_KEY: '', ASAAS_WEBHOOK_TOKEN: '' })
+    context = await createTestContext({ ASAAS_API_KEY: '', ESTEVAO_APP_INTERNAL_ID: '', ASAAS_WEBHOOK_TOKEN: '' })
     const checks = await runDoctor(context.deps)
     const details = checks.map((check) => `${check.area}: ${check.detail}`).join('\n')
     expect(details).toContain('RESEND_API_KEY ausente')
     expect(details).toContain('ASAAS_API_KEY ausente')
-    expect(details).toContain('ESTEVAO_API_KEY ausente')
+    expect(details).toContain('ESTEVAO_APP_INTERNAL_ID ausente')
     expect(details).toContain('chave de anthropic ausente')
     expect(context.fake.calls.filter((call) => !call.url.pathname.startsWith('/v1/models'))).toEqual([])
   })

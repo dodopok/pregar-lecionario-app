@@ -189,11 +189,11 @@ async function asaasChecks(deps: AppDeps): Promise<DoctorCheck[]> {
 
 async function estevaoChecks(deps: AppDeps): Promise<DoctorCheck[]> {
   const { config } = deps
-  if (!config.ESTEVAO_API_KEY) return [{ area: 'Estêvão API', status: 'falha', detail: 'ESTEVAO_API_KEY ausente: assinantes ficam sem leituras' }]
+  if (!config.ESTEVAO_APP_INTERNAL_ID) return [{ area: 'Estêvão API', status: 'falha', detail: 'ESTEVAO_APP_INTERNAL_ID ausente: assinantes ficam sem leituras' }]
   return safely('Estêvão API', async () => {
-    const response = await getJSON(deps, new URL('/api/v2/prayer-books', config.ESTEVAO_API_URL).toString(), { 'X-API-Key': config.ESTEVAO_API_KEY! })
+    const response = await getJSON(deps, new URL('/api/v2/prayer-books', config.ESTEVAO_API_URL).toString(), { 'X-App-Internal-Id': config.ESTEVAO_APP_INTERNAL_ID! })
     return response.status === 200
-      ? { area: 'Estêvão API', status: 'ok', detail: 'chave aceita' }
+      ? { area: 'Estêvão API', status: 'ok', detail: 'identificador aceito' }
       : { area: 'Estêvão API', status: 'falha', detail: `a Estêvão API respondeu HTTP ${response.status}` }
   })
 }

@@ -82,13 +82,13 @@ export class EstevaoProxy {
 
   private async fetchUpstream(upstreamPath: string, search: URLSearchParams, key: string): Promise<CacheEntry> {
     const { config } = this.deps
-    if (!config.ESTEVAO_API_KEY) throw errors.unavailable('As leituras pelo servidor ainda não estão configuradas.')
+    if (!config.ESTEVAO_APP_INTERNAL_ID) throw errors.unavailable('As leituras pelo servidor ainda não estão configuradas.')
     const url = new URL(upstreamPath, config.ESTEVAO_API_URL)
     url.search = search.toString()
     let response: Response
     try {
       response = await this.deps.fetch(url, {
-        headers: { 'X-API-Key': config.ESTEVAO_API_KEY, Accept: 'application/json, application/problem+json' },
+        headers: { 'X-App-Internal-Id': config.ESTEVAO_APP_INTERNAL_ID, Accept: 'application/json, application/problem+json' },
         signal: AbortSignal.timeout(20_000),
       })
     } catch (error) {
@@ -108,7 +108,7 @@ export class EstevaoProxy {
         )
         .execute()
     } else if (response.status === 401 || response.status === 403) {
-      this.deps.log?.error({ status: response.status }, 'Chave do servidor recusada pela Estêvão API')
+      this.deps.log?.error({ status: response.status }, 'Identificador do servidor recusado pela Estêvão API')
       throw errors.unavailable('As leituras pelo servidor estão temporariamente indisponíveis.')
     }
     return entry

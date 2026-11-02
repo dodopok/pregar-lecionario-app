@@ -41,7 +41,7 @@ Guia: [api-railway.md](api-railway.md).
 
 ## 4. Leituras e IA dos assinantes
 
-1. [ ] `ESTEVAO_API_KEY`: uma chave da Estêvão API só para o servidor.
+1. [ ] `ESTEVAO_APP_INTERNAL_ID`: identificador usado pelo Ordo, enviado no header `X-App-Internal-Id` só pelo servidor.
 2. [ ] `ANTHROPIC_API_KEY`: chave do console da Anthropic (revisão e perguntas). Defina um limite de gastos mensal no console.
 3. [ ] `PERPLEXITY_API_KEY`: chave da Perplexity (pesquisa de materiais). Defina também um limite de gastos.
 

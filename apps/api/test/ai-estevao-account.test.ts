@@ -112,13 +112,13 @@ describe('IA pelo servidor', () => {
 })
 
 describe('proxy da Estêvão API', () => {
-  it('usa a chave do servidor, filtra parâmetros e guarda em cache', async () => {
+  it('usa o identificador interno do servidor, filtra parâmetros e guarda em cache', async () => {
     context = await createTestContext()
     let upstream = 0
     context.fake.routes.push((url, init) => {
       if (url.host !== 'api.caminhoanglicano.com.br') return undefined
       upstream += 1
-      expect(new Headers(init.headers).get('x-api-key')).toBe('chave-estevao-servidor')
+      expect(new Headers(init.headers).get('x-app-internal-id')).toBe('identificador-estevao-servidor')
       expect(url.searchParams.has('evil')).toBe(false)
       return json({ data: { date: '2026-11-01', sunday_name: 'Todos os Santos' } })
     })

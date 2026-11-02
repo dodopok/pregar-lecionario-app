@@ -99,7 +99,7 @@ export async function createTestContext(
     AUTH_SECRET: 'segredo-de-teste-com-mais-de-trinta-e-dois-caracteres',
     ASAAS_API_KEY: '$aact_teste_chave_do_asaas_sandbox',
     ASAAS_WEBHOOK_TOKEN: 'token-do-webhook-de-teste-com-32-caracteres',
-    ESTEVAO_API_KEY: 'chave-estevao-servidor',
+    ESTEVAO_APP_INTERNAL_ID: 'identificador-estevao-servidor',
     ADMIN_TOKEN: 'token-administrativo-de-teste-com-32-caracteres',
     LOG_LEVEL: 'silent',
     RECONCILE_INTERVAL_MINUTES: '0',

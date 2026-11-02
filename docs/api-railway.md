@@ -44,7 +44,7 @@ O comando termina com código 1 se houver falha. Rode de novo depois de cada aju
 | `AUTH_SECRET` | sim | Segredo de 32+ caracteres para os códigos de login (`openssl rand -base64 48`) |
 | `PUBLIC_BASE_URL` | sim | Endereço público da API, usado nas páginas legais |
 | `RESEND_API_KEY`, `EMAIL_FROM` | sim | Envio do código de login por email ([Resend](https://resend.com)); o remetente precisa de domínio verificado |
-| `ESTEVAO_API_KEY` | sim | Chave do servidor para as leituras dos assinantes |
+| `ESTEVAO_APP_INTERNAL_ID` | sim | Identificador do app enviado como `X-App-Internal-Id` para as leituras dos assinantes |
 | `ANTHROPIC_API_KEY` | sim | Revisão e perguntas dos assinantes (padrão `claude-sonnet-5-5`) |
 | `PERPLEXITY_API_KEY` | sim | Pesquisa de materiais dos assinantes (padrão `perplexity/sonar`) |
 | `AI_REVIEW_PROVIDER`, `AI_REVIEW_MODEL`, `AI_RESEARCH_PROVIDER`, `AI_RESEARCH_MODEL` | não | Troca de provedor ou modelo sem novo release; os outros provedores usam `OPENAI_API_KEY` e `GOOGLE_AI_API_KEY` |
