@@ -1,9 +1,11 @@
 name: CI
 
+# Desligado nos envios: o GitHub Actions não está disponível nesta conta. A verificação oficial é
+# local, com `npm run verify` na raiz. Para religar, troque o gatilho por:
+#   push: { branches: [main, 'feat/**'] }
+#   pull_request:
 on:
-  push:
-    branches: [main, 'feat/**']
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

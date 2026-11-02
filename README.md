@@ -78,7 +78,7 @@ Variáveis do app (em `apps/desktop/.env` ou no ambiente do build):
 ## Testar
 
 ```sh
-npm run verify   # tudo de uma vez, como o CI: lint, tipos, testes, build e roteiros
+npm run verify   # verificação completa: lint, tipos, testes, build e roteiros
 
 # ou por partes:
 npm run lint
@@ -97,7 +97,7 @@ node test/e2e/smoke.mjs out smoke.png          # abre o app e confere a Mesa
 node test/e2e/mesa.mjs out capturas             # login na API falsa, leituras, escrita e revisão por IA
 ```
 
-Os demais roteiros em `test/e2e/` cobrem Leitor, Biblioteca e Preferências da mesma forma. O CI (`.github/workflows/ci.yml`) roda lint, tipos, Vitest com PostgreSQL, os roteiros ponta a ponta no Linux, no macOS e no Windows, e o build da imagem da API.
+Os demais roteiros em `test/e2e/` cobrem Leitor, Biblioteca e Preferências da mesma forma. A verificação oficial é local, com `npm run verify`: o GitHub Actions não está disponível nesta conta, e os workflows em `.github/workflows/` ficam só para disparo manual até ele voltar.
 
 ## Instaladores e atualização
 
@@ -107,7 +107,7 @@ npm run dist:win -w @pregar/desktop     # instalador NSIS x64 e ARM64
 npm run dist:linux -w @pregar/desktop   # AppImage e .deb
 ```
 
-As versões públicas saem do workflow de release ao enviar uma tag `v*`, ou do seu computador com `npm run release -w @pregar/desktop` (sem depender do GitHub Actions). O app instalado se atualiza sozinho a partir dos releases do GitHub. Certificados, notarização e variáveis do repositório estão em [docs/release-desktop.md](docs/release-desktop.md).
+As versões públicas saem do computador de cada sistema com `npm run release -w @pregar/desktop`, que publica um rascunho de release no GitHub. O app instalado se atualiza sozinho a partir dos releases do GitHub. Certificados, notarização e variáveis do repositório estão em [docs/release-desktop.md](docs/release-desktop.md).
 
 ## API, Railway e cobrança
 

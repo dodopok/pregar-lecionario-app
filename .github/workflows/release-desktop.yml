@@ -2,9 +2,11 @@ name: Release do app desktop
 
 # Crie uma tag v1.2.3 (com a mesma versão em apps/desktop/package.json) para gerar instaladores
 # assinados e um rascunho de release no GitHub. A atualização automática do app usa esse release.
+# Desligado nas tags: o GitHub Actions não está disponível nesta conta. Os instaladores saem do
+# computador de cada sistema com `npm run release -w @pregar/desktop` (docs/release-desktop.md).
+# Para religar, acrescente:
+#   push: { tags: ['v*'] }
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:

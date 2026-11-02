@@ -106,7 +106,7 @@ Sem isso o app funciona normalmente; só o envio para o Google Docs fica desliga
 
 ## 9. Gerar e publicar os instaladores
 
-O GitHub Actions da sua conta não está rodando, então os instaladores saem do seu computador. Guia: [release-desktop.md](release-desktop.md#publicar-do-seu-computador-sem-o-github-actions).
+Os instaladores saem do seu computador (o GitHub Actions não será usado). Guia: [release-desktop.md](release-desktop.md#publicar-do-seu-computador).
 
 Em cada máquina, uma vez:
 

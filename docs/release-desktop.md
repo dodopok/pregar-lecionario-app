@@ -1,28 +1,28 @@
 # Instaladores e atualização do app desktop
 
-Os instaladores saem do workflow `.github/workflows/release-desktop.yml`, que roda em macOS, Windows e Linux quando uma tag `v*` é enviada, ou do seu computador com `npm run release -w @pregar/desktop` (veja "Publicar do seu computador"). Ele publica um rascunho de release no GitHub; o app instalado se atualiza sozinho a partir dos releases publicados.
+Os instaladores saem do computador de cada sistema com `npm run release -w @pregar/desktop`, que publica um rascunho de release no GitHub. O app instalado se atualiza sozinho a partir dos releases publicados. O GitHub Actions não é usado: o workflow `.github/workflows/release-desktop.yml` fica guardado só com disparo manual.
 
 ## Publicar uma versão
 
-1. Atualize `version` em `apps/desktop/package.json` (por exemplo `0.2.0`).
-2. Faça commit, crie a tag e envie: `git tag v0.2.0 && git push origin v0.2.0`.
-3. Ao fim do workflow, revise o rascunho do release no GitHub e publique. A partir daí, quem tem o app recebe a atualização.
+1. Atualize `version` em `apps/desktop/package.json` (por exemplo `0.2.0`) e faça commit.
+2. Rode `npm run verify` na raiz e confira que tudo passa.
+3. Gere e envie os instaladores em cada sistema, como em "Publicar do seu computador" abaixo. Os três envios completam o mesmo rascunho.
+4. Revise o rascunho do release no GitHub e publique. A partir daí, quem tem o app recebe a atualização.
 
-## Configuração do repositório
+## Variáveis e segredos
 
-Em Settings › Secrets and variables › Actions:
+Ficam no seu computador, nunca no repositório:
 
-| Nome | Tipo | Uso |
+| Nome | Onde | Uso |
 | --- | --- | --- |
-| `PREGAR_API_URL` | variável | Endereço da API embutido no app (ex.: `https://api.pregar.app`) |
-| `GOOGLE_CLIENT_ID` | variável | Cliente OAuth "App para computador" do Google Drive |
-| `GOOGLE_CLIENT_SECRET` | segredo | Segredo desse cliente (em apps de computador o Google não o trata como confidencial) |
-| `DRIVE_API_KEY` | segredo | Chave restrita à Drive API para importar pastas públicas (opcional) |
-| `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD` | segredos | Certificado Developer ID Application em base64 (.p12) e senha |
-| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | segredos | Notarização na Apple |
-| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | segredos | Certificado de assinatura de código do Windows (.pfx em base64) |
+| `MAIN_VITE_PREGAR_API_URL` | `apps/desktop/.env.production.local` | Endereço da API embutido no app (ex.: `https://api.pregar.app`) |
+| `MAIN_VITE_GOOGLE_CLIENT_ID`, `MAIN_VITE_GOOGLE_CLIENT_SECRET` | `apps/desktop/.env.production.local` | Cliente OAuth "App para computador" do Google Drive (em apps de computador o Google não trata o segredo como confidencial) |
+| `MAIN_VITE_DRIVE_API_KEY` | `apps/desktop/.env.production.local` | Chave restrita à Drive API para importar pastas públicas (opcional) |
+| `CSC_LINK`, `CSC_KEY_PASSWORD` | terminal | Certificado (caminho ou base64 do .p12 no Mac, do .pfx no Windows) e senha. No Mac, o certificado instalado no Acesso às Chaves também serve |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | terminal (Mac) | Notarização na Apple |
+| `GH_TOKEN` | terminal | Token do GitHub com escrita em releases, só para `--publish` |
 
-Sem os certificados, o workflow ainda gera os instaladores, mas sem assinatura. No macOS, um app sem assinatura e notarização é bloqueado pelo Gatekeeper; no Windows, o SmartScreen avisa que o editor é desconhecido. Para leigos, assine desde a primeira versão pública.
+Sem os certificados, o script ainda gera os instaladores, mas sem assinatura. No macOS, um app sem assinatura e notarização é bloqueado pelo Gatekeeper; no Windows, o SmartScreen avisa que o editor é desconhecido. Para leigos, assine desde a primeira versão pública.
 
 ## Por sistema
 
@@ -34,18 +34,16 @@ Sem os certificados, o workflow ainda gera os instaladores, mas sem assinatura. 
 
 Crie no Google Cloud um cliente OAuth do tipo "App para computador", com o escopo `drive.file`, e preencha a tela de consentimento (nome Pregar, links de privacidade e termos da API: `/legal/privacidade` e `/legal/termos`). Como o escopo é restrito aos arquivos criados pelo app, a verificação do Google é a simples. O login usa PKCE com retorno em `127.0.0.1`, sem servidor do Pregar no meio.
 
-## Quando o CI não roda
+## Verificação
 
-O CI roda em Linux, macOS e Windows a cada envio. Se todos os jobs falham em um ou dois segundos, sem log e sem runner, o GitHub não chegou a iniciá-los. Como o repositório é público, o Actions não é cobrado: isso indica uma restrição na conta dona do repositório (Settings › Billing and plans ou um aviso da conta). Resolvido o problema da conta, rode o workflow de novo.
+`npm run verify` na raiz roda a verificação completa no seu computador: lint, tipos, testes (os da API precisam de um PostgreSQL em `TEST_DATABASE_URL`), build e os cinco roteiros ponta a ponta. `npm run verify -- --quick` pula o build e os roteiros. O workflow `.github/workflows/ci.yml` faz o mesmo no GitHub, mas fica só com disparo manual enquanto o Actions não estiver disponível na conta.
 
-Enquanto o Actions estiver parado, `npm run verify` na raiz roda a mesma verificação no seu computador: lint, tipos, testes (os da API precisam de um PostgreSQL em `TEST_DATABASE_URL`), build e os cinco roteiros ponta a ponta. `npm run verify -- --quick` pula o build e os roteiros.
-
-## Publicar do seu computador (sem o GitHub Actions)
+## Publicar do seu computador
 
 Cada sistema gera os próprios instaladores: rode no Mac para o macOS, num PC com Windows para o Windows e em Linux (ou num contêiner Linux) para o Linux.
 
 1. Em `apps/desktop`, copie `.env.example` para `.env.production.local` (fica fora do git) e preencha `MAIN_VITE_PREGAR_API_URL` com o endereço da API na Railway e, se houver, o cliente do Google Drive.
-2. Exporte no terminal os segredos de assinatura do sistema, os mesmos da tabela acima, com os nomes que o electron-builder espera: `CSC_LINK` e `CSC_KEY_PASSWORD` (certificado em base64 ou caminho do .p12/.pfx) e, no Mac, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` e `APPLE_TEAM_ID`. Sem eles o instalador sai sem assinatura, e o script avisa.
+2. Exporte no terminal os segredos de assinatura da tabela acima. Sem eles o instalador sai sem assinatura, e o script avisa.
 3. Para só gerar os arquivos: `npm run release -w @pregar/desktop`. Ele roda `npm run verify` antes (use `-- --skip-verify` para pular) e deixa tudo em `apps/desktop/release/<versão>/`.
 4. Para publicar: `GH_TOKEN=<token> npm run release -w @pregar/desktop -- --publish`. O token precisa de permissão de escrita em releases do repositório. O envio cria ou completa um rascunho com a versão de `apps/desktop/package.json`; rode nos três sistemas e publique o rascunho no GitHub quando os três tiverem enviado. Por segurança, `--publish` recusa endereço de API que não seja https ou que aponte para localhost ou domínio de teste.
 
