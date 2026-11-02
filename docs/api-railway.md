@@ -64,7 +64,7 @@ O modelo completo, com comentários, está em `apps/api/.env.example`.
 
 - **Logs.** O log nunca grava corpos de requisição nem cabeçalhos de autenticação. Erros do Asaas e dos provedores aparecem com status e duração.
 - **Reconciliação.** A cada `RECONCILE_INTERVAL_MINUTES` (padrão 15), a API reprocessa webhooks que falharam, confere checkouts pendentes no Asaas e encerra assinaturas vencidas depois da tolerância. Ela usa uma trava do Postgres, então é seguro rodar mais de uma réplica.
-- **Suporte.** Com `ADMIN_TOKEN`, `POST /v1/admin/grant` concede dias de plano pago (cortesia ou correção) e `GET /v1/admin/users/:email` mostra plano, uso e assinaturas. Pela linha de comando, no shell da Railway: `node apps/api/dist/admin.js grant email@exemplo.com 30`, `user email@exemplo.com` ou `reconcile`.
+- **Suporte.** Com `ADMIN_TOKEN`, `POST /v1/admin/grant` concede dias de plano pago (cortesia ou correção) e `GET /v1/admin/users/:email` mostra plano, uso e assinaturas. Pela linha de comando, no shell da Railway: `node apps/api/dist/admin.js grant email@exemplo.com 30`, `user email@exemplo.com` (plano, uso, custo real da IA no período e as últimas chamadas) ou `reconcile`.
 - **Backup do banco.** Ative os backups do PostgreSQL na Railway. A API não guarda manuscritos: só contas, sessões, assinaturas, pagamentos e contagem de uso.
 - **LGPD.** O usuário exporta e apaga a conta pelo app. A exclusão cancela a cobrança, remove email, nome, sessões e uso, e mantém os pagamentos sem dados pessoais.
 

@@ -36,7 +36,7 @@ Crie no Google Cloud um cliente OAuth do tipo "App para computador", com o escop
 
 ## Quando o CI não roda
 
-O CI roda em Linux, macOS e Windows a cada envio. Se todos os jobs falham em um ou dois segundos, sem log e sem runner, o GitHub não chegou a iniciá-los. Em repositório privado isso costuma ser cobrança: pagamento recusado ou limite de gastos do Actions atingido. Confira em Settings › Billing and plans da conta dona do repositório e rode o workflow de novo.
+O CI roda em Linux, macOS e Windows a cada envio. Se todos os jobs falham em um ou dois segundos, sem log e sem runner, o GitHub não chegou a iniciá-los. Como o repositório é público, o Actions não é cobrado: isso indica uma restrição na conta dona do repositório (Settings › Billing and plans ou um aviso da conta). Resolvido o problema da conta, rode o workflow de novo.
 
 Enquanto o Actions estiver parado, `npm run verify` na raiz roda a mesma verificação no seu computador: lint, tipos, testes (os da API precisam de um PostgreSQL em `TEST_DATABASE_URL`), build e os cinco roteiros ponta a ponta. `npm run verify -- --quick` pula o build e os roteiros.
 

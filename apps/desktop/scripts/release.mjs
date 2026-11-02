@@ -52,7 +52,7 @@ function isProductionURL(value) {
 
 const extra = []
 if (process.platform === 'darwin') {
-  if (!process.env.CSC_LINK) warnings.push('Sem CSC_LINK: o app sai sem assinatura e o macOS vai bloqueá-lo em outros Macs.')
+  if (!process.env.CSC_LINK) warnings.push('Sem CSC_LINK: o electron-builder procura o certificado Developer ID no Acesso às Chaves; sem ele, o app sai sem assinatura e o macOS o bloqueia em outros Macs.')
   if (!process.env.APPLE_ID) {
     warnings.push('Sem APPLE_ID: sem notarização.')
     extra.push('-c.mac.notarize=false')
