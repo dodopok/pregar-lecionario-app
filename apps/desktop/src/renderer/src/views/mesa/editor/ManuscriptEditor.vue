@@ -12,13 +12,14 @@ import {
   manuscriptPlainText,
   manuscriptWordCount,
   parseManuscriptJSON,
+  setLanguageCorrections,
   selectionFormatting,
 } from '@pregar/editor'
 import type { FootnoteEntry, ManuscriptShortcutAction, SelectionFormatting } from '@pregar/editor'
 import { DEFAULT_SETTINGS } from '@shared/settings'
 import PButton from '@/components/PButton.vue'
 import { errorMessage, on, shortcut } from '@/lib/api'
-import { activeEditor } from '@/lib/editorBridge'
+import { activeEditor, selectedSpellingFinding, selectQuote } from '@/lib/editorBridge'
 import { useAppStore } from '@/stores/app'
 import { useMesaStore } from '@/stores/mesa'
 import { useToasts } from '@/stores/toasts'
@@ -44,12 +45,13 @@ let wordsTimer: ReturnType<typeof setTimeout> | null = null
 let loadingContent = false
 
 // O CSS do manuscrito vem do pacote do editor (mesmas medidas das exportações).
-if (!document.getElementById('manuscript-editor-css')) {
-  const style = document.createElement('style')
-  style.id = 'manuscript-editor-css'
-  style.textContent = MANUSCRIPT_EDITOR_CSS
-  document.head.appendChild(style)
-}
+// Atualizar a folha existente também permite que o HMR aplique mudanças de estilo sem reiniciar.
+const manuscriptStyle =
+  (document.getElementById('manuscript-editor-css') as HTMLStyleElement | null) ??
+  document.createElement('style')
+manuscriptStyle.id = 'manuscript-editor-css'
+manuscriptStyle.textContent = MANUSCRIPT_EDITOR_CSS
+if (!manuscriptStyle.isConnected) document.head.appendChild(manuscriptStyle)
 
 function onShortcut(action: ManuscriptShortcutAction, detail?: { footnoteId?: string }): boolean {
   switch (action) {
@@ -101,7 +103,7 @@ const editor = useEditor({
   editorProps: MANUSCRIPT_EDITOR_PROPS as never,
   onCreate: ({ editor: created }) => {
     activeEditor.value = created as Editor
-    loadContent()
+    loadContent(created as Editor)
     refreshState()
   },
   onUpdate: ({ editor: updated }) => {
@@ -142,8 +144,7 @@ function refreshState(): void {
 }
 
 /** Troca o documento do editor quando muda a preparação ou uma restauração substitui o texto. */
-function loadContent(): void {
-  const current = editor.value
+function loadContent(current: Editor | undefined = editor.value): void {
   if (!current) return
   loadingContent = true
   try {
@@ -157,7 +158,9 @@ function loadContent(): void {
         // Documento ilegível: preserva ao menos o texto corrido salvo.
         content = {
           type: 'doc',
-          content: (mesa.record.plainText || '').split('\n').map((line) => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })),
+          content: (mesa.record.plainText || '')
+            .split('\n')
+            .map((line) => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })),
         }
       }
     }
@@ -171,7 +174,39 @@ function loadContent(): void {
   refreshState()
 }
 
-watch(() => mesa.documentRevision, loadContent)
+watch(
+  () => mesa.documentRevision,
+  () => loadContent(),
+)
+
+const spellingItems = computed(() => {
+  const report = [...mesa.reviews].reverse().find((item) => item.criteria.includes('spelling'))
+  return (report?.findings ?? [])
+    .filter((item) => item.criterion === 'spelling' && item.status === 'open' && item.correction)
+    .map((item) => ({
+      id: item.id,
+      quote: item.manuscriptQuote,
+      correction: item.correction,
+      observation: item.observation,
+    }))
+})
+watch(
+  [() => editor.value, spellingItems, () => mesa.documentRevision],
+  () => {
+    const current = editor.value
+    if (current) setLanguageCorrections(current as Editor, spellingItems.value)
+  },
+  { immediate: true, flush: 'post' },
+)
+
+function onProofreadingClick(event: MouseEvent): void {
+  const mark = (event.target as HTMLElement).closest<HTMLElement>('[data-spelling-id]')
+  const finding = spellingItems.value.find((item) => item.id === mark?.dataset.spellingId)
+  if (!finding) return
+  selectedSpellingFinding.value = finding.id
+  mesa.contextTab = 'review'
+  selectQuote(finding.quote)
+}
 
 function setZoom(value: number): void {
   const next = Math.min(2, Math.max(0.5, Math.round(value * 100) / 100))
@@ -191,8 +226,15 @@ function applyLink(): void {
   const current = editor.value
   if (!current) return
   const href = linkHref.value.trim()
-  ;(current.chain().focus() as unknown as { applyLink(input: { href: string | null; text?: string }): { run(): boolean } })
-    .applyLink({ href: href ? (/^[a-z]+:/i.test(href) ? href : `https://${href}`) : null, text: linkText.value || undefined })
+  ;(
+    current.chain().focus() as unknown as {
+      applyLink(input: { href: string | null; text?: string }): { run(): boolean }
+    }
+  )
+    .applyLink({
+      href: href ? (/^[a-z]+:/i.test(href) ? href : `https://${href}`) : null,
+      text: linkText.value || undefined,
+    })
     .run()
   linkOpen.value = false
 }
@@ -204,7 +246,9 @@ function focusFootnote(id?: string): void {
 
 function updateNote(entry: FootnoteEntry, note: string): void {
   if (!entry.id) return
-  ;(editor.value?.commands as unknown as { updateFootnote(id: string, note: string): boolean }).updateFootnote(entry.id, note)
+  ;(
+    editor.value?.commands as unknown as { updateFootnote(id: string, note: string): boolean }
+  ).updateFootnote(entry.id, note)
 }
 
 function removeNote(entry: FootnoteEntry): void {
@@ -237,7 +281,9 @@ onMounted(() => {
         zoomOut: () => setZoom(zoom.value - 0.1),
         zoomReset: () => setZoom(DEFAULT_SETTINGS.editor.zoom),
         pastePlain: () => {
-          void navigator.clipboard.readText().then((text) => current.chain().focus().insertContent(text).run())
+          void navigator.clipboard
+            .readText()
+            .then((text) => current.chain().focus().insertContent(text).run())
         },
       }
       map[command]?.()
@@ -258,8 +304,12 @@ const PAGE_MARGIN = 96
 // O zoom muda o tamanho do texto; a página estreita para caber na área visível (e as margens
 // diminuem), em vez de encolher o texto. O texto sempre quebra dentro da largura disponível.
 const pageScale = computed(() => zoom.value)
-const pageWidth = computed(() => Math.min(PAGE_WIDTH, Math.max(320, (surfaceWidth.value - 48) / pageScale.value)))
-const pageMargin = computed(() => Math.round(Math.max(28, Math.min(PAGE_MARGIN, (pageWidth.value - 420) / 2))))
+const pageWidth = computed(() =>
+  Math.min(PAGE_WIDTH, Math.max(320, (surfaceWidth.value - 48) / pageScale.value)),
+)
+const pageMargin = computed(() =>
+  Math.round(Math.max(28, Math.min(PAGE_MARGIN, (pageWidth.value - 420) / 2))),
+)
 const showTip = computed(() => mesa.wordCount === 0 && !app.settings.onboarding.mesaTipDismissed)
 const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index))
 </script>
@@ -276,26 +326,65 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
       @link="openLink"
       @zoom="setZoom"
     />
-    <div ref="surface" class="manuscript__surface scroll" @mousedown.self="editor?.commands.focus('end')">
-      <FindBar v-if="findOpen && editor" :editor="editor as Editor" :replace-mode="findOpen === 'replace'" :tick="findTick" @close="findOpen = null" />
+    <div
+      ref="surface"
+      class="manuscript__surface scroll"
+      @mousedown.self="editor?.commands.focus('end')"
+      @click="onProofreadingClick"
+    >
+      <FindBar
+        v-if="findOpen && editor"
+        :editor="editor as Editor"
+        :replace-mode="findOpen === 'replace'"
+        :tick="findTick"
+        @close="findOpen = null"
+      />
       <div v-if="linkOpen" class="link-popover" role="dialog" aria-label="Editar link">
         <input v-model="linkText" class="field" placeholder="Texto" aria-label="Texto do link" />
-        <input v-model="linkHref" class="field" placeholder="https://" aria-label="Endereço do link" autofocus @keydown.enter.prevent="applyLink" @keydown.esc="linkOpen = false" />
+        <input
+          v-model="linkHref"
+          class="field"
+          placeholder="https://"
+          aria-label="Endereço do link"
+          autofocus
+          @keydown.enter.prevent="applyLink"
+          @keydown.esc="linkOpen = false"
+        />
         <PButton variant="primary" compact @click="applyLink">Aplicar</PButton>
         <PButton variant="ghost" compact @click="linkOpen = false">Cancelar</PButton>
       </div>
       <div class="page-wrap" :style="{ width: `${pageWidth * pageScale}px` }">
         <div v-if="app.settings.editor.showRuler" class="ruler" aria-hidden="true">
-          <span v-for="tick in rulerTicks" :key="tick" class="ruler__tick" :style="{ left: `${(tick / 21) * 100}%` }">{{ tick > 0 && tick < 21 ? tick : '' }}</span>
+          <span
+            v-for="tick in rulerTicks"
+            :key="tick"
+            class="ruler__tick"
+            :style="{ left: `${(tick / 21) * 100}%` }"
+            >{{ tick > 0 && tick < 21 ? tick : '' }}</span
+          >
         </div>
-        <div class="page" :style="{ zoom: pageScale, width: `${pageWidth}px`, paddingLeft: `${pageMargin}px`, paddingRight: `${pageMargin}px` }">
+        <div
+          class="page"
+          :style="{
+            zoom: pageScale,
+            width: `${pageWidth}px`,
+            paddingLeft: `${pageMargin}px`,
+            paddingRight: `${pageMargin}px`,
+          }"
+        >
           <aside v-if="showTip" class="tip" aria-label="Como funciona a Mesa">
-            <button type="button" class="tip__close" aria-label="Dispensar dica" @click="dismissTip"><X :size="13" /></button>
+            <button type="button" class="tip__close" aria-label="Dispensar dica" @click="dismissTip">
+              <X :size="13" />
+            </button>
             <strong class="serif">Como funciona a Mesa</strong>
             <ol>
               <li>O dia de pregar fica no botão de data; troque quando quiser.</li>
               <li>Nas leituras, marque a que o sermão vai seguir como texto principal.</li>
-              <li>Escreva aqui. Anotações só suas ({{ shortcut('⇧⌘A') }}) ficam fora do púlpito; a revisão ({{ shortcut('⇧⌥⌘R') }}) aponta, nunca reescreve.</li>
+              <li>
+                Escreva aqui. Anotações só suas ({{ shortcut('⇧⌘A') }}) ficam fora do púlpito; a revisão ({{
+                  shortcut('⇧⌥⌘R')
+                }}) aponta, nunca reescreve.
+              </li>
             </ol>
           </aside>
           <EditorContent v-if="editor" :editor="editor" />
@@ -312,7 +401,14 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
                 :aria-label="`Nota ${entry.number}`"
                 @change="updateNote(entry, ($event.target as HTMLTextAreaElement).value)"
               />
-              <button type="button" class="note__remove" :aria-label="`Remover nota ${entry.number}`" @click="removeNote(entry)"><X :size="12" /></button>
+              <button
+                type="button"
+                class="note__remove"
+                :aria-label="`Remover nota ${entry.number}`"
+                @click="removeNote(entry)"
+              >
+                <X :size="12" />
+              </button>
             </div>
           </section>
         </div>
@@ -330,13 +426,6 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
   background: var(--editor-surface);
   --manuscript-ink: var(--ink);
   --manuscript-link: var(--accent-ink);
-  --manuscript-accent: var(--accent);
-}
-@media (prefers-color-scheme: dark) {
-  .manuscript {
-    --manuscript-quote-paper: rgb(255 255 255 / 0.05);
-    --manuscript-quote-ink: var(--ink);
-  }
 }
 .manuscript__surface {
   position: relative;

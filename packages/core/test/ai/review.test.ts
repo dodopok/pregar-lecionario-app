@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SermonReviewError } from '../../src/ai/errors'
 import { MAXIMUM_BYTES_PER_SOURCE, MAXIMUM_INPUT_BYTES } from '../../src/ai/materials'
-import { REVIEW_SYSTEM_PROMPT } from '../../src/ai/prompts'
+import { REVIEW_SYSTEM_PROMPT, LANGUAGE_REVIEW_SYSTEM_PROMPT } from '../../src/ai/prompts'
 import { AI_PROVIDERS, suggestedModel } from '../../src/ai/providers'
 import {
   buildReviewRequest,
@@ -196,7 +196,7 @@ describe('revisão: esquema compacto do Claude', () => {
       const observation = fields.observation as JSONObject
       expect(observation.maxLength).toBeUndefined()
       expect(String(observation.description)).toContain('800')
-      expect(properties.structure).toBeDefined()
+      expect(Boolean(properties.structure)).toBe(criteria.length !== 1 || criteria[0] !== 'spelling')
     }
   })
 
@@ -292,7 +292,7 @@ describe('revisão: esquema compacto do Claude', () => {
       expect(call.body?.top_k).toBeUndefined()
       expect(call.body?.thinking).toBeUndefined()
       expect(at(call.body, 'output_config', 'format', 'type')).toBe('json_schema')
-      expect(call.body?.system).toBe(REVIEW_SYSTEM_PROMPT)
+      expect(call.body?.system).toBe(LANGUAGE_REVIEW_SYSTEM_PROMPT)
     }
   })
 })
@@ -521,7 +521,7 @@ describe('revisão: endpoints e contratos de cada provedor', () => {
     expect(warning).not.toContain('Este apontamento')
   })
 
-  it('aceita na ortografia somente uma palavra corrigida', async () => {
+  it('aceita correções linguísticas com mais de uma palavra', async () => {
     const json =
       '{"findings":[{"criterion":"spelling","severity":"attention","manuscript_quote":"excessão","observation":"A grafia desta palavra não corresponde à forma padrão.","correction":"exceção","classification":"spelling","evidence_source_id":"","evidence_quote":""},{"criterion":"spelling","severity":"attention","manuscript_quote":"excessão","observation":"Grafia.","correction":"a exceção","classification":"spelling","evidence_source_id":"","evidence_quote":""}]}'
     const { fetch } = fakeFetch(() => providerResponse(json, 'anthropic'))
@@ -530,11 +530,11 @@ describe('revisão: endpoints e contratos de cada provedor', () => {
       [],
       testConfiguration('anthropic', fetch),
     )
-    expect(result.findings).toHaveLength(1)
+    expect(result.findings).toHaveLength(2)
     expect(result.findings[0]?.manuscriptQuote).toBe('excessão')
     expect(result.findings[0]?.correction).toBe('exceção')
     expect(result.findings[0]?.evidenceSourceTitle).toBeUndefined()
-    expect(result.rejectionReasons).toEqual(['orthography'])
+    expect(result.rejectionReasons).toEqual([])
   })
 
   it('confere citações com espaços colapsados e rejeita trechos longos fora da ortografia', async () => {
@@ -712,9 +712,18 @@ describe('revisão: mapa do sermão', () => {
     )
   })
 
-  it('sempre pede o mapa do sermão no esquema', () => {
+  it('dedica a revisão exclusiva de língua às correções, sem mapa homilético', () => {
     const { fetch } = fakeFetch()
-    const request = buildReviewRequest(reviewContext(['spelling']), [], testConfiguration('openai', fetch))
+    const request = buildReviewRequest(reviewContext(['spelling']), [], testConfiguration('anthropic', fetch))
+    expect(request.body.system).toBe(LANGUAGE_REVIEW_SYSTEM_PROMPT)
+    const schema = at(request.body, 'output_config', 'format', 'schema') as JSONObject
+    expect(schema.required).toEqual(['findings'])
+    expect(at(schema, 'properties', 'structure')).toBeUndefined()
+  })
+
+  it('pede o mapa nas revisões de conteúdo', () => {
+    const { fetch } = fakeFetch()
+    const request = buildReviewRequest(reviewContext(['clarity']), [], testConfiguration('openai', fetch))
     const schema = at(request.body, 'text', 'format', 'schema') as JSONObject
     expect(new Set(schema.required as string[])).toEqual(new Set(['findings', 'structure']))
     const structure = at(schema, 'properties', 'structure') as JSONObject

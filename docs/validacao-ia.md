@@ -1,6 +1,6 @@
 # Autoria e validação da revisão com IA
 
-O Proper usa a IA para analisar o sermão existente e fazer perguntas que ajudem o autor a esclarecer o que escreveu. A IA não deve escrever, completar ou propor conteúdo para o sermão. O aplicativo nunca aplica suas respostas ao manuscrito.
+O Proper usa a IA para analisar o sermão existente e fazer perguntas que ajudem o autor a esclarecer o que escreveu. A IA não deve escrever, completar ou propor conteúdo para o sermão. O aplicativo aplica somente correções linguísticas do critério Ortografia e gramática, por comando explícito do autor, com conferência do trecho atual e possibilidade de desfazer.
 
 Essa regra de comportamento é explicada nas instruções compartilhadas pela revisão e pelas perguntas, com exemplos de crítica pertinente e de coautoria, inclusive sugestões disfarçadas de perguntas. Não há lista de palavras proibidas, comparação de vocabulário, classificação gramatical nem três moldes fixos de pergunta.
 
@@ -8,7 +8,7 @@ O código confere condições verificáveis. Isso não demonstra, por si só, qu
 
 ## Contratos conferidos localmente
 
-- Apontamentos: critério selecionado, classificação compatível, campos e tamanhos válidos; toda citação declarada do manuscrito deve existir nele. Correção ortográfica aceita uma palavra, e os demais critérios não aceitam texto de substituição no campo de correção.
+- Apontamentos: critério selecionado, classificação compatível, campos e tamanhos válidos; toda citação declarada do manuscrito deve existir nele. Correção linguística aceita o trecho citado corrigido, com a mesma âncora de até 420 caracteres dos outros critérios, e os demais critérios não aceitam texto de substituição no campo de correção.
 - Fidelidade: exige trecho do manuscrito, identificação de fonte fornecida e evidência literal dessa fonte. O prompt distingue comentário e Escritura.
 - Mapa: confere as citações declaradas e os limites dos campos. Movimentos precisam de um trecho inicial localizável. Uma citação ausente não sustenta uma seção marcada como plenamente presente.
 - Perguntas: até três perguntas redigidas pelo modelo, de até 400 caracteres, com âncora literal de até 240 caracteres. Um segundo trecho é opcional e, quando informado, deve ser diferente e existir no manuscrito. Evidências externas precisam vir das fontes fornecidas.
@@ -46,3 +46,5 @@ Cada arquivo gerado contém o texto sintético, a rubrica e somente o conteúdo 
 Essa separação segue as [orientações de avaliação da Anthropic](https://www.anthropic.com/research/demystifying-evals-for-ai-agents): verificações por código para condições objetivas e avaliação contextual para questões de sentido. Uma execução por caso é uma amostra, não uma garantia sobre todas as respostas futuras. Não há segunda chamada de IA em produção para classificar as respostas; ela só deve ser considerada se os resultados justificarem seu custo e tempo adicionais.
 
 Os testes opcionais com manuscrito anexado continuam exigindo o caminho por variável de ambiente e autorização para o envio. Texto pessoal e capturas de respostas ficam fora do repositório e do instalador.
+
+A revisão exclusiva de ortografia e gramática usa um prompt próprio e retorna apenas correções, sem mapa homilético. A revisão completa continua incluindo o mapa.

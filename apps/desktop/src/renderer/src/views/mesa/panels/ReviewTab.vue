@@ -4,7 +4,7 @@
  * abertos por critério (resolver/descartar) e os fechados recolhidos. A revisão só aponta e
  * fundamenta; cada trecho citado apenas seleciona o texto no manuscrito.
  */
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   Check,
   ChevronDown,
@@ -27,7 +27,7 @@ import {
 import type { SermonReviewFinding, SermonReviewFindingStatus, SermonReviewReport } from '@pregar/core/ai'
 import PButton from '@/components/PButton.vue'
 import { errorMessage, invoke, isMac } from '@/lib/api'
-import { selectQuote } from '@/lib/editorBridge'
+import { selectQuote, applyLanguageCorrections, selectedSpellingFinding } from '@/lib/editorBridge'
 import { useMesaStore } from '@/stores/mesa'
 import { useToasts } from '@/stores/toasts'
 import FindingItem from './FindingItem.vue'
@@ -42,15 +42,70 @@ const mesa = useMesaStore()
 const toasts = useToasts()
 const { access } = useAIAccess('review')
 
-const report = computed<SermonReviewReport | null>(() => mesa.reviews.at(-1) ?? null)
+const report = computed<SermonReviewReport | null>(
+  () =>
+    [...mesa.reviews].reverse().find((item) => item.criteria.some((criterion) => criterion !== 'spelling')) ??
+    mesa.reviews.at(-1) ??
+    null,
+)
+const spellingReport = computed(
+  () => [...mesa.reviews].reverse().find((item) => item.criteria.includes('spelling')) ?? null,
+)
+const spelling = computed(() =>
+  spellingReport.value
+    ? openFindings(spellingReport.value).filter((item) => item.criterion === 'spelling')
+    : [],
+)
+const applying = ref(false)
+watch(
+  selectedSpellingFinding,
+  async (id) => {
+    if (!id) return
+    await nextTick()
+    document.getElementById(`finding-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  },
+  { immediate: true },
+)
+async function applySpelling(items: SermonReviewFinding[]): Promise<void> {
+  const target = spellingReport.value
+  if (!target || applying.value) return
+  applying.value = true
+  try {
+    const ids = applyLanguageCorrections(
+      items.map((item) => ({ id: item.id, quote: item.manuscriptQuote, correction: item.correction })),
+    )
+    for (const id of ids) {
+      const finding = items.find((item) => item.id === id)!
+      await changeStatus(target, finding, 'resolved')
+    }
+    const skipped = items.length - ids.length
+    toasts.show(
+      `${ids.length} correção(ões) aplicada(s).${skipped ? ` ${skipped} trecho(s) alterado(s), repetido(s) ou sobreposto(s): confira individualmente.` : ' Use Desfazer para restaurar o texto.'}`,
+      'info',
+    )
+  } finally {
+    applying.value = false
+  }
+}
 const stale = ref(false)
 const showClosed = ref(false)
 const busyFindings = ref<Set<string>>(new Set())
 
-const open = computed(() => (report.value ? openFindings(report.value) : []))
-const closed = computed(() => (report.value ? closedFindings(report.value) : []))
+const open = computed(() =>
+  report.value ? openFindings(report.value).filter((item) => item.criterion !== 'spelling') : [],
+)
+const closed = computed(() => [
+  ...new Map(
+    [
+      ...(report.value ? closedFindings(report.value) : []),
+      ...(spellingReport.value
+        ? closedFindings(spellingReport.value).filter((item) => item.criterion === 'spelling')
+        : []),
+    ].map((item) => [item.id, item]),
+  ).values(),
+])
 const groups = computed(() => groupFindingsByCriterion(open.value))
-const counts = computed(() => criterionCounts(report.value))
+const counts = computed(() => criterionCounts(report.value).filter((item) => item.criterion !== 'spelling'))
 const usage = computed(() =>
   access.value?.mode === 'pro' && access.value.usage
     ? usageLine(access.value.usage, ['review', 'structure'])
@@ -111,18 +166,21 @@ async function changeStatus(
   finding: SermonReviewFinding,
   status: SermonReviewFindingStatus,
 ): Promise<void> {
+  target = mesa.reviews.find((item) => item.id === target.id) ?? target
   const previous = mesa.reviews
-  mesa.reviews = replaceReport(previous, setFindingStatus(target, finding.id, status))
+  if (mesa.selectedDateKey === target.dateKey)
+    mesa.reviews = replaceReport(previous, setFindingStatus(target, finding.id, status))
   busyFindings.value = new Set([...busyFindings.value, finding.id])
   try {
-    mesa.reviews = await invoke('reviews:setFindingStatus', {
+    const updated = await invoke('reviews:setFindingStatus', {
       dateKey: target.dateKey,
       reportId: target.id,
       findingId: finding.id,
       status,
     })
+    if (mesa.selectedDateKey === target.dateKey) mesa.reviews = updated
   } catch (error) {
-    mesa.reviews = previous
+    if (mesa.selectedDateKey === target.dateKey) mesa.reviews = previous
     toasts.show(errorMessage(error), 'error')
   } finally {
     const next = new Set(busyFindings.value)
@@ -147,6 +205,38 @@ async function changeStatus(
     </template>
     <p v-else class="review__muted">Ainda não há observações para esta versão.</p>
 
+    <section class="proofreading" aria-label="Ortografia e gramática">
+      <h3 class="findings__heading">
+        ORTOGRAFIA E GRAMÁTICA <span class="findings__count">{{ spelling.length }}</span>
+      </h3>
+      <p class="review__muted review__small">
+        Correções locais. Os trechos encontrados ficam sublinhados no manuscrito; passe o mouse para ver a
+        correção ou clique para abrir o apontamento.
+      </p>
+      <p v-if="spellingReport" class="review__meta">{{ shortDateTime(spellingReport.createdAt) }}</p>
+      <div class="review__actions">
+        <PButton compact @click="mesa.requestReview(['spelling'])">Revisar ortografia e gramática</PButton>
+        <PButton v-if="spelling.length" compact :disabled="applying" @click="applySpelling(spelling)"
+          >Aplicar todas ({{ spelling.length }})</PButton
+        >
+      </div>
+      <p v-if="spellingReport && !spelling.length" class="review__muted review__small">
+        Nenhuma correção pendente nesta revisão.
+      </p>
+      <FindingItem
+        v-for="finding in spelling"
+        :key="finding.id"
+        :finding="finding"
+        :show-criterion="false"
+        show-status-actions
+        can-apply
+        :busy="applying || busyFindings.has(finding.id)"
+        @select="goTo"
+        @apply="applySpelling([finding])"
+        @status="changeStatus(spellingReport!, finding, $event)"
+      />
+    </section>
+
     <StructureMap
       v-if="report?.structure"
       :structure="report.structure"
@@ -159,8 +249,8 @@ async function changeStatus(
         <ListTree :size="13" aria-hidden="true" /> <span class="serif">Mapa do sermão</span>
       </p>
       <p class="placeholder__text">
-        Toda revisão devolve onde começam introdução, desenvolvimento e conclusão, qual é a ideia dominante,
-        os movimentos do texto e onde a Boa Nova aparece. “Checar estrutura” faz só essa leitura.
+        As revisões de conteúdo mostram onde começam introdução, desenvolvimento e conclusão, qual é a ideia
+        dominante, os movimentos do texto e onde a Boa Nova aparece. “Checar estrutura” faz só essa leitura.
       </p>
     </section>
 
@@ -179,7 +269,8 @@ async function changeStatus(
       </p>
       <template v-else>
         <p v-if="open.length === 0" class="review__muted review__row">
-          <CircleCheck :size="13" aria-hidden="true" /> Todos os apontamentos foram resolvidos ou descartados.
+          <CircleCheck :size="13" aria-hidden="true" /> Todos os apontamentos de conteúdo foram resolvidos ou
+          descartados.
         </p>
         <section
           v-for="group in groups"
@@ -230,7 +321,14 @@ async function changeStatus(
                   variant="link"
                   compact
                   :disabled="busyFindings.has(finding.id)"
-                  @click="changeStatus(report, finding, 'open')"
+                  @click="
+                    changeStatus(
+                      mesa.reviews.find((item) => item.findings.some((entry) => entry.id === finding.id)) ??
+                        report,
+                      finding,
+                      'open',
+                    )
+                  "
                   >Reabrir</PButton
                 >
               </div>
@@ -268,12 +366,25 @@ async function changeStatus(
     </PButton>
     <p v-if="usage" class="review__usage">{{ usage }}</p>
     <p class="review__muted review__small">
-      A revisão aponta e fundamenta. Não escreve, não completa, não sugere frases.
+      As revisões de conteúdo apontam e fundamentam. Correções de língua são aplicadas apenas pelo seu
+      comando.
     </p>
   </div>
 </template>
 
 <style scoped>
+.proofreading {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.proofreading :deep(.finding:target) {
+  background: var(--surface);
+}
+
 .review {
   display: flex;
   flex-direction: column;

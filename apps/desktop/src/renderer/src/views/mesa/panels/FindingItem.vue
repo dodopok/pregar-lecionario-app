@@ -15,6 +15,7 @@ withDefaults(
     showCriterion?: boolean
     showStatusActions?: boolean
     busy?: boolean
+    canApply?: boolean
   }>(),
   {
     showCriterion: true,
@@ -22,7 +23,11 @@ withDefaults(
     busy: false,
   },
 )
-const emit = defineEmits<{ select: [quote: string]; status: [status: SermonReviewFindingStatus] }>()
+const emit = defineEmits<{
+  select: [quote: string]
+  status: [status: SermonReviewFindingStatus]
+  apply: []
+}>()
 
 function sourceLine(finding: SermonReviewFinding): string {
   return [finding.evidenceSourceTitle, finding.evidenceCitation].filter(Boolean).join(' · ')
@@ -30,7 +35,11 @@ function sourceLine(finding: SermonReviewFinding): string {
 </script>
 
 <template>
-  <article class="finding" :aria-label="`Apontamento de ${CRITERION_TITLES[finding.criterion]}`">
+  <article
+    :id="`finding-${finding.id}`"
+    class="finding"
+    :aria-label="`Apontamento de ${CRITERION_TITLES[finding.criterion]}`"
+  >
     <div class="finding__head">
       <span v-if="showCriterion" class="finding__criterion">{{
         CRITERION_TITLES[finding.criterion].toUpperCase()
@@ -73,7 +82,15 @@ function sourceLine(finding: SermonReviewFinding): string {
       “{{ finding.manuscriptQuote }}”
     </button>
     <p class="finding__observation selectable">{{ finding.observation }}</p>
-    <p v-if="finding.correction" class="finding__correction">Grafia: {{ finding.correction }}</p>
+    <p v-if="finding.correction" class="finding__correction">Correção: {{ finding.correction }}</p>
+    <PButton
+      v-if="canApply && finding.criterion === 'spelling' && finding.correction"
+      compact
+      :disabled="busy"
+      @click="emit('apply')"
+    >
+      <Check :size="13" /> Aplicar correção
+    </PButton>
     <template v-if="finding.evidenceQuote">
       <p class="finding__evidence selectable">“{{ finding.evidenceQuote }}”</p>
       <p v-if="sourceLine(finding)" class="finding__source">{{ sourceLine(finding) }}</p>

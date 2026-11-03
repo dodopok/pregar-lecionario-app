@@ -16,3 +16,5 @@ export * from './clipboardHtml'
 export * from './printHtml'
 export * from './rtf'
 export * from './selectionState'
+
+export * from './proofreading'

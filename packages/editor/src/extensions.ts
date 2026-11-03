@@ -19,6 +19,7 @@ import { ManuscriptBlockquote } from './blockquote'
 import { ManuscriptClipboard } from './clipboard'
 import { ManuscriptCommands } from './commands'
 import { FindReplace } from './findReplace'
+import { Proofreading } from './proofreading'
 import { Footnote } from './footnote'
 import { ManuscriptKeymap, type ManuscriptShortcutHandler } from './keymap'
 import { ParagraphFormat } from './paragraphFormat'
@@ -90,6 +91,7 @@ export function createManuscriptExtensions(options: ManuscriptExtensionOptions =
     Footnote.configure({ generateId }),
     Annotation,
     FindReplace,
+    Proofreading,
     ManuscriptCommands,
     ManuscriptKeymap.configure({ onShortcut: options.onShortcut ?? null, generateId }),
   ]

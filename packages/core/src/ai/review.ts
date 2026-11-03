@@ -1,9 +1,10 @@
+import { isLanguageCorrection } from './language'
 import { z } from 'zod'
 import { silentIntegrationLog } from '../log/integration'
 import { tryParseJSON } from '../util/http'
 import { SermonReviewError } from './errors'
 import { MAXIMUM_BYTES_PER_SOURCE, MAXIMUM_INPUT_BYTES, utf8ByteLength } from './materials'
-import { REVIEW_SYSTEM_PROMPT } from './prompts'
+import { REVIEW_SYSTEM_PROMPT, LANGUAGE_REVIEW_SYSTEM_PROMPT } from './prompts'
 import { acceptsModel, providerName } from './providers'
 import {
   characterCount,
@@ -35,7 +36,7 @@ export const SERMON_REVIEW_CRITERIA: readonly SermonReviewCriterion[] = [
 ]
 
 export const CRITERION_TITLES: Record<SermonReviewCriterion, string> = {
-  spelling: 'Ortografia',
+  spelling: 'Ortografia e gramática',
   fidelity: 'Fidelidade',
   structure: 'Estrutura',
   clarity: 'Clareza',
@@ -44,7 +45,8 @@ export const CRITERION_TITLES: Record<SermonReviewCriterion, string> = {
 
 /** O que cada critério examina, no vocabulário do workshop de pregação. */
 export const CRITERION_GUIDANCE: Record<SermonReviewCriterion, string> = {
-  spelling: 'Erros objetivos de grafia. Mostra a palavra e a forma correta, sem reescrever a frase.',
+  spelling:
+    'Grafia, acentuação, concordância, regência e pontuação: correções linguísticas, preservando a sua voz e o conteúdo.',
   fidelity:
     'Afirmações em tensão com a passagem e seu contexto, com evidência literal. Leitura que ninguém nunca fez é sinal de alerta.',
   structure:
@@ -317,7 +319,6 @@ export type AIReviewRawStructure = z.infer<typeof rawStructureSchema>
 // Cliente
 
 const FIDELITY_CLASSIFICATIONS = ['contradiction', 'tension', 'unsupported', 'interpretive']
-const SPELLING_CORRECTION = /^[\p{L}\p{M}][\p{L}\p{M}'’-]*$/u
 
 function inputSize(manuscript: string, sources: readonly SermonReviewSource[]): number {
   return (
@@ -443,10 +444,19 @@ export function buildReviewRequest(
   }
   const request = makeStructuredRequest({
     userText: JSON.stringify(input),
-    systemPrompt: REVIEW_SYSTEM_PROMPT,
+    systemPrompt:
+      context.criteria.length === 1 && context.criteria[0] === 'spelling'
+        ? LANGUAGE_REVIEW_SYSTEM_PROMPT
+        : REVIEW_SYSTEM_PROMPT,
     formatName: 'sermonreview',
     schema: sermonReviewSchema(context.criteria, sources, isClaude),
-    maxOutputTokens: maxOutputTokens ?? (isClaude ? (CLAUDE_OUTPUT_TOKEN_BUDGETS[0] ?? 16_000) : 4_000),
+    maxOutputTokens:
+      maxOutputTokens ??
+      (isClaude
+        ? (CLAUDE_OUTPUT_TOKEN_BUDGETS[0] ?? 16_000)
+        : context.criteria.includes('spelling')
+          ? 8_000
+          : 4_000),
     configuration,
   })
   if (isClaude) request.timeoutMs = CLAUDE_STRUCTURED_TIMEOUT_MS
@@ -476,7 +486,7 @@ function validateFinding(
   const quote = item.manuscript_quote.trim()
   if (quote && !containsExact(quote, context.manuscript)) return 'manuscriptAnchor'
   if (criterion === 'spelling') {
-    if (!quote || !SPELLING_CORRECTION.test(item.correction) || characterCount(item.correction) > 64) {
+    if (!isLanguageCorrection(quote, item.correction)) {
       return 'orthography'
     }
   } else if (item.correction) {
@@ -546,8 +556,11 @@ export function sermonReviewSchema(
   return {
     type: 'object',
     additionalProperties: false,
-    properties: { findings, structure: structureSchema() },
-    required: ['findings', 'structure'],
+    properties:
+      criteria.length === 1 && criteria[0] === 'spelling'
+        ? { findings }
+        : { findings, structure: structureSchema() },
+    required: criteria.length === 1 && criteria[0] === 'spelling' ? ['findings'] : ['findings', 'structure'],
   }
 }
 
@@ -563,9 +576,9 @@ function compactFindingSchema(
   const correction: JSONSchema = criteria.includes('spelling')
     ? {
         type: 'string',
-        maxLength: 64,
+        maxLength: 420,
         description:
-          'Somente em spelling: uma palavra corrigida, sem reescrever a frase. Nos demais critérios, string vazia.',
+          'Somente em spelling: o trecho citado corrigido em ortografia, gramática e pontuação, preservando o sentido. Nos demais critérios, string vazia.',
       }
     : { type: 'string', enum: [''] }
   const evidence: JSONSchema = hasFidelity
@@ -609,7 +622,9 @@ function findingSchema(criterion: SermonReviewCriterion, sources: readonly Sermo
   let evidence: JSONSchema = { type: 'string', enum: [''] }
   switch (criterion) {
     case 'spelling':
-      correction = { type: 'string', minLength: 1, maxLength: 64 }
+      quote.minLength = 1
+      quote.maxLength = 420
+      correction = { type: 'string', minLength: 1, maxLength: 420 }
       classification = { type: 'string', enum: ['spelling'] }
       break
     case 'fidelity':

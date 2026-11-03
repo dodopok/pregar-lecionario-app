@@ -59,7 +59,7 @@ describe('apontamentos', () => {
       ],
     })
     expect(counts.map((row) => [row.title, row.count])).toEqual([
-      ['Ortografia', 1],
+      ['Ortografia e gramática', 1],
       ['Fidelidade', 0],
       ['Estrutura', 0],
       ['Clareza', 0],

@@ -114,7 +114,8 @@ describe('citação: prosa e poema', () => {
     expect(MANUSCRIPT_EDITOR_CSS).toContain(
       '.manuscript-editor blockquote[data-kind="poem"] p { padding-left: 1.5em; text-indent: -1.5em; }',
     )
-    expect(MANUSCRIPT_EDITOR_CSS).toContain('border-left: 2px solid var(--accent, #2e7a51)')
+    // A epígrafe usa a apresentação neutra aprovada, sem a antiga faixa de cor.
+    expect(MANUSCRIPT_EDITOR_CSS).not.toContain('border-left: 2px solid var(--accent, #2e7a51)')
     expect(MANUSCRIPT_EDITOR_CSS).toContain("content: 'Anotação'")
     expect(MANUSCRIPT_EDITOR_CSS).toContain('aside.manuscript-annotation')
   })

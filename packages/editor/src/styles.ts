@@ -163,13 +163,14 @@ export const MANUSCRIPT_EDITOR_CSS = `
 .manuscript-editor h6 { font-size: ${HEADING_FONT_SIZES_PT[6]}pt; font-style: italic; }
 .manuscript-editor blockquote {
   margin: ${QUOTE_SPACE_BEFORE_PT}pt ${QUOTE_INDENT_END_PT}pt ${QUOTE_SPACE_AFTER_PT}pt 0;
-  padding: 5px 0 5px ${QUOTE_INDENT_PT}pt;
-  border-left: 2px solid var(--accent, #2e7a51);
-  border-radius: 4px;
-  color: var(--manuscript-quote-ink, ${QUOTE_INK_COLOR});
-  background: var(--manuscript-quote-paper, ${QUOTE_BLOCK_COLOR});
+  padding: 0;
+  border: 0;
+  color: var(--manuscript-ink, #000);
+  background: transparent;
   font-family: var(--font-serif, Georgia, 'Times New Roman', serif);
   font-style: italic;
+  font-size: 1.04em;
+  line-height: 1.45;
 }
 /* Na prosa citada em itálico, a ênfase volta ao redondo para continuar visível. */
 .manuscript-editor blockquote:not([data-kind="poem"]) em { font-style: normal; }
@@ -180,7 +181,15 @@ export const MANUSCRIPT_EDITOR_CSS = `
   white-space: pre-wrap;
 }
 .manuscript-editor blockquote[data-kind="poem"] p { padding-left: 1.5em; text-indent: -1.5em; }
-.manuscript-editor p[data-attribution] { font-size: 0.92em; opacity: 0.85; }
+.manuscript-editor p[data-attribution] {
+  margin-top: 4pt;
+  color: var(--muted, #707067);
+  font-family: var(--font-ui, system-ui, sans-serif);
+  font-size: 0.82em;
+  font-style: normal;
+  line-height: 1.35;
+  text-align: right;
+}
 /* Anotação: nota do pregador para si; aparte discreto, fora do texto falado e das exportações. */
 .manuscript-editor aside.manuscript-annotation {
   margin: 12px 0;
@@ -225,5 +234,12 @@ export const MANUSCRIPT_EDITOR_CSS = `
   height: 0;
   pointer-events: none;
   color: var(--manuscript-placeholder, #9aa0a6);
+}
+
+.manuscript-editor .manuscript-proofreading {
+  text-decoration: underline wavy var(--warning, #a96618);
+  text-underline-offset: 3px;
+  background: color-mix(in srgb, var(--warning, #a96618) 8%, transparent);
+  cursor: pointer;
 }
 `
