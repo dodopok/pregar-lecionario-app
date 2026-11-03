@@ -13,8 +13,8 @@ export const BREAKPOINTS = {
 
 export const PANEL_LIMITS = {
   calendar: { min: 220, max: 320, default: 248 },
-  readings: { min: 260, max: 520, default: 360 },
-  materials: { min: 280, max: 480, default: 340 },
+  readings: { min: 240, max: 480, default: 300 },
+  materials: { min: 260, max: 460, default: 316 },
   editorMin: 420,
   railWide: 64,
   railCompact: 48,

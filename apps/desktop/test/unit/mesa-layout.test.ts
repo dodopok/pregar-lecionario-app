@@ -56,7 +56,7 @@ describe('layoutFor', () => {
       widths: { calendar: 900, readings: 10, materials: 9000 },
     })
     expect(layout.calendarWidth).toBe(320)
-    expect(layout.readings).toBe(260)
+    expect(layout.readings).toBe(240)
     expect(layout.materialsWidth).toBeLessThanOrEqual(480)
   })
 })

@@ -120,6 +120,9 @@ function open(kind: WindowKind): void {
         </button>
       </template>
       <template #menu>
+        <button type="button" role="menuitem" class="menu__item" @click="mesa.openSheet('setup')">
+          Primeiros passos
+        </button>
         <button type="button" role="menuitem" class="menu__item" @click="mesa.tourOpen = true">
           Rever o tour da Mesa
         </button>

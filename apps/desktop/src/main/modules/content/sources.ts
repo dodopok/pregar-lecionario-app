@@ -24,10 +24,15 @@ export function registerSources(context: MainContext): void {
   })
   const inflight = new Map<string, Promise<unknown>>()
 
-  function profiles(): { sites: FavoriteSite[]; authors: FavoriteAuthor[] } {
+  function profiles(): { sites: FavoriteSite[]; authors: FavoriteAuthor[]; customized: boolean } {
     const sites = store.get<string>('profiles.sites')
     const authors = store.get<string>('profiles.authors')
-    return { sites: favoriteSitesFromData(sites ?? null), authors: favoriteAuthorsFromData(authors ?? null) }
+    return {
+      sites: favoriteSitesFromData(sites ?? null),
+      authors: favoriteAuthorsFromData(authors ?? null),
+      // Verdadeiro depois que a pessoa salvou os próprios sites ou autores (os padrões não contam).
+      customized: sites !== undefined || authors !== undefined,
+    }
   }
 
   handle('sources:profiles', () => profiles())
@@ -35,12 +40,19 @@ export function registerSources(context: MainContext): void {
     if (sites !== undefined) {
       // Revalida pelo próprio decodificador do domínio: perfis inválidos não entram.
       const decoded = decodeFavoriteSites(JSON.parse(JSON.stringify(sites)))
-      if (!decoded) throw new UserFacingError('Os sites favoritos não puderam ser salvos: confira endereços e campos.')
+      if (!decoded)
+        throw new UserFacingError('Os sites favoritos não puderam ser salvos: confira endereços e campos.')
       store.set('profiles.sites', encodeFavoriteSites(decoded))
     }
     if (authors !== undefined) {
-      const list = z.array(z.unknown()).max(200).parse(JSON.parse(JSON.stringify(authors)))
-      store.set('profiles.authors', encodeFavoriteAuthors(list.length === 0 ? [] : favoriteAuthorsFromData(list)))
+      const list = z
+        .array(z.unknown())
+        .max(200)
+        .parse(JSON.parse(JSON.stringify(authors)))
+      store.set(
+        'profiles.authors',
+        encodeFavoriteAuthors(list.length === 0 ? [] : favoriteAuthorsFromData(list)),
+      )
     }
     return profiles()
   })

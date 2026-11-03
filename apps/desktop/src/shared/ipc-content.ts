@@ -26,7 +26,7 @@ export interface IdeaNote {
 }
 
 export interface ContentInvokeChannels {
-  'sources:profiles': { req: void; res: { sites: FavoriteSite[]; authors: FavoriteAuthor[] } }
+  'sources:profiles': { req: void; res: { sites: FavoriteSite[]; authors: FavoriteAuthor[]; customized?: boolean } }
   'sources:saveProfiles': {
     req: { sites?: FavoriteSite[]; authors?: FavoriteAuthor[] }
     res: { sites: FavoriteSite[]; authors: FavoriteAuthor[] }

@@ -106,6 +106,7 @@ export type MesaCommandId =
   | 'readingsFullscreen'
   | 'captureIdea'
   | 'connect'
+  | 'setup'
   | 'tour'
   | 'history'
   | 'drive'
@@ -198,6 +199,12 @@ export const MESA_COMMANDS: MesaCommand[] = [
     title: 'Conectar leituras e revisão…',
     group: 'Preparação',
     keywords: 'assinar conta chaves degustação login',
+  },
+  {
+    id: 'setup',
+    title: 'Primeiros passos…',
+    group: 'Preparação',
+    keywords: 'começar configurar fontes autores comentários drive importar',
   },
   { id: 'tour', title: 'Rever o tour da Mesa', group: 'Preparação', keywords: 'ajuda primeiros passos' },
   {

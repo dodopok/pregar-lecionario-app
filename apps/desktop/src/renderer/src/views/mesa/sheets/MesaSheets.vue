@@ -16,11 +16,12 @@ const HistorySheet = defineAsyncComponent(() => import('./HistorySheet.vue'))
 const PulpitSheet = defineAsyncComponent(() => import('./PulpitSheet.vue'))
 const ConnectSheet = defineAsyncComponent(() => import('./ConnectSheet.vue'))
 const FreePreparationSheet = defineAsyncComponent(() => import('./FreePreparationSheet.vue'))
+const SetupSheet = defineAsyncComponent(() => import('./SetupSheet.vue'))
 
 const mesa = useMesaStore()
 
 function close(): void {
-  mesa.activeSheet = null
+  mesa.closeSheet()
 }
 </script>
 
@@ -34,4 +35,5 @@ function close(): void {
   <CommandSearchSheet v-else-if="mesa.activeSheet === 'commands'" @close="close" />
   <ConnectSheet v-else-if="mesa.activeSheet === 'connect'" @close="close" />
   <FreePreparationSheet v-else-if="mesa.activeSheet === 'free'" @close="close" />
+  <SetupSheet v-else-if="mesa.activeSheet === 'setup'" @close="close" />
 </template>

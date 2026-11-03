@@ -27,6 +27,10 @@ Atualizado em 3 de novembro de 2026. Tudo o que não está aqui foi implementado
 12. **Importar sermões antigos** escolhe arquivos e pastas no mesmo diálogo só no macOS; no Windows e no Linux o diálogo aceita vários arquivos. Conferir também um `.docx` real do Word com imagens e estilos próprios (o conversor avisa o que descartou).
 13. **Instalação limpa.** O tour e a degustação só aparecem na primeira abertura (`onboarding.tourDone`). Teste com a pasta de dados vazia.
 
+## Próximo produto
+
+17. **App companheiro iOS.** O desenho e a proposta de sincronização estão em [app-companheiro-ios.md](app-companheiro-ios.md); começa pelo nome do app e pela conta Apple Developer. O passo a passo geral e as sugestões de nome estão em [proximos-passos.md](proximos-passos.md).
+
 ## Repositório
 
 14. **Dependência nova.** `packages/editor` passou a declarar `@tiptap/extension-blockquote` e `apps/desktop` recebeu `mammoth` (devDependencies, empacotadas pelo electron-vite). Depois de puxar a branch, rode `npm install`.

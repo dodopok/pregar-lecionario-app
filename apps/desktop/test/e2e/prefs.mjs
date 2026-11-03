@@ -343,8 +343,14 @@ try {
       await settle(mesa, 300)
       if (step === 3 || step === 5) await mesa.screenshot({ path: join(shots, `tour-passo-${step}.png`) })
     }
-    await mesa.click('.tour button:has-text("Conectar agora")')
+    await mesa.click('.tour button:has-text("Primeiros passos")')
     await mesa.waitForSelector('.tour', { state: 'detached', timeout: 5000 }).catch(() => failures.push('o tour não fechou'))
+    await mesa.waitForSelector('.setup', { timeout: 6000 })
+    await settle(mesa)
+    await mesa.screenshot({ path: join(shots, 'primeiros-passos.png') })
+    const steps = await mesa.locator('.setup .step').count()
+    check(steps === 6, `esperava 6 passos em Primeiros passos, vieram ${steps}`)
+    await mesa.click('.setup .step:first-child button')
     const afterTour = await invoke(mesa, 'settings:get')
     check(afterTour.value.onboarding.tourDone === true, `o tour não ficou marcado como concluído: ${JSON.stringify(afterTour.value.onboarding)}`)
   } else {

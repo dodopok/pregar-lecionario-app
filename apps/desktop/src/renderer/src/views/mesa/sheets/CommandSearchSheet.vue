@@ -81,6 +81,7 @@ function run(command: MesaCommand): void {
     case 'drive':
     case 'shortcuts':
     case 'connect':
+    case 'setup':
       return mesa.openSheet(command.id)
     case 'rehearsal':
       return mesa.openFullscreen('rehearsal')

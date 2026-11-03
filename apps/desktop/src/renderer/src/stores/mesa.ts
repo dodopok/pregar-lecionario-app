@@ -32,7 +32,16 @@ export type SaveState = 'saved' | 'pending' | 'saving' | 'error'
 
 /** Folhas modais da Mesa. */
 export type MesaSheet =
-  'review' | 'questions' | 'pulpit' | 'history' | 'drive' | 'shortcuts' | 'commands' | 'connect' | 'free'
+  | 'review'
+  | 'questions'
+  | 'pulpit'
+  | 'history'
+  | 'drive'
+  | 'shortcuts'
+  | 'commands'
+  | 'connect'
+  | 'free'
+  | 'setup'
 /** Modos de tela cheia dentro da janela da Mesa. */
 export type MesaFullscreen = 'readings' | 'rehearsal'
 
@@ -71,6 +80,8 @@ export const useMesaStore = defineStore('mesa', () => {
   const focusMode = ref(false)
   const contextTab = ref<'materials' | 'ideas' | 'review'>('materials')
   const activeSheet = ref<MesaSheet | null>(null)
+  /** Folha para a qual voltar quando a atual fechar (Primeiros passos → Conectar → Primeiros passos). */
+  const returnSheet = ref<MesaSheet | null>(null)
   const fullscreen = ref<MesaFullscreen | null>(null)
   /** Tour da primeira abertura (também reaberto pelo menu Ajuda). */
   const tourOpen = ref(false)
@@ -485,10 +496,18 @@ export const useMesaStore = defineStore('mesa', () => {
     }
   }
 
-  function openSheet(sheet: MesaSheet): void {
+  function openSheet(sheet: MesaSheet, options: { returnTo?: MesaSheet | null } = {}): void {
     void flush()
     fullscreen.value = null
+    returnSheet.value = options.returnTo ?? null
     activeSheet.value = sheet
+  }
+
+  /** Fecha a folha atual, voltando à anterior quando foi aberta a partir dela. */
+  function closeSheet(): void {
+    const back = returnSheet.value
+    returnSheet.value = null
+    activeSheet.value = back
   }
 
   function openFullscreen(mode: MesaFullscreen): void {
@@ -621,6 +640,7 @@ export const useMesaStore = defineStore('mesa', () => {
     createFreePreparation,
     loadTranslation,
     openSheet,
+    closeSheet,
     openFullscreen,
     requestReview,
     snapshotInput,

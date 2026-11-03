@@ -41,8 +41,8 @@ const STEPS: Step[] = [
   },
   {
     target: '[data-tour="connect"]',
-    title: 'Conectar quando quiser',
-    text: 'Para carregar as leituras e revisar, o Pregar precisa de uma conta ou das suas chaves. Em degustação, as próximas semanas já aparecem.',
+    title: 'Comece bem',
+    text: 'Em poucos minutos: conecte as leituras e a revisão, traga os sites e autores que você já lê, os comentários em PDF e os sermões antigos. Em degustação, as próximas semanas já aparecem.',
   },
 ]
 
@@ -87,7 +87,7 @@ async function finish(connect: boolean): Promise<void> {
     await app.updateSettings({ onboarding: { tourDone: true } })
   } finally {
     emit('close')
-    if (connect) mesa.openSheet('connect')
+    if (connect) mesa.openSheet('setup')
   }
 }
 
@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
         <span class="spacer" />
         <PButton v-if="index > 0" compact @click="back">Voltar</PButton>
         <PButton v-if="last" variant="primary" compact autofocus @click="finish(true)"
-          >Conectar agora</PButton
+          >Primeiros passos</PButton
         >
         <PButton v-else variant="primary" compact autofocus @click="next">Próximo</PButton>
       </footer>
