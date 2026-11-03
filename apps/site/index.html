@@ -21,6 +21,7 @@
   --paper:#f5f3ee;--paper-2:#fbfaf7;--ink:#1f1d19;--ink-soft:#4a4843;--muted:#706e67;
   --line:rgba(31,29,25,.12);--line-strong:rgba(31,29,25,.22);
   --green:#2e7a51;--green-ink:#235e3e;--green-soft:#e0ede5;--green-contrast:#f5f3ee;
+  --botao:#2e7a51;--botao-hover:#235e3e;--botao-ink:#f5f3ee;
   --serif:'Source Serif 4',Georgia,'Times New Roman',serif;--sans:'Source Sans 3',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --shadow:0 24px 60px rgba(31,29,25,.16),0 2px 6px rgba(31,29,25,.08);
 }
@@ -29,6 +30,7 @@
     --paper:#1e1d1b;--paper-2:#262522;--ink:#ece9e2;--ink-soft:#cbc7bd;--muted:#a9a69e;
     --line:rgba(236,233,226,.14);--line-strong:rgba(236,233,226,.28);
     --green:#5ca87a;--green-ink:#a6dcbd;--green-soft:#2b4233;--green-contrast:#14201a;
+    --botao:#2e7a51;--botao-hover:#3b8f62;--botao-ink:#f5f3ee;
     --shadow:0 24px 60px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
   }
 }
@@ -48,10 +50,10 @@ p{margin:0}
 .topo .miolo{display:flex;align-items:center;gap:28px;height:64px}
 .marca{display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none;font-family:var(--serif);font-size:22px;font-weight:600}
 .topo nav{margin-left:auto;display:flex;align-items:center;gap:22px;font-size:15px}
-.topo nav a{color:var(--ink-soft);text-decoration:none}
-.topo nav a:hover{color:var(--ink)}
-.botao{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 22px;border-radius:12px;background:var(--green);color:var(--green-contrast);font-weight:600;font-size:16px;text-decoration:none;border:1px solid transparent;white-space:nowrap}
-.botao:hover{background:var(--green-ink);color:var(--green-contrast)}
+.topo nav a:not(.botao){color:var(--ink-soft);text-decoration:none}
+.topo nav a:not(.botao):hover{color:var(--ink)}
+.botao{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 22px;border-radius:12px;background:var(--botao);color:var(--botao-ink);font-weight:600;font-size:16px;text-decoration:none;border:1px solid transparent;white-space:nowrap}
+.botao:hover{background:var(--botao-hover);color:var(--botao-ink)}
 .botao--secundario{background:transparent;color:var(--ink);border-color:var(--line-strong)}
 .botao--secundario:hover{background:var(--paper-2);color:var(--ink);border-color:var(--ink)}
 .botao--mini{height:36px;padding:0 14px;font-size:14px;border-radius:9px}
