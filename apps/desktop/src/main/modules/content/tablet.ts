@@ -34,8 +34,8 @@ function safeFileName(value: string): string {
   return (cleaned || 'Sermão').slice(0, 120)
 }
 
-/** Gera o PDF de leitura em uma janela oculta, sem scripts e sem acesso à rede. */
-async function renderPdf(html: string): Promise<Buffer> {
+/** Janela oculta com o HTML da folha, sem scripts e sem acesso à rede (usada para PDF e impressão). */
+async function openPrintWindow(html: string, parent?: BrowserWindow): Promise<BrowserWindow> {
   const partition = 'tablet-print'
   const printSession = session.fromPartition(partition, { cache: false })
   printSession.webRequest.onBeforeRequest((details, callback) => {
@@ -43,17 +43,43 @@ async function renderPdf(html: string): Promise<Buffer> {
   })
   const window = new BrowserWindow({
     show: false,
+    parent,
     width: 900,
     height: 1200,
     webPreferences: { partition, sandbox: true, javascript: false, contextIsolation: true, nodeIntegration: false, spellcheck: false },
   })
+  await window.loadURL(`data:text/html;charset=utf-8;base64,${Buffer.from(html, 'utf8').toString('base64')}`)
+  return window
+}
+
+/** Gera o PDF de leitura em uma janela oculta, sem scripts e sem acesso à rede. */
+async function renderPdf(html: string): Promise<Buffer> {
+  const window = await openPrintWindow(html)
   try {
-    await window.loadURL(`data:text/html;charset=utf-8;base64,${Buffer.from(html, 'utf8').toString('base64')}`)
     return await window.webContents.printToPDF({
       pageSize: 'A4',
       printBackground: true,
       margins: { top: 0.6, bottom: 0.6, left: 0.6, right: 0.6 },
       displayHeaderFooter: false,
+    })
+  } finally {
+    window.destroy()
+  }
+}
+
+/** Abre o diálogo de impressão do sistema para a folha; cancelar não é erro. */
+async function printHtml(html: string, parent?: BrowserWindow): Promise<{ printed: boolean; message: string | null }> {
+  const window = await openPrintWindow(html, parent)
+  try {
+    return await new Promise((resolve) => {
+      window.webContents.print({ silent: false, printBackground: true }, (success, failureReason) => {
+        if (success) {
+          resolve({ printed: true, message: null })
+          return
+        }
+        const cancelled = !failureReason || /cancel/i.test(failureReason)
+        resolve({ printed: false, message: cancelled ? null : `Não foi possível imprimir: ${failureReason}` })
+      })
     })
   } finally {
     window.destroy()
@@ -84,5 +110,25 @@ export function registerTablet(context: MainContext): void {
     const updated = context.sermons.save(key, { tabletPdfPath: path, tabletPdfUpdatedAt: new Date().toISOString() })
     context.windows.broadcast('sermon:changed', { dateKey: key, origin: event.sender.id })
     return { path, record: updated }
+  })
+  handle('tablet:print', async ({ html }, event) => {
+    const content = z.string().min(1).max(30_000_000).parse(html)
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    return printHtml(content, parent)
+  })
+  handle('tablet:saveText', async ({ dateKey, text, title }, event) => {
+    const key = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(dateKey)
+    const content = z.string().max(5_000_000).parse(text)
+    const folder = context.currentSettings().tablet.lastExportFolder ?? app.getPath('documents')
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    const result = await dialog.showSaveDialog(parent!, {
+      title: 'Salvar como texto simples',
+      defaultPath: join(folder, `${key} - ${safeFileName(title)}.txt`),
+      filters: [{ name: 'Texto', extensions: ['txt'] }],
+    })
+    if (result.canceled || !result.filePath) return null
+    const path = result.filePath.toLowerCase().endsWith('.txt') ? result.filePath : `${result.filePath}.txt`
+    writeFileSync(path, content, 'utf8')
+    return { path }
   })
 }

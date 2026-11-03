@@ -11,12 +11,26 @@ import {
   QUOTE_SPACE_BEFORE_PT,
 } from '@pregar/core/document/model'
 
-export { BODY_FONT_FAMILY, BODY_FONT_SIZE_PT, BODY_LINE_HEIGHT, QUOTE_INDENT_PT, QUOTE_SPACE_AFTER_PT, QUOTE_SPACE_BEFORE_PT }
+export {
+  BODY_FONT_FAMILY,
+  BODY_FONT_SIZE_PT,
+  BODY_LINE_HEIGHT,
+  QUOTE_INDENT_PT,
+  QUOTE_SPACE_AFTER_PT,
+  QUOTE_SPACE_BEFORE_PT,
+}
 
 export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
 
 /** Tamanho de cada nível de título (DocumentParagraphStyle.pointSize). */
-export const HEADING_FONT_SIZES_PT: Readonly<Record<HeadingLevel, number>> = { 1: 20, 2: 16, 3: 14, 4: 12, 5: 11, 6: 11 }
+export const HEADING_FONT_SIZES_PT: Readonly<Record<HeadingLevel, number>> = {
+  1: 20,
+  2: 16,
+  3: 14,
+  4: 12,
+  5: 11,
+  6: 11,
+}
 /** Estilos "Título" e "Subtítulo" do Swift, convertidos em título 1 e corpo na importação. */
 export const TITLE_FONT_SIZE_PT = 26
 export const SUBTITLE_FONT_SIZE_PT = 15
@@ -66,9 +80,14 @@ export const LINE_SPACING_OPTIONS = [
   { label: 'Duplo', value: 2 },
 ] as const
 
-export type ParagraphStyleName = 'normal' | 'heading1' | 'heading2' | 'heading3' | 'heading4' | 'heading5' | 'heading6'
+export type ParagraphStyleName =
+  'normal' | 'heading1' | 'heading2' | 'heading3' | 'heading4' | 'heading5' | 'heading6'
 
-export const PARAGRAPH_STYLES: ReadonlyArray<{ name: ParagraphStyleName; label: string; level: 0 | HeadingLevel }> = [
+export const PARAGRAPH_STYLES: ReadonlyArray<{
+  name: ParagraphStyleName
+  label: string
+  level: 0 | HeadingLevel
+}> = [
   { name: 'normal', label: 'Texto normal', level: 0 },
   { name: 'heading1', label: 'Título 1', level: 1 },
   { name: 'heading2', label: 'Título 2', level: 2 },
@@ -102,6 +121,7 @@ export const SHORTCUTS: ReadonlyArray<{ label: string; keys: string }> = [
   { label: 'Aumentar / Diminuir recuo', keys: '⌘] / ⌘[' },
   { label: 'Inserir link', keys: '⌘K' },
   { label: 'Nota de rodapé', keys: '⌥⌘F' },
+  { label: 'Citação / Anotação', keys: '⇧⌘B / ⇧⌘A' },
   { label: 'Sobrescrito / Subscrito', keys: '⌘. / ⌘,' },
   { label: 'Aumentar / Diminuir fonte', keys: '⇧⌘. / ⇧⌘,' },
   { label: 'Copiar / Colar formatação', keys: '⌥⌘C / ⌥⌘V' },
@@ -140,24 +160,47 @@ export const MANUSCRIPT_EDITOR_CSS = `
 .manuscript-editor h5 { font-size: ${HEADING_FONT_SIZES_PT[5]}pt; }
 .manuscript-editor h6 { font-size: ${HEADING_FONT_SIZES_PT[6]}pt; font-style: italic; }
 .manuscript-editor blockquote {
-  position: relative;
   margin: ${QUOTE_SPACE_BEFORE_PT}pt ${QUOTE_INDENT_END_PT}pt ${QUOTE_SPACE_AFTER_PT}pt 0;
   padding: 5px 0 5px ${QUOTE_INDENT_PT}pt;
+  border-left: 2px solid var(--accent, #2e7a51);
+  border-radius: 4px;
   color: var(--manuscript-quote-ink, ${QUOTE_INK_COLOR});
   background: var(--manuscript-quote-paper, ${QUOTE_BLOCK_COLOR});
-  border-radius: 6px;
+  font-family: var(--font-serif, Georgia, 'Times New Roman', serif);
+  font-style: italic;
 }
-.manuscript-editor blockquote::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 1.5px;
-  background: var(--manuscript-quote-bar, ${QUOTE_BAR_COLOR});
+/* Na prosa citada em itálico, a ênfase volta ao redondo para continuar visível. */
+.manuscript-editor blockquote:not([data-kind="poem"]) em { font-style: normal; }
+/* Poema ou hino: versos sem itálico; a linha que quebra recua (recuo pendente por parágrafo). */
+.manuscript-editor blockquote[data-kind="poem"] {
+  border-left-width: 1px;
+  font-style: normal;
+  white-space: pre-wrap;
 }
+.manuscript-editor blockquote[data-kind="poem"] p { padding-left: 1.5em; text-indent: -1.5em; }
 .manuscript-editor p[data-attribution] { font-size: 0.92em; opacity: 0.85; }
+/* Anotação: nota do pregador para si; aparte discreto, fora do texto falado e das exportações. */
+.manuscript-editor aside.manuscript-annotation {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--annotation-ink, #8f5a12);
+  border-radius: 6px;
+  background: rgba(201, 141, 42, 0.08);
+  color: var(--annotation-text, #5c4a28);
+  font-family: var(--font-ui, system-ui, sans-serif);
+  font-size: 0.86em;
+  line-height: 1.5;
+}
+.manuscript-editor aside.manuscript-annotation::before {
+  content: 'Anotação';
+  display: block;
+  margin-bottom: 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--annotation-ink, #8f5a12);
+}
 .manuscript-editor ul, .manuscript-editor ol { margin: 0; padding-left: ${INDENT_STEP_PT}pt; }
 .manuscript-editor ul[data-type="taskList"] { list-style: none; padding-left: 4pt; }
 .manuscript-editor ul[data-type="taskList"] li { display: flex; gap: 6pt; align-items: baseline; }

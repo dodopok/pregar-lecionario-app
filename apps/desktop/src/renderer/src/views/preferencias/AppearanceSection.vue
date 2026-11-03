@@ -2,6 +2,7 @@
 /** Aparência: automático, claro ou escuro para todas as janelas; o acento segue a cor litúrgica. */
 import { computed } from 'vue'
 import { Monitor, Moon, Sun } from 'lucide-vue-next'
+import { TEXT_SCALES } from '@shared/settings'
 import type { AppearanceMode } from '@shared/settings'
 import { normalizeLiturgicalColor } from '@pregar/core/liturgy/types'
 import { useAppStore } from '@/stores/app'
@@ -30,6 +31,10 @@ const colorName = computed(() => COLOR_NAMES[normalizeLiturgicalColor(app.settin
 
 function choose(mode: AppearanceMode): void {
   void app.updateSettings({ appearance: mode })
+}
+
+function chooseScale(value: number): void {
+  void app.updateSettings({ textScale: value })
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -72,6 +77,25 @@ function onKeydown(event: KeyboardEvent): void {
         </span>
       </PrefRow>
     </PrefGroup>
+    <PrefGroup label="Texto da interface">
+      <PrefRow label="Tamanho" top hint="Vale para menus, painéis e leituras em todas as janelas. O manuscrito tem o próprio tamanho na barra do editor.">
+        <div class="modes" role="radiogroup" aria-label="Tamanho do texto da interface">
+          <button
+            v-for="scale in TEXT_SCALES"
+            :key="scale.value"
+            type="button"
+            role="radio"
+            class="mode"
+            :class="{ 'mode--active': app.settings.textScale === scale.value }"
+            :aria-checked="app.settings.textScale === scale.value"
+            @click="chooseScale(scale.value)"
+          >
+            {{ scale.label }} <span class="mode__pct">{{ Math.round(scale.value * 100) }}%</span>
+          </button>
+        </div>
+        <p class="sample" :style="{ fontSize: `${13 * app.settings.textScale}px` }">Assim fica o texto dos painéis e das leituras.</p>
+      </PrefRow>
+    </PrefGroup>
     <p class="help">A aparência vale para todas as janelas e folhas. “Automático” acompanha o ajuste do sistema.</p>
   </div>
 </template>
@@ -79,7 +103,21 @@ function onKeydown(event: KeyboardEvent): void {
 <style scoped>
 .modes {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+}
+.mode__pct {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--muted);
+}
+.sample {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  background: var(--paper);
+  line-height: 1.45;
 }
 .mode {
   display: inline-flex;
@@ -98,7 +136,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 .mode--active,
 .mode--active:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
   background: var(--accent-soft);
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);

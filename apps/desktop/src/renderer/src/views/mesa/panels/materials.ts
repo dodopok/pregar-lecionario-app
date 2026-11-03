@@ -12,6 +12,7 @@ import type {
 } from '@pregar/core/sources'
 import type { ReaderTab, ReaderTabKind } from '@pregar/core/reader'
 import type { LibrarySectionMatch } from '@shared/ipc-library'
+import type { RelatedSermon } from '@shared/types'
 
 export type MaterialFilter = 'all' | 'library' | 'sites'
 export type MatchGroupId = 'exact' | 'partial' | 'context'
@@ -340,4 +341,53 @@ export function findReaderTab(
 
 export function totalItems(groups: readonly MaterialGroup[]): number {
   return groups.reduce((sum, group) => sum + group.items.length, 0)
+}
+
+/** "PT", "EN", "ES"… a partir do idioma declarado da fonte; nulo quando não se sabe. */
+export function languageTag(language: string | null | undefined): string | null {
+  const value = (language ?? '').trim().toLowerCase()
+  if (!value) return null
+  if (/^(pt|por|portugu)/.test(value)) return 'PT'
+  if (/^(en|ing|engl)/.test(value)) return 'EN'
+  if (/^(es|esp|spa)/.test(value)) return 'ES'
+  if (/^(fr|fra|fre)/.test(value)) return 'FR'
+  if (/^(de|ale|ger|deu)/.test(value)) return 'DE'
+  if (/^(it|ita)/.test(value)) return 'IT'
+  if (/^(la|lat)/.test(value)) return 'LA'
+  if (/^(el|gr|gre)/.test(value)) return 'GR'
+  return value.slice(0, 2).toUpperCase()
+}
+
+/** Verdadeiro quando a fonte se declara em português (ou não declara idioma). */
+export function isPortugueseOrUnknown(language: string | null | undefined): boolean {
+  const tag = languageTag(language)
+  return tag === null || tag === 'PT'
+}
+
+/** Como a preparação antiga se liga ao dia aberto, em palavras. */
+export function relatedRelationLabel(item: Pick<RelatedSermon, 'relation' | 'relationKind'>): string {
+  if (item.relation === 'occasion') return 'mesma ocasião'
+  switch (item.relationKind) {
+    case 'exact':
+      return 'mesma passagem'
+    case 'contains':
+      return 'passagem maior'
+    case 'partial':
+      return 'trecho em comum'
+    default:
+      return 'mesmo capítulo'
+  }
+}
+
+/** "12/11/2023 · Próprio 27 · 1.240 palavras". */
+export function relatedMetaLine(
+  item: Pick<RelatedSermon, 'dateKey' | 'liturgicalOccasion' | 'wordCount'>,
+): string {
+  const [year, month, day] = item.dateKey.split('-')
+  const date = day && month && year ? `${day}/${month}/${year}` : item.dateKey
+  return joinParts([
+    date,
+    item.liturgicalOccasion,
+    item.wordCount > 0 ? `${item.wordCount.toLocaleString('pt-BR')} palavras` : null,
+  ])
 }

@@ -23,12 +23,14 @@ export class LiturgicalAPIError extends Error {
 }
 
 /**
- * Como a requisição chega à Estêvão API: direto com a chave do usuário (plano gratuito)
- * ou pelo proxy da API do Pregar, que acrescenta a chave do servidor (assinantes).
+ * Como a requisição chega à Estêvão API: direto com a chave do usuário (plano gratuito),
+ * pelo proxy da API do Pregar, que acrescenta a chave do servidor (assinantes), ou pela
+ * degustação pública da API do Pregar, sem conta e limitada às próximas semanas.
  */
 export type LiturgicalTransport =
   | { kind: 'direct'; apiKey: string; baseURL?: string }
   | { kind: 'proxy'; baseURL: string; sessionToken: string }
+  | { kind: 'preview'; baseURL: string }
 
 export interface LiturgicalClientOptions {
   http: HttpContext
@@ -76,6 +78,35 @@ export const ESTEVAO_ALLOWED_QUERY = new Set([
   'text_format',
 ])
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Dias já passados que a degustação ainda mostra (o domingo que acabou de passar). */
+export const PREVIEW_PAST_DAYS = 7
+
+/** Chaves yyyy-MM-dd do primeiro e do último dia que a degustação alcança. */
+export interface PreviewWindow {
+  from: string
+  to: string
+}
+
+/** Resposta de GET /v1/public/preview da API do Pregar: se a degustação está ligada e quais datas alcança. */
+export interface PreviewStatus {
+  enabled: boolean
+  days: number
+  from: string | null
+  to: string | null
+}
+
+/**
+ * Janela da degustação: de PREVIEW_PAST_DAYS dias atrás até `days` dias à frente. Conta em dias UTC,
+ * como o servidor aplica, para que app e API cheguem às mesmas datas.
+ */
+export function previewWindow(now: Date, days: number): PreviewWindow {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const key = (time: number) => new Date(time).toISOString().slice(0, 10)
+  return { from: key(today - PREVIEW_PAST_DAYS * DAY_MS), to: key(today + days * DAY_MS) }
+}
+
 export class LiturgicalClient {
   constructor(private readonly options: LiturgicalClientOptions) {}
 
@@ -85,9 +116,10 @@ export class LiturgicalClient {
     if (transport.kind === 'direct') {
       url = new URL(path, transport.baseURL ?? ESTEVAO_API_BASE_URL)
     } else {
-      // O proxy espelha os caminhos v2 sob /v1/estevao.
+      // A API do Pregar espelha os caminhos v2: /v1/estevao (assinantes) e /v1/public/estevao (degustação).
       const base = transport.baseURL.replace(/\/+$/, '')
-      url = new URL(`${base}/v1/estevao${path.replace(/^\/api\/v2/, '')}`)
+      const prefix = transport.kind === 'proxy' ? '/v1/estevao' : '/v1/public/estevao'
+      url = new URL(`${base}${prefix}${path.replace(/^\/api\/v2/, '')}`)
     }
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined && value !== '') url.searchParams.set(key, value)
@@ -101,26 +133,36 @@ export class LiturgicalClient {
     const headers: Record<string, string> = { Accept: 'application/json, application/problem+json' }
     if (transport.kind === 'direct') {
       if (!transport.apiKey) {
-        throw new LiturgicalAPIError('Salve a chave da Estêvão API nas Preferências para carregar o calendário.')
+        throw new LiturgicalAPIError(
+          'Salve a chave da Estêvão API nas Preferências para carregar o calendário.',
+        )
       }
       headers['X-API-Key'] = transport.apiKey
-    } else {
+    } else if (transport.kind === 'proxy') {
       headers.Authorization = `Bearer ${transport.sessionToken}`
     }
+    // A degustação não leva credencial: o servidor limita por endereço IP e por janela de datas.
     const response = await loggedRequest(
       this.options.http,
       url,
       { method: 'GET', headers },
-      { integration: transport.kind === 'direct' ? 'Estêvão API' : 'Pregar API', operation: 'consulta', timeoutMs: 30_000 },
+      {
+        integration: transport.kind === 'direct' ? 'Estêvão API' : 'Pregar API',
+        operation: 'consulta',
+        timeoutMs: 30_000,
+      },
     )
     if (!response.ok) {
-      const problem = tryParseJSON<{ detail?: string; code?: string; error?: { message?: string; code?: string } }>(
-        response.text(),
-      )
+      const problem = tryParseJSON<{
+        detail?: string
+        code?: string
+        error?: { message?: string; code?: string }
+      }>(response.text())
       let detail = problem?.detail ?? problem?.error?.message
       if (!detail) {
         if (response.status === 404) {
-          detail = 'A rota da API v2 não foi encontrada neste endereço. Confira se a v2 está publicada no servidor.'
+          detail =
+            'A rota da API v2 não foi encontrada neste endereço. Confira se a v2 está publicada no servidor.'
         } else if (response.status === 401) {
           detail = 'A chave da Estêvão API foi recusada.'
         } else if (response.status === 429) {
@@ -130,7 +172,11 @@ export class LiturgicalClient {
         }
       }
       const code = problem?.code ?? problem?.error?.code
-      throw new LiturgicalAPIError(`${detail} (HTTP ${response.status}${code ? `, ${code}` : ''}).`, response.status, code)
+      throw new LiturgicalAPIError(
+        `${detail} (HTTP ${response.status}${code ? `, ${code}` : ''}).`,
+        response.status,
+        code,
+      )
     }
     const json = tryParseJSON<{ data?: unknown }>(response.text())
     if (!json || json.data === undefined) {
@@ -184,5 +230,32 @@ export class LiturgicalClient {
       'fields[prayer_book]':
         'code,name,description,language,jurisdiction,year,is_recommended,image_url,thumbnail_url',
     })
+  }
+}
+
+/** Consulta se a API do Pregar oferece a degustação (leituras sem conta) e quais datas ela alcança. */
+export async function fetchPreviewStatus(http: HttpContext, baseURL: string): Promise<PreviewStatus> {
+  const url = new URL(`${baseURL.replace(/\/+$/, '')}/v1/public/preview`)
+  const response = await loggedRequest(
+    http,
+    url,
+    { method: 'GET', headers: { Accept: 'application/json' } },
+    { integration: 'Pregar API', operation: 'degustação', timeoutMs: 15_000 },
+  )
+  if (!response.ok) {
+    throw new LiturgicalAPIError(
+      `A API do Pregar não informou a degustação (HTTP ${response.status}).`,
+      response.status,
+    )
+  }
+  const json = tryParseJSON<Partial<PreviewStatus>>(response.text())
+  if (!json || typeof json.enabled !== 'boolean') {
+    throw new LiturgicalAPIError('A resposta da API do Pregar não corresponde ao formato esperado.')
+  }
+  return {
+    enabled: json.enabled,
+    days: typeof json.days === 'number' ? json.days : 0,
+    from: typeof json.from === 'string' ? json.from : null,
+    to: typeof json.to === 'string' ? json.to : null,
   }
 }

@@ -100,7 +100,7 @@ describe('atalhos e comandos', () => {
     expect(SHORTCUT_TABLES.map((table) => table.title)).toEqual(['Escrita', 'Preparação', 'Leitor'])
     expect(SHORTCUT_TABLES[1]!.rows.at(-1)).toEqual({
       keys: '⇧⌥⌘R · ⇧⌥⌘E · ⇧⌘T · ⇧⌥⌘H',
-      action: 'Revisar · Ensaio · Tablet · Histórico de versões',
+      action: 'Revisar · Ensaio · Levar para o púlpito · Histórico de versões',
     })
   })
 

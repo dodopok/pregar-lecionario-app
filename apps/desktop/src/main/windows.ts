@@ -35,8 +35,19 @@ export class WindowManager {
   private readonly pendingClose = new Map<number, () => void>()
   /** O app está saindo: depois de salvar, a saída interrompida é retomada. */
   quitting = false
+  /** Escala do texto da interface (Preferências › Aparência e texto), aplicada como zoom da página. */
+  private textScale = 1
 
   constructor(private readonly bounds: KeyValueStore) {}
+
+  /** Aplica a escala do texto a todas as janelas abertas e às que ainda vão abrir. */
+  applyTextScale(scale: number): void {
+    const next = Number.isFinite(scale) && scale >= 0.8 && scale <= 1.6 ? scale : 1
+    this.textScale = next
+    for (const window of this.all()) {
+      if (window.webContents.getZoomFactor() !== next) window.webContents.setZoomFactor(next)
+    }
+  }
 
   setCloseGuard(contents: Electron.WebContents, enabled: boolean): void {
     if (enabled) this.closeGuarded.add(contents.id)
@@ -108,6 +119,9 @@ export class WindowManager {
     })
     this.windows.set(kind, window)
     window.once('ready-to-show', () => window.show())
+    window.webContents.on('did-finish-load', () => {
+      if (window.webContents.getZoomFactor() !== this.textScale) window.webContents.setZoomFactor(this.textScale)
+    })
     window.webContents.on('context-menu', (_event, params) => {
       // Sugestões de ortografia e edição básica, que o Electron não oferece por padrão.
       const items: MenuItemConstructorOptions[] = []

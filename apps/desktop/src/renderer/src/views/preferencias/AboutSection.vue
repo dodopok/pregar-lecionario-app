@@ -14,6 +14,7 @@ import { useToasts } from '@/stores/toasts'
 import PrefGroup from './ui/PrefGroup.vue'
 import PrefRow from './ui/PrefRow.vue'
 import Notice from './ui/Notice.vue'
+import LogsSection from './LogsSection.vue'
 import { openExternal } from './composables'
 import { normalizeApiBaseURL, validateApiBaseURL } from './format'
 
@@ -156,6 +157,13 @@ onBeforeUnmount(() => unsubscribe?.())
         </div>
       </div>
     </PrefGroup>
+
+    <details class="advanced">
+      <summary>Registros para o suporte</summary>
+      <div class="advanced__body">
+        <LogsSection />
+      </div>
+    </details>
 
     <details class="advanced">
       <summary>Avançado</summary>

@@ -31,6 +31,16 @@
   --accent-contrast: rgb(255 255 255);
   --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
   --accent-softer: color-mix(in srgb, var(--accent) 8%, transparent);
+  /* Texto na cor do acento sobre fundos tingidos (contraste ≥ 4,5:1 sobre --accent-soft). */
+  --accent-ink: color-mix(in srgb, var(--accent) 72%, var(--ink));
+  /* Texto de aviso legível sobre papel e sobre fundos âmbar. */
+  --warning-ink: rgb(143 90 18);
+  --warning-soft: rgb(184 112 20 / 0.1);
+  /* Texto secundário que ainda passa no contraste mínimo em papel. */
+  --ink-soft: rgb(74 72 67);
+  /* Anotações do pregador no manuscrito (âmbar discreto). */
+  --annotation-ink: rgb(143 90 18);
+  --annotation-text: rgb(92 74 40);
 
   --space-xs: 4px;
   --space-sm: 8px;
@@ -45,10 +55,20 @@
   --radius-sheet: 12px;
 
   --header-height: 52px;
+  --mesa-header-height: 60px;
+  --rail-width: 64px;
   --icon-button: 34px;
   --control: 28px;
   --control-compact: 24px;
   --window-controls-inset: 0px;
+
+  /* Escala tipográfica mínima da interface: nada abaixo de 11 px. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-title: 18px;
 
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-serif: 'Iowan Old Style', 'New York', Charter, 'Bitstream Charter', Georgia, 'Times New Roman', serif;
@@ -87,6 +107,12 @@
     --doc-border: rgb(231 234 239 / 0.14);
 
     --accent-contrast: rgb(20 20 18);
+    --accent-ink: color-mix(in srgb, var(--accent) 80%, white);
+    --warning-ink: rgb(237 180 106);
+    --warning-soft: rgb(237 168 77 / 0.14);
+    --ink-soft: rgb(200 197 189);
+    --annotation-ink: rgb(237 180 106);
+    --annotation-text: rgb(226 214 190);
     --shadow-sheet: 0 18px 48px rgb(0 0 0 / 0.5), 0 2px 8px rgb(0 0 0 / 0.3);
   }
 }

@@ -1,4 +1,4 @@
-import { addDays, dateKey, monthNamePt, nextSunday, parseDateKey, startOfDay } from '@pregar/core/util/dates'
+import { addDays, dateKey, daysBetween, monthNamePt, nextPreachingDay, parseDateKey } from '@pregar/core/util/dates'
 import type { SermonPreparationState } from '@shared/types'
 
 export const WEEKDAY_INITIALS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
@@ -50,16 +50,26 @@ export function shiftDays(key: string, days: number): string {
   return dateKey(addDays(date, days))
 }
 
-/** Ritmo da semana do workshop: contagem regressiva e orientação para o próximo domingo. */
-export function weekRhythm(today: Date, state: SermonPreparationState): { sunday: string; countdown: string; guidance: string } {
-  const sunday = nextSunday(today)
-  const days = Math.round((startOfDay(sunday).getTime() - startOfDay(today).getTime()) / 86_400_000)
+/** Dicas da semana por distância do dia de pregar (Preferências › Ritmo e duração › dicas da semana). */
+export function weekGuidance(days: number, state: SermonPreparationState): string {
+  if (state === 'exported') return 'Folha pronta. Releia com calma e descanse.'
+  if (days === 0) return 'Dia de pregar: caminhe tranquilamente pelo texto.'
+  if (days === 1) return 'Véspera: revise e prepare a folha do púlpito.'
+  if (days >= 2 && days <= 4) return 'Hora de escrever, com o texto já ruminado.'
+  return 'Semana de releitura: leia e releia os textos do dia.'
+}
+
+/**
+ * Ritmo da semana: próximo dia de pregar (conforme as Preferências), contagem regressiva e orientação.
+ * Sem dias configurados, vale o domingo.
+ */
+export function weekRhythm(
+  today: Date,
+  state: SermonPreparationState,
+  weekdays: readonly number[] = [0],
+): { sunday: string; days: number; countdown: string; guidance: string } {
+  const next = nextPreachingDay(today, weekdays)
+  const days = daysBetween(today, next)
   const countdown = days === 0 ? 'É hoje' : days === 1 ? 'Falta 1 dia' : `Faltam ${days} dias`
-  let guidance: string
-  if (state === 'exported') guidance = 'Cópia pronta. Releia com calma e descanse.'
-  else if (days === 0) guidance = 'Dia de pregar: caminhe tranquilamente pelo texto.'
-  else if (days === 1) guidance = 'Véspera: revise e prepare a cópia para o tablet.'
-  else if (days >= 2 && days <= 4) guidance = 'Hora de escrever, com o texto já ruminado.'
-  else guidance = 'Semana de releitura: leia e releia os textos do domingo.'
-  return { sunday: dateKey(sunday), countdown, guidance }
+  return { sunday: dateKey(next), days, countdown, guidance: weekGuidance(days, state) }
 }

@@ -38,6 +38,28 @@ export function nextSunday(date: Date): Date {
   return addDays(day, (7 - day.getDay()) % 7)
 }
 
+/**
+ * Próximo dia de pregação a partir de `date` (o próprio dia conta), dado o conjunto de dias da semana
+ * em que a pessoa prega (0 = domingo). Sem dias válidos, vale o domingo.
+ */
+export function nextPreachingDay(date: Date, weekdays: readonly number[]): Date {
+  const valid = new Set(weekdays.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))
+  if (valid.size === 0) return nextSunday(date)
+  const day = startOfDay(date)
+  for (let offset = 0; offset < 7; offset += 1) {
+    const candidate = addDays(day, offset)
+    if (valid.has(candidate.getDay())) return candidate
+  }
+  return nextSunday(date)
+}
+
+/** Dias que faltam de `from` até `to` (0 no mesmo dia; negativo se `to` já passou). */
+export function daysBetween(from: Date, to: Date): number {
+  const a = startOfDay(from).getTime()
+  const b = startOfDay(to).getTime()
+  return Math.round((b - a) / 86_400_000)
+}
+
 const MONTHS_PT = [
   'janeiro',
   'fevereiro',

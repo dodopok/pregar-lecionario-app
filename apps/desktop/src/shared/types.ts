@@ -70,6 +70,15 @@ export interface SermonSummary {
 
 export type ArchiveSearchMode = 'passage' | 'occasion' | 'date' | 'text'
 
+/** Preparação anterior relacionada com o dia aberto ("Já preguei sobre isto"). */
+export interface RelatedSermon extends SermonSummary {
+  relation: 'passage' | 'occasion'
+  /** Como a passagem principal daquela preparação se relaciona com a leitura do dia. */
+  relationKind: 'exact' | 'contains' | 'partial' | 'context' | null
+  /** Leitura do dia com a qual a preparação casou. */
+  matchedReference: string | null
+}
+
 export interface PregarAPIErrorInfo {
   code: string
   message: string

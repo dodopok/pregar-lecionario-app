@@ -1,14 +1,14 @@
 import type { Component } from 'vue'
-import { Cloud, Contrast, FileSearch, Globe, Info, Library, Network, Sparkles, Tablet, UserRound } from 'lucide-vue-next'
+import { Church, Cloud, Contrast, Globe, Info, Library, Network, Sparkles, Timer, UserRound } from 'lucide-vue-next'
 import AccountSection from './AccountSection.vue'
 import EstevaoSection from './EstevaoSection.vue'
 import AISection from './AISection.vue'
 import AppearanceSection from './AppearanceSection.vue'
 import TabletSection from './TabletSection.vue'
+import RhythmSection from './RhythmSection.vue'
 import DriveSection from './DriveSection.vue'
 import LibrarySection from './LibrarySection.vue'
 import SourcesSection from './SourcesSection.vue'
-import LogsSection from './LogsSection.vue'
 import AboutSection from './AboutSection.vue'
 
 export type PreferencesSectionId =
@@ -16,11 +16,11 @@ export type PreferencesSectionId =
   | 'estevao'
   | 'ia'
   | 'aparencia'
-  | 'tablet'
+  | 'ritmo'
+  | 'pulpito'
   | 'drive'
   | 'biblioteca'
   | 'fontes'
-  | 'registros'
   | 'sobre'
 
 export interface PreferencesSection {
@@ -44,34 +44,42 @@ export const PREFERENCES_SECTIONS: readonly PreferencesSection[] = [
   },
   {
     id: 'estevao',
-    title: 'Estêvão API',
-    subtitle: 'A conexão usa sempre a Estêvão API v2.',
+    title: 'Leituras e calendário',
+    subtitle: 'De onde vêm as leituras: assinatura, chave própria da Estêvão API ou degustação.',
     footer: 'A chave fica salva no cofre de senhas deste computador.',
     icon: Network,
     component: EstevaoSection,
   },
   {
     id: 'ia',
-    title: 'Inteligência artificial',
-    subtitle: 'Pela assinatura do Pregar ou por provedores externos com suas próprias chaves.',
+    title: 'Revisão e pesquisa',
+    subtitle: 'A revisão por IA e a pesquisa de materiais: pela assinatura ou com as suas chaves.',
     footer: 'Credenciais no cofre de senhas; preferências neste computador.',
     icon: Sparkles,
     component: AISection,
   },
   {
+    id: 'ritmo',
+    title: 'Ritmo e duração',
+    subtitle: 'O dia em que prega, a meta de minutos e o seu ritmo de fala.',
+    footer: 'As estimativas da Mesa e do Ensaio usam estes valores.',
+    icon: Timer,
+    component: RhythmSection,
+  },
+  {
     id: 'aparencia',
-    title: 'Aparência',
-    subtitle: 'Claro, escuro ou automático.',
+    title: 'Aparência e texto',
+    subtitle: 'Claro, escuro ou automático, e o tamanho do texto da interface.',
     footer: 'Preferência salva neste computador.',
     icon: Contrast,
     component: AppearanceSection,
   },
   {
-    id: 'tablet',
-    title: 'Tablet',
-    subtitle: 'Formato de leitura no tablet.',
-    footer: 'Preferências locais de leitura no tablet.',
-    icon: Tablet,
+    id: 'pulpito',
+    title: 'Levar para o púlpito',
+    subtitle: 'Tipografia da folha impressa ou em PDF, notas e pasta.',
+    footer: 'Preferências locais da folha do púlpito.',
+    icon: Church,
     component: TabletSection,
   },
   {
@@ -99,17 +107,9 @@ export const PREFERENCES_SECTIONS: readonly PreferencesSection[] = [
     component: SourcesSection,
   },
   {
-    id: 'registros',
-    title: 'Registros',
-    subtitle: 'Registro das chamadas externas, para diagnosticar erros.',
-    footer: 'O registro fica neste computador, sem chaves nem manuscrito.',
-    icon: FileSearch,
-    component: LogsSection,
-  },
-  {
     id: 'sobre',
     title: 'Sobre',
-    subtitle: 'Versão, atualizações e privacidade.',
+    subtitle: 'Versão, atualizações, privacidade e os registros para o suporte.',
     footer: 'Pregar · Caminho Anglicano',
     icon: Info,
     component: AboutSection,
@@ -125,10 +125,14 @@ const ALIASES: Record<string, PreferencesSectionId> = {
   'inteligencia-artificial': 'ia',
   ai: 'ia',
   appearance: 'aparencia',
+  tablet: 'pulpito',
+  pulpit: 'pulpito',
+  rhythm: 'ritmo',
+  registros: 'sobre',
   library: 'biblioteca',
   backup: 'biblioteca',
   sources: 'fontes',
-  logs: 'registros',
+  logs: 'sobre',
   about: 'sobre',
 }
 

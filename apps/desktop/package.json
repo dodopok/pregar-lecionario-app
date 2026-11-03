@@ -33,6 +33,7 @@
     "electron-updater": "^6.8.11",
     "electron-vite": "^6.0.0",
     "lucide-vue-next": "^1.0.0",
+    "mammoth": "^1.11.0",
     "pdfjs-dist": "^6.4.299",
     "pinia": "^3.0.4",
     "tesseract.js": "^7.0.0",

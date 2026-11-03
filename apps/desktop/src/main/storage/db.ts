@@ -38,6 +38,19 @@ const MIGRATIONS: string[] = [
    create index sermon_revisions_date on sermon_revisions(date_key, version);
    create table review_reports (date_key text primary key, payload text not null, updated_at text not null);
    create table kv (namespace text not null, key text not null, value text not null, expires_at integer, primary key (namespace, key));`,
+  // Ideias locais (antes só existiam no documento do Google Drive).
+  `create table ideas (
+     id text primary key,
+     text text not null,
+     date_key text,
+     reference text,
+     source text not null default 'local',
+     source_title text,
+     done integer not null default 0,
+     created_at text not null,
+     modified_at text not null
+   );
+   create index ideas_date on ideas(date_key, created_at);`,
 ]
 
 export class LocalDatabase {

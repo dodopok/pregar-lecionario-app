@@ -63,6 +63,16 @@ export function startFakeAPI() {
       }
       const auth = request.headers.authorization === 'Bearer prg_token_de_teste_valido_123456'
       const path = url.pathname
+      // Degustação pública (sem conta): estado e leituras de uma janela de datas.
+      if (path === '/v1/public/preview') {
+        const today = new Date()
+        const from = new Date(today)
+        from.setDate(today.getDate() - 7)
+        const to = new Date(today)
+        to.setDate(today.getDate() + 35)
+        return send(200, { enabled: true, days: 35, from: key(from), to: key(to) })
+      }
+      if (path.startsWith('/v1/public/estevao/days/')) return send(200, { data: day(path.split('/').at(-1)) })
       if (path === '/v1/auth/start') return send(202, { ok: true, expiresInMinutes: 10 })
       if (path === '/v1/auth/verify') return send(200, { token: 'prg_token_de_teste_valido_123456', sessionId: 'x', user: account.user })
       if (!auth && !path.startsWith('/v1/billing/plans')) return send(401, { error: { code: 'unauthorized', message: 'Entre na sua conta para continuar.' } })

@@ -1,6 +1,27 @@
 # Progresso de implementação
 
-Atualizado em 1º de novembro de 2026.
+Atualizado em 3 de novembro de 2026.
+
+## Estudo de UX do primeiro uso (3 de novembro de 2026)
+
+O estudo de usabilidade para quem nunca usou o Pregar (documento, 15 telas desenhadas e PDF entregues ao usuário) foi implementado na branch `feat/ux-primeiro-uso`. O que mudou:
+
+- **Mesa.** Trilho à esquerda com as áreas do app, o estado da conexão, ajuda e Preferências (largo a partir de 1100 px, só ícones abaixo). Cabeçalho único: botão de data (abre o calendário atracado ou em popover), nome do dia com Próprio, ciclo e cor, chip do texto principal (troca por menu), Ensaio, Levar ao púlpito, Foco, Revisar com IA e o menu Mais. O layout por largura (`mesa-layout.ts`, com testes) atraca o calendário só a partir de 1280 px e transforma os materiais em gaveta quando leituras e materiais não cabem juntos; os botões nunca quebram linha. A Mesa abre no próximo dia de pregar (ou na última preparação aberta).
+- **Leituras.** Todas abertas com o texto inteiro, ou só a principal; chips de navegação que acompanham a rolagem; botão explícito "Usar como texto principal" e selo no texto escolhido; salmos com recuo pendente; "Comparar traduções" e "Capítulo inteiro"; leitura em tela cheia com índice, tamanho do texto, tradução e impressão (⇧⌥⌘L). Aviso de degustação com a janela de datas e a folha Conectar.
+- **Editor.** Barra curta (desfazer, estilo, negrito/itálico/sublinhado, citação com a opção de poema, listas, anotação, nota e link) e o menu Mais com fonte, cores, alinhamento, entrelinha, recuo e tamanho na tela (padrão 120 %). Nó de **anotação** (`aside[data-annotation]`, ⇧⌘A) fora da contagem de palavras, das exportações, do ensaio e do púlpito; citações `kind: quote | poem`; CSS do manuscrito com o acento litúrgico.
+- **Materiais, ideias e revisão.** "Já preguei sobre isto" (`sermons:related`: mesma passagem em qualquer leitura do dia, ou a mesma ocasião), chips de idioma nos cartões e filtro "Em português". Ideias guardadas no banco local (`ideas`, migração 2, canais `ideas:*`, atalho ⇧⌘I), com captura rápida, filtros, inserir no manuscrito e marcar como usada; o documento de ideias do Drive virou opcional e pode ser trazido para cá. As ideias entram no backup pelo bloco de preferências.
+- **Ensaio e púlpito.** Ensaio em tela cheia com cronômetro, rolagem automática no ritmo estimado, marcas por título e medição do ritmo real ("Cheguei ao fim"), que atualiza Preferências › Ritmo. A folha "Levar para o púlpito" reúne Imprimir direto (`tablet:print`, diálogo do sistema), PDF, Google Doc e texto simples (`tablet:saveText`), com a duração contra a meta.
+- **Primeiro uso.** Tour de cinco passos sobre as regiões reais da Mesa (`TourOverlay`), folha Conectar (antiga folha de boas-vindas, agora aberta pelo trilho, pelo fim do tour ou por uma ação que exige conta) e modo de acesso `preview`: sem conta nem chave, o app consulta `GET /v1/public/preview` e busca as leituras em `/v1/public/estevao/*` dentro da janela permitida.
+- **Calendário.** Dias de pregar destacados, Hoje e Próximo domingo, "Próximas celebrações" com cor litúrgica e estado por extenso, cartão do ritmo da semana compacto e desligável.
+- **Preferências.** Seções renomeadas (Leituras e calendário, Revisão e pesquisa, Aparência e texto, Levar para o púlpito), nova seção Ritmo e duração (dia de pregar, dias extras, meta, ritmo, páginas, dicas da semana), tamanho do texto da interface (zoom da janela, 90 % a 140 %) e os registros dentro de Sobre.
+- **Arquivo.** Estado vazio que explica a tela e importação de sermões antigos (`.docx` com mammoth, `.rtf`, `.txt`, `.md`), com detecção de data, passagem e título (`packages/core/src/import`) e a folha de conferência antes de gravar.
+- **API.** `GET /v1/public/preview` e `GET /v1/public/estevao/days/:date` e `days?from&to` sem conta, limitadas a uma janela de datas e por IP (`ESTEVAO_PUBLIC_PREVIEW`, `ESTEVAO_PREVIEW_DAYS`, `LIMIT_ESTEVAO_PREVIEW_PER_MINUTE`); transporte `preview` no cliente do domínio.
+- **Tipografia e tokens.** Nada abaixo de 11 px na interface; `--accent-ink` e `--warning-ink` para texto sobre fundos tingidos; cursor de mão fora do macOS; chips, menus e rótulos de seção compartilhados em `base.css`.
+
+Verificado nesta etapa: 692 testes Vitest (core, editor e desktop; os da API precisam de PostgreSQL e não rodaram aqui), lint e tipos limpos, build do app e os cinco roteiros ponta a ponta no Linux (smoke com o tour, Mesa com leituras inteiras, tela cheia, ensaio, ideia local e janela de 1024 px, Preferências com o tour, a folha Conectar e as seções novas, Leitor e Biblioteca). Capturas em claro e escuro revisadas.
+
+Ficou de fora, por decisão: a preparação avulsa (sem data do lecionário, ou mais de uma por data) muda a chave de todos os registros e tocaria o calendário, o Arquivo, o histórico, o Drive e o backup; o desenho está no estudo e a importação já exige uma data para cada arquivo. O que depende de outros repositórios ou do usuário está em [pendencias-ux.md](pendencias-ux.md).
+
 
 ## Versão multiplataforma (Windows, macOS e Linux)
 

@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { Archive, CircleArrowRight, SearchX } from 'lucide-vue-next'
+import { Archive, CircleArrowRight, FileUp, SearchX } from 'lucide-vue-next'
+import { useRoute } from 'vue-router'
 import { countTabsMarkedForReview } from '@pregar/core/reader/model'
+import type { ImportCandidate } from '@shared/ipc-import'
 import type { ArchiveSearchMode, SermonSummary } from '@shared/types'
 import EmptyState from '@/components/EmptyState.vue'
+import PButton from '@/components/PButton.vue'
 import Segmented from '@/components/Segmented.vue'
 import Spinner from '@/components/Spinner.vue'
 import WindowHeader from '@/components/WindowHeader.vue'
 import { errorMessage, invoke, on, platform } from '@/lib/api'
 import { useToasts } from '@/stores/toasts'
+import ImportSheet from './ImportSheet.vue'
 import {
   SEARCH_MODES,
   STATE_LABELS,
@@ -26,8 +30,12 @@ import {
 } from './archive-helpers'
 
 const toasts = useToasts()
+const route = useRoute()
 
 const all = ref<SermonSummary[]>([])
+const importCandidates = ref<ImportCandidate[] | null>(null)
+const picking = ref(false)
+const highlighted = ref<string | null>(null)
 const results = ref<SermonSummary[]>([])
 const loaded = ref(false)
 const searching = ref(false)
@@ -130,6 +138,48 @@ function materialsFor(row: SermonSummary): string {
   return count === undefined ? '…' : `${count} PDFs`
 }
 
+// MARK: Importação de sermões antigos
+
+async function pickImport(): Promise<void> {
+  if (picking.value) return
+  picking.value = true
+  try {
+    const candidates = await invoke('import:pick')
+    if (candidates.length === 0) return
+    importCandidates.value = candidates
+  } catch (error) {
+    toasts.show(errorMessage(error), 'error')
+  } finally {
+    picking.value = false
+  }
+}
+
+function onImportClosed(imported: number): void {
+  importCandidates.value = null
+  if (imported > 0) {
+    toasts.show(imported === 1 ? '1 preparação importada.' : `${imported} preparações importadas.`, 'success')
+    scheduleRefresh()
+  }
+}
+
+function openNextSunday(): void {
+  void invoke('app:openWindow', { window: 'mesa' })
+}
+
+/** `/arquivo?date=2023-11-12` (vindo da Mesa) destaca e rola até a preparação. */
+async function revealRequested(): Promise<void> {
+  const requested = typeof route.query.date === 'string' ? route.query.date : new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('date')
+  if (!requested) return
+  highlighted.value = requested
+  await nextTick()
+  const index = rows.value.findIndex((row) => row.dateKey === requested)
+  if (index < 0) return
+  activeIndex.value = index
+  const element = list.value?.querySelector<HTMLElement>(`[data-row="${index}"]`)
+  element?.scrollIntoView({ block: 'center' })
+  element?.focus()
+}
+
 // MARK: Abertura e teclado
 
 const list = ref<HTMLElement | null>(null)
@@ -202,12 +252,14 @@ onMounted(async () => {
   window.addEventListener('keydown', onGlobalKeydown)
   unsubscribe.push(
     on('sermon:changed', scheduleRefresh),
+    on('navigate', () => void nextTick(revealRequested)),
     on('library:changed', () => {
       materialCounts.clear()
       scheduleCounts()
     }),
   )
   await loadAll()
+  await revealRequested()
 })
 
 onBeforeUnmount(() => {
@@ -241,6 +293,9 @@ watch(rows, () => {
           />
           <Spinner v-if="searching" class="archive__spinner" :size="12" label="Buscando" />
         </div>
+        <PButton variant="primary" :busy="picking" title="Traz sermões em .docx, .rtf, .txt ou .md para o Arquivo" @click="pickImport">
+          <FileUp :size="14" aria-hidden="true" /> Importar sermões antigos…
+        </PButton>
       </template>
     </WindowHeader>
 
@@ -257,12 +312,31 @@ watch(rows, () => {
       </div>
 
       <div v-if="!loaded" class="archive__loading"><Spinner label="Carregando o Arquivo" /></div>
-      <EmptyState
-        v-else-if="all.length === 0"
-        :icon="Archive"
-        title="Arquivo vazio"
-        message="Cada data aberta na Mesa cria uma preparação; elas aparecem aqui com ocasião, passagem e materiais."
-      />
+      <section v-else-if="all.length === 0" class="start" aria-label="Comece o seu arquivo">
+        <div class="start__text">
+          <Archive :size="28" class="start__icon" aria-hidden="true" />
+          <h2 class="serif start__title">O seu arquivo começa aqui</h2>
+          <p class="start__lead">
+            Cada domingo aberto na Mesa vira uma preparação e aparece nesta lista com ocasião, passagem e materiais. Traga também o que você já
+            pregou: os sermões importados ganham data e passagem, e voltam a aparecer em <strong>“Já preguei sobre isto”</strong> quando a
+            mesma leitura chegar de novo.
+          </p>
+          <div class="start__actions">
+            <PButton variant="primary" :busy="picking" @click="pickImport"><FileUp :size="14" aria-hidden="true" /> Importar sermões antigos…</PButton>
+            <PButton @click="openNextSunday">Abrir o próximo domingo na Mesa</PButton>
+          </div>
+          <p class="start__note">
+            Aceita .docx, .rtf, .txt e .md, um arquivo ou uma pasta inteira. A data e a passagem são lidas do nome do arquivo e das primeiras linhas;
+            você confere antes de guardar. Nada sai do seu computador.
+          </p>
+        </div>
+        <div class="start__example" aria-hidden="true">
+          <p class="eyebrow start__example-label">Como fica depois da importação</p>
+          <div class="example-row"><span class="example-row__date">12/11/2023</span><span class="example-row__text"><span class="serif">As dez moças e a longa espera</span><span>Mateus 25:1-13 · Próprio 27, Ano A · lido do título</span></span><span class="example-row__ok">conferido</span></div>
+          <div class="example-row"><span class="example-row__date">09/11/2014</span><span class="example-row__text"><span class="serif">Vigiai, porque não sabeis o dia</span><span>Mateus 25:1-13 · passagem lida do texto</span></span><span class="example-row__ok">conferido</span></div>
+          <div class="example-row"><span class="example-row__date example-row__date--warn">sem data</span><span class="example-row__text"><span class="serif">Sermão casamento Ana e Pedro.docx</span><span>1 Coríntios 13 · você informa a data</span></span><span class="example-row__warn">confirmar data</span></div>
+        </div>
+      </section>
       <EmptyState
         v-else-if="hasQuery && !searching && results.length === 0"
         :icon="SearchX"
@@ -282,6 +356,7 @@ watch(rows, () => {
           <button
             type="button"
             class="archive-row"
+            :class="{ 'archive-row--highlighted': row.dateKey === highlighted }"
             :data-row="index"
             :tabindex="index === activeIndex ? 0 : -1"
             :aria-label="archiveRowLabel(row)"
@@ -328,6 +403,7 @@ watch(rows, () => {
       </ol>
       <span id="archive-row-hint" class="visually-hidden">Abre a preparação na Mesa</span>
     </div>
+    <ImportSheet v-if="importCandidates" :candidates="importCandidates" @close="onImportClosed" />
   </div>
 </template>
 
@@ -378,7 +454,7 @@ watch(rows, () => {
   height: 34px;
   align-items: center;
   border-bottom: 1px solid var(--line);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -398,6 +474,107 @@ watch(rows, () => {
 .archive__table > :deep(.empty) {
   flex: 1;
   justify-content: center;
+}
+.start {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 32px;
+  padding: 36px 40px;
+  align-items: start;
+  overflow: auto;
+}
+.start__text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 480px;
+}
+.start__icon {
+  color: var(--muted);
+  opacity: 0.8;
+}
+.start__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+.start__lead {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: 1.55;
+}
+.start__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.start__note {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--muted);
+}
+.start__example {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+.start__example-label {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.example-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 96px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-sm);
+}
+.example-row:last-child {
+  border-bottom: none;
+}
+.example-row__date {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.example-row__date--warn,
+.example-row__warn {
+  color: var(--warning-ink);
+}
+.example-row__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.example-row__text > :first-child {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.example-row__text > :last-child {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.example-row__ok {
+  font-size: var(--text-xs);
+  color: var(--accent-ink);
+}
+.example-row__warn {
+  font-size: var(--text-xs);
+}
+.archive-row--highlighted {
+  background: var(--accent-softer);
+}
+@container archive (max-width: 980px) {
+  .start {
+    grid-template-columns: 1fr;
+  }
 }
 .archive-row {
   width: 100%;
@@ -443,7 +620,7 @@ watch(rows, () => {
   color: var(--ink);
 }
 .archive-row__secondary {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -508,7 +685,7 @@ watch(rows, () => {
   color: var(--ink);
 }
 .archive-row__drive {
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 .archive-row__saved {

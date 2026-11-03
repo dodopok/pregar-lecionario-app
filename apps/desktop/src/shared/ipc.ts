@@ -14,12 +14,15 @@ import type {
 } from '@pregar/core/liturgy/types'
 import type { AIEventChannels, AIInvokeChannels } from './ipc-ai'
 import type { ContentEventChannels, ContentInvokeChannels } from './ipc-content'
+import type { IdeasEventChannels, IdeasInvokeChannels } from './ipc-ideas'
+import type { ImportInvokeChannels } from './ipc-import'
 import type { LibraryEventChannels, LibraryInvokeChannels } from './ipc-library'
 import type { ReaderEventChannels, ReaderInvokeChannels } from './ipc-reader'
 import type { AppSettings, SettingsPatch } from './settings'
 import type {
   AppInfo,
   ArchiveSearchMode,
+  RelatedSermon,
   SecretName,
   SecretStatus,
   SermonPatch,
@@ -79,6 +82,8 @@ export interface CoreInvokeChannels {
   'sermons:list': { req: void; res: SermonSummary[] }
   'sermons:search': { req: { mode: ArchiveSearchMode; query: string }; res: SermonSummary[] }
   'sermons:states': { req: { from: string; to: string }; res: Record<string, SermonSummary['state']> }
+  /** Preparações anteriores com a mesma passagem (qualquer leitura do dia) ou a mesma ocasião. */
+  'sermons:related': { req: { dateKey: string; references: string[]; occasion: string | null }; res: RelatedSermon[] }
 
   'logs:tail': { req: { lines?: number }; res: { path: string; text: string } }
   'logs:clear': { req: void; res: void }
@@ -99,8 +104,11 @@ export interface AccountState {
 
 /** Como as leituras estão sendo obtidas agora. */
 export interface LiturgyAccess {
-  mode: 'proxy' | 'direct' | 'none'
+  /** `preview`: degustação sem conta (janela de datas limitada pela API pública). */
+  mode: 'proxy' | 'direct' | 'preview' | 'none'
   message: string
+  /** Janela da degustação (chaves de data), só no modo `preview`. */
+  preview?: { from: string; to: string } | null
 }
 
 export interface UpdateStatus {
@@ -127,8 +135,19 @@ export type InvokeChannels = CoreInvokeChannels & ExtraInvokeChannels
 export type EventChannels = CoreEventChannels & ExtraEventChannels
 
 // Canais dos módulos (IA, conteúdo, Leitor, Biblioteca), declarados em arquivos próprios.
-export interface ExtraInvokeChannels extends AIInvokeChannels, ContentInvokeChannels, ReaderInvokeChannels, LibraryInvokeChannels {}
-export interface ExtraEventChannels extends AIEventChannels, ContentEventChannels, ReaderEventChannels, LibraryEventChannels {}
+export interface ExtraInvokeChannels
+  extends AIInvokeChannels,
+    ContentInvokeChannels,
+    IdeasInvokeChannels,
+    ImportInvokeChannels,
+    ReaderInvokeChannels,
+    LibraryInvokeChannels {}
+export interface ExtraEventChannels
+  extends AIEventChannels,
+    ContentEventChannels,
+    IdeasEventChannels,
+    ReaderEventChannels,
+    LibraryEventChannels {}
 
 export type InvokeChannel = keyof InvokeChannels
 export type InvokeRequest<C extends InvokeChannel> = InvokeChannels[C]['req']

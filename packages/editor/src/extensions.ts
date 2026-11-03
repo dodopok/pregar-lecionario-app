@@ -13,7 +13,9 @@ import { BackgroundColor, Color, FontFamily, FontSize, TextStyle } from '@tiptap
 import { CharacterCount, Placeholder } from '@tiptap/extensions'
 import { StarterKit } from '@tiptap/starter-kit'
 import { countWords } from '@pregar/core/util/text'
+import { Annotation } from './annotation'
 import { BlockId } from './blockId'
+import { ManuscriptBlockquote } from './blockquote'
 import { ManuscriptClipboard } from './clipboard'
 import { ManuscriptCommands } from './commands'
 import { FindReplace } from './findReplace'
@@ -48,6 +50,8 @@ export function createManuscriptExtensions(options: ManuscriptExtensionOptions =
   const extensions: AnyExtension[] = [
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4, 5, 6] },
+      // A citação do manuscrito (blockquote.ts) acrescenta o atributo kind: prosa ou poema.
+      blockquote: false,
       code: false,
       codeBlock: false,
       horizontalRule: false,
@@ -64,6 +68,7 @@ export function createManuscriptExtensions(options: ManuscriptExtensionOptions =
         HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: null },
       },
     }),
+    ManuscriptBlockquote,
     TextStyle,
     Color,
     BackgroundColor,
@@ -71,7 +76,11 @@ export function createManuscriptExtensions(options: ManuscriptExtensionOptions =
     FontSize,
     // ⇧⌘H é "Localizar e substituir" no Docs; o realce fica sem atalho.
     Highlight.extend({ addKeyboardShortcuts: () => ({}) }).configure({ multicolor: true }),
-    TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'], defaultAlignment: null }),
+    TextAlign.configure({
+      types: ['heading', 'paragraph'],
+      alignments: ['left', 'center', 'right', 'justify'],
+      defaultAlignment: null,
+    }),
     Superscript.extend({ excludes: 'subscript' }),
     Subscript.extend({ excludes: 'superscript' }),
     TaskList,
@@ -79,13 +88,16 @@ export function createManuscriptExtensions(options: ManuscriptExtensionOptions =
     ParagraphFormat,
     BlockId.configure({ generateId }),
     Footnote.configure({ generateId }),
+    Annotation,
     FindReplace,
     ManuscriptCommands,
     ManuscriptKeymap.configure({ onShortcut: options.onShortcut ?? null, generateId }),
   ]
   if (options.richClipboard !== false) extensions.push(ManuscriptClipboard)
   if (options.characterLimit !== false) {
-    extensions.push(CharacterCount.configure({ limit: options.characterLimit ?? null, wordCounter: countWords }))
+    extensions.push(
+      CharacterCount.configure({ limit: options.characterLimit ?? null, wordCounter: countWords }),
+    )
   }
   if (options.placeholder !== false) {
     extensions.push(Placeholder.configure({ placeholder: options.placeholder ?? DEFAULT_PLACEHOLDER }))

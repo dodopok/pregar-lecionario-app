@@ -11,6 +11,7 @@ import { activeEditor } from '@/lib/editorBridge'
 import { useAppStore } from '@/stores/app'
 import { useMesaStore } from '@/stores/mesa'
 import { useToasts } from '@/stores/toasts'
+import { printPulpitSheet } from '../pulpit'
 import { MESA_COMMANDS, filterCommands, platformKeys } from './commands'
 import type { MesaCommand, MesaCommandId } from './commands'
 
@@ -33,6 +34,7 @@ const EDITOR_COMMANDS: Partial<Record<MesaCommandId, string>> = {
   underline: 'toggleUnderline',
   strike: 'toggleStrike',
   quote: 'toggleQuote',
+  annotation: 'toggleAnnotation',
   bulletList: 'toggleBulletList',
   orderedList: 'toggleOrderedList',
   undo: 'undo',
@@ -74,17 +76,47 @@ function run(command: MesaCommand): void {
     case 'structure':
       return mesa.requestReview(['structure'])
     case 'questions':
-    case 'rehearsal':
-    case 'tablet':
+    case 'pulpit':
     case 'history':
     case 'drive':
     case 'shortcuts':
+    case 'connect':
       return mesa.openSheet(command.id)
+    case 'rehearsal':
+      return mesa.openFullscreen('rehearsal')
+    case 'readingsFullscreen':
+      return mesa.openFullscreen('readings')
+    case 'poem':
+      emit('close')
+      setTimeout(() => {
+        const editor = activeEditor.value
+        if (!editor) return toasts.show('Abra o manuscrito para usar este comando.', 'info')
+        const chain = editor.chain().focus() as unknown as Record<
+          string,
+          (...args: unknown[]) => { run(): boolean }
+        > & { run(): boolean }
+        if (!editor.isActive('blockquote')) chain.toggleQuote?.().run()
+        ;(editor.chain().focus() as unknown as Record<string, (...args: unknown[]) => { run(): boolean }>)
+          .setBlockquoteKind?.('poem')
+          .run()
+      }, 0)
+      return
   }
   emit('close')
   switch (command.id) {
     case 'save':
       void mesa.flush()
+      break
+    case 'print':
+      void printPulpitSheet(mesa, app).then(
+        (result) => result.message && toasts.show(result.message, 'error'),
+      )
+      break
+    case 'captureIdea':
+      mesa.requestIdeaCapture()
+      break
+    case 'tour':
+      mesa.tourOpen = true
       break
     case 'focusMode':
       mesa.focusMode = !mesa.focusMode

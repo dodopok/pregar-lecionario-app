@@ -128,9 +128,20 @@ Tudo fica na pasta de dados do app:
 - **Manuscritos, histórico de versões, relatórios de revisão, preferências e índice da Biblioteca** em `pregar.sqlite` (SQLite com busca de texto completo).
 - **Chaves e sessão** (Estêvão API, provedores de IA, sessão da conta, token do Google) em `secrets.bin`, cifrado pelo cofre do sistema: Keychain no macOS, DPAPI no Windows, libsecret no Linux. As chaves nunca chegam à interface; ela só sabe se cada uma está cadastrada.
 - **PDFs** continuam nos caminhos originais; capas e PDFs baixados do Drive ficam em `Library/`.
-- **Registro de integrações** em `Logs/`, sem corpos de requisição nem chaves (Preferências › Registros mostra e copia as últimas linhas).
+- **Registro de integrações** em `Logs/`, sem corpos de requisição nem chaves (Preferências › Sobre › Registros para o suporte mostra e copia as últimas linhas).
+- **Ideias** da aba Ideias da Mesa também ficam em `pregar.sqlite` (o documento de ideias do Google Drive é opcional e pode ser trazido para cá).
 
 Preferências › Biblioteca cria e restaura um backup local de tudo isso, exceto as chaves.
+
+## Primeiro uso
+
+A Mesa abre no próximo dia de pregar (domingo, por padrão; Preferências › Ritmo e duração) com um tour de cinco passos sobre as regiões reais da tela: o botão de data, as leituras inteiras, o manuscrito, os materiais e a conexão. Sem conta e sem chave, a API do Pregar pode servir uma **degustação** das leituras das próximas semanas (ver `ESTEVAO_PUBLIC_PREVIEW` em [docs/api-railway.md](docs/api-railway.md)); a folha **Conectar** (trilho › Conectar, ou o fim do tour) leva à assinatura ou às chaves próprias.
+
+Na Mesa, todas as leituras do dia ficam abertas com o texto inteiro (ou só a principal, à escolha), com chips para pular entre elas, o botão **Usar como texto principal** em cada uma e a leitura em tela cheia. O editor tem uma barra curta (o resto fica em **Mais**), citações em bloco ou em versos e **anotações só para você**, que ficam fora da contagem de palavras, da folha do púlpito e do ensaio. A barra de estado compara a duração estimada com a sua meta; o **Ensaio** em tela cheia tem rolagem automática, marcas por título e mede o seu ritmo de fala. **Levar para o púlpito** imprime direto, salva PDF, cria o Google Doc ou copia o texto simples.
+
+## Importar sermões antigos
+
+No Arquivo, **Importar sermões antigos…** aceita `.docx`, `.rtf`, `.txt` e `.md`, um arquivo ou uma pasta inteira (no macOS; nos outros sistemas, vários arquivos de uma vez). A data e a passagem são lidas do nome do arquivo e das primeiras linhas, e você confere cada linha antes de guardar. As preparações importadas aparecem no Arquivo e voltam em **Já preguei sobre isto**, na aba Materiais, quando a mesma passagem (ou a mesma ocasião) chegar de novo. Nada sai do computador.
 
 ## Migrar do Pregar para Mac (Swift)
 
@@ -150,11 +161,15 @@ No Windows e no Linux, leia ⌘ como Ctrl e ⌥ como Alt.
 | ⌘B · ⌘I · ⌘U · ⇧⌘X | Negrito · Itálico · Sublinhado · Tachado |
 | ⌥⌘0 · ⌥⌘1…6 | Texto normal · Título 1 a 6 |
 | ⇧⌘7 · ⇧⌘8 | Lista numerada · Marcadores |
+| ⇧⌘A | Anotação só para você (fora da contagem, do púlpito e do ensaio) |
 | ⌘K · ⌥⌘F | Link · Nota de rodapé |
 | ⌘F · ⇧⌘H | Localizar · Localizar e substituir |
-| ⌘S · ⌘P | Salvar agora · Imprimir |
-| ⌘+ · ⌘− | Aumentar · Diminuir zoom |
-| ⇧⌥⌘R · ⇧⌥⌘E · ⇧⌘T · ⇧⌥⌘H | Revisar · Ensaio · Tablet · Histórico de versões |
+| ⌘S · ⌘P | Salvar agora · Imprimir direto |
+| ⌘+ · ⌘− · ⌥⌘0 | Aumentar · Diminuir · Tamanho padrão do manuscrito na tela |
+| ⇧⌥⌘1 · ⇧⌥⌘2 · ⇧⌥⌘3 | Mostrar ou ocultar calendário · leituras · materiais |
+| ⇧⌘F · ⇧⌥⌘L | Foco · Leituras em tela cheia |
+| ⇧⌘I | Guardar uma ideia |
+| ⇧⌥⌘R · ⇧⌥⌘E · ⇧⌘T · ⇧⌥⌘H | Revisar · Ensaio · Levar para o púlpito · Histórico de versões |
 | ⌘T · ⌘W · ⇧⌘T | No Leitor: nova aba · fechar aba · reabrir a última |
 
 ## Segurança, em resumo

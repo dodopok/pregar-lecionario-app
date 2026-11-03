@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Cópia de leitura para o tablet: tipografia, notas, formato (PDF ou Google Doc) e pasta. */
+/** Folha do púlpito: tipografia da impressão e do PDF, notas, formato preferido e pasta dos PDFs. */
 import { computed, onMounted, ref } from 'vue'
 import { Folder, Minus, Plus } from 'lucide-vue-next'
 import type { AppSettings } from '@shared/settings'
@@ -32,7 +32,7 @@ function setSize(value: number): void {
 }
 
 async function chooseFolder(): Promise<void> {
-  const chosen = await invoke('app:chooseFolder', { title: 'Pasta para as cópias do tablet' }).catch(() => null)
+  const chosen = await invoke('app:chooseFolder', { title: 'Pasta para as folhas em PDF' }).catch(() => null)
   if (chosen) update({ lastExportFolder: chosen })
 }
 
@@ -43,7 +43,7 @@ onMounted(async () => {
 
 <template>
   <div class="section-stack">
-    <PrefGroup label="Leitura no tablet">
+    <PrefGroup label="Folha impressa ou em PDF">
       <PrefRow label="Fonte de leitura" for="tablet-font">
         <select id="tablet-font" class="field select" :value="tablet.fontFamily" @change="update({ fontFamily: ($event.target as HTMLSelectElement).value })">
           <option v-for="font in fontOptions" :key="font" :value="font">{{ font }}</option>
@@ -70,17 +70,17 @@ onMounted(async () => {
           class="wide"
           :model-value="tablet.includeNotes"
           label="Incluir as notas de rodapé"
-          description="As notas aparecem no fim da cópia de leitura."
+          description="As notas aparecem no fim da folha. As anotações só para você nunca entram."
           @update:model-value="update({ includeNotes: $event })"
         />
       </PrefRow>
     </PrefGroup>
 
-    <PrefGroup label="Formato">
-      <PrefRow label="Enviar como" top>
+    <PrefGroup label="Formato preferido">
+      <PrefRow label="Levar como" top>
         <Segmented
           :model-value="tablet.format"
-          label="Formato da cópia do tablet"
+          label="Formato preferido da folha"
           :options="[
             { value: 'pdf', label: 'PDF' },
             { value: 'gdoc', label: 'Google Doc' },
@@ -90,7 +90,7 @@ onMounted(async () => {
         <p class="hint">
           {{
             tablet.format === 'pdf'
-              ? 'Um arquivo PDF para abrir no tablet (por exemplo, pela pasta do Drive ou por um app de leitura).'
+              ? 'Um PDF paginado para o tablet (pela pasta do Drive ou por um app de leitura). Imprimir direto e texto simples ficam na folha da Mesa.'
               : 'Um documento no seu Google Drive, que você abre no app Google Docs do tablet.'
           }}
           <RouterLink v-if="tablet.format === 'gdoc'" to="/preferencias/drive" replace>Conectar o Google Drive</RouterLink>

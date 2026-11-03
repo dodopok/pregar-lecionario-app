@@ -264,14 +264,14 @@ function startPrefsAPI() {
 
 const SECTIONS = [
   ['conta', 'Conta e assinatura'],
-  ['estevao', 'Estêvão API'],
-  ['ia', 'Inteligência artificial'],
-  ['aparencia', 'Aparência'],
-  ['tablet', 'Tablet'],
+  ['estevao', 'Leituras e calendário'],
+  ['ia', 'Revisão e pesquisa'],
+  ['ritmo', 'Ritmo e duração'],
+  ['aparencia', 'Aparência e texto'],
+  ['pulpito', 'Levar para o púlpito'],
   ['drive', 'Google Drive'],
   ['biblioteca', 'Biblioteca'],
   ['fontes', 'Fontes'],
-  ['registros', 'Registros'],
   ['sobre', 'Sobre'],
 ]
 
@@ -312,7 +312,10 @@ async function openSection(prefs, id, title) {
 async function shootSections(prefs, suffix) {
   for (const [id, title] of SECTIONS) {
     await openSection(prefs, id, title)
-    if (id === 'registros') await prefs.waitForSelector('.tail__view')
+    if (id === 'sobre') {
+      await prefs.click('summary:has-text("Registros para o suporte")')
+      await prefs.waitForSelector('.tail__view')
+    }
     await prefs.screenshot({ path: join(shots, `prefs-${id}-${suffix}.png`) })
   }
 }
@@ -330,7 +333,23 @@ try {
   await prepare(mesa, 1400, 900)
   await mesa.waitForLoadState('domcontentloaded')
 
-  // Boas-vindas: a Mesa mostra a folha enquanto settings.onboarding.completed é falso (se já estiver ligada).
+  // Primeira abertura: tour de cinco passos sobre a Mesa; o último abre a folha Conectar.
+  const tour = await mesa.waitForSelector('.tour', { timeout: 6000 }).catch(() => null)
+  if (tour) {
+    await settle(mesa)
+    await mesa.screenshot({ path: join(shots, 'tour-passo-1.png') })
+    for (let step = 2; step <= 5; step += 1) {
+      await mesa.click('.tour button:has-text("Próximo")')
+      await settle(mesa, 300)
+      if (step === 3 || step === 5) await mesa.screenshot({ path: join(shots, `tour-passo-${step}.png`) })
+    }
+    await mesa.click('.tour button:has-text("Conectar agora")')
+    await mesa.waitForSelector('.tour', { state: 'detached', timeout: 5000 }).catch(() => failures.push('o tour não fechou'))
+    const afterTour = await invoke(mesa, 'settings:get')
+    check(afterTour.value.onboarding.tourDone === true, `o tour não ficou marcado como concluído: ${JSON.stringify(afterTour.value.onboarding)}`)
+  } else {
+    notes.push('A Mesa não mostrou o tour da primeira abertura; capturas do tour puladas.')
+  }
   const onboarding = await mesa.waitForSelector('.onboarding', { timeout: 6000 }).catch(() => null)
   if (onboarding) {
     await settle(mesa)
@@ -352,10 +371,10 @@ try {
     const saved = await invoke(mesa, 'settings:get')
     check(saved.value.onboarding.completed === true && saved.value.onboarding.path === 'later', `onboarding não salvou: ${JSON.stringify(saved.value.onboarding)}`)
   } else {
-    notes.push('A Mesa ainda não mostra a folha de boas-vindas; capturas do onboarding puladas.')
+    notes.push('A folha Conectar não abriu depois do tour; capturas puladas.')
   }
 
-  await invoke(mesa, 'settings:update', { apiBaseURL: api.url, appearance: 'light', onboarding: { completed: true, path: 'later' } })
+  await invoke(mesa, 'settings:update', { apiBaseURL: api.url, appearance: 'light', onboarding: { completed: true, path: 'later', tourDone: true } })
   const opening = app.waitForEvent('window')
   await invoke(mesa, 'app:openWindow', { window: 'preferencias' })
   const prefs = await opening
@@ -475,7 +494,7 @@ try {
   await setAppearance(prefs, 'light')
 
   // 5. Com a assinatura: leituras pelo servidor e seletor de livro de oração.
-  await openSection(prefs, 'estevao', 'Estêvão API')
+  await openSection(prefs, 'estevao', 'Leituras e calendário')
   await prefs.waitForSelector('text=As leituras vêm da sua assinatura')
   await prefs.screenshot({ path: join(shots, 'estevao-assinatura-claro.png') })
   await prefs.click('.book-button')
@@ -497,7 +516,7 @@ try {
   await invoke(prefs, 'settings:update', { liturgy: { prayerBook: 'loc_2027' } })
   await setAppearance(prefs, 'light')
 
-  await openSection(prefs, 'ia', 'Inteligência artificial')
+  await openSection(prefs, 'ia', 'Revisão e pesquisa')
   await prefs.waitForSelector('.prefer-own')
   await prefs.screenshot({ path: join(shots, 'ia-assinatura-claro.png') })
 

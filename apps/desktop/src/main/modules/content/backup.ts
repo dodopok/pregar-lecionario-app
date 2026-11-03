@@ -14,6 +14,7 @@ import {
 import type { BackupData, BackupSermon, RestorableBackup, RestorePlan } from '@pregar/core/backup'
 import { rtfToTiptap } from '@pregar/editor/rtf'
 import { manuscriptPlainText } from '@pregar/editor/richDocument'
+import type { Idea } from '@shared/ipc-ideas'
 import type { SermonRecord } from '@shared/types'
 import type { MainContext } from '../../context'
 import { handle, UserFacingError } from '../../ipc/router'
@@ -21,6 +22,8 @@ import { nodeBackupFileSystem } from '../../storage/backup-fs'
 import { ReviewReportRepository } from '../../storage/reviews'
 
 const SETTINGS_KEY = 'pregar.settings.v2'
+/** As ideias locais viajam no bloco de preferências do backup, sem mudar o formato dos arquivos. */
+const IDEAS_KEY = 'pregar.ideas.v1'
 
 function toBackupSermon(record: SermonRecord): BackupSermon {
   return {
@@ -105,7 +108,10 @@ export function registerBackup(context: MainContext): void {
       libraryRecords: (library?.exportRecords() ?? []) as BackupData['libraryRecords'],
       readerArchive: (reader?.exportArchive() ?? { tabs: [] }) as BackupData['readerArchive'],
       sectionLinks: library?.exportSectionLinks() ?? {},
-      preferences: { [SETTINGS_KEY]: JSON.parse(JSON.stringify(context.settings.get())) },
+      preferences: {
+        [SETTINGS_KEY]: JSON.parse(JSON.stringify(context.settings.get())),
+        [IDEAS_KEY]: JSON.parse(JSON.stringify(context.ideas.all())),
+      },
       favoriteSources: {
         sites: JSON.parse(sources.get<string>('profiles.sites') ?? '[]'),
         authors: JSON.parse(sources.get<string>('profiles.authors') ?? '[]'),
@@ -138,6 +144,14 @@ export function registerBackup(context: MainContext): void {
       const current = context.settings.get()
       context.settings.update({ ...(settings as object), apiBaseURL: current.apiBaseURL, onboarding: current.onboarding })
       context.windows.broadcast('settings:changed', context.settings.get())
+    }
+    const ideas = plan.preferences.set[IDEAS_KEY]
+    if (Array.isArray(ideas)) {
+      try {
+        context.ideas.replaceAll(ideas as unknown as Idea[])
+      } catch {
+        // Ideias de um backup antigo ou malformado não impedem a restauração do resto.
+      }
     }
     const sources = context.kv('sources')
     if (plan.favoriteSources.sites.length > 0) sources.set('profiles.sites', JSON.stringify(plan.favoriteSources.sites))

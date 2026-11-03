@@ -192,6 +192,18 @@ export function parseReference(value: string): ScriptureReference | null {
   return parseAllReferences(value)[0] ?? null
 }
 
+export interface LocatedReference {
+  reference: ScriptureReference
+  /** Posição e comprimento (UTF-16) no texto original; a dobra de acentos preserva as posições. */
+  index: number
+  length: number
+}
+
+/** Referências explícitas com a posição em que aparecem, para separar a referência do resto da linha. */
+export function locateReferences(value: string): LocatedReference[] {
+  return explicitMatches(foldCaseAndDiacritics(value)).map(({ reference, index, length }) => ({ reference, index, length }))
+}
+
 /**
  * Referência que abre um cabeçalho: começa na posição 0, tem versículo, é a única referência
  * da linha e o título que vem depois começa com maiúscula.
@@ -248,6 +260,15 @@ export function englishReference(reference: ScriptureReference): string {
 /** "Romanos 13:8–14" com traço meia-risca, para exibição em português. */
 export function portugueseReference(reference: ScriptureReference): string {
   return formatRange(reference, portugueseBookName(reference)).replace('-', '–')
+}
+
+/**
+ * Forma gravada em `mainReadingReference`, igual à das leituras da Estêvão API: nome em português,
+ * "Salmo" no singular, dois-pontos e hífen ("Romanos 13:8-14", "Salmo 23:1-6").
+ */
+export function canonicalReference(reference: ScriptureReference): string {
+  const name = reference.book === 'psalms' ? 'Salmo' : portugueseBookName(reference)
+  return formatRange(reference, name)
 }
 
 export function sameReference(left: ScriptureReference | null, right: ScriptureReference | null): boolean {

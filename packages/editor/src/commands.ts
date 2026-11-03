@@ -151,7 +151,9 @@ function liftQuotes(tr: Transaction, from: number, to: number): void {
     if (!node) continue
     const innerFrom = Math.max(from, pos + 1)
     const innerTo = Math.min(to, pos + node.nodeSize - 1)
-    const range = tr.doc.resolve(innerFrom).blockRange(tr.doc.resolve(innerTo), (parent) => parent.type === blockquote)
+    const range = tr.doc
+      .resolve(innerFrom)
+      .blockRange(tr.doc.resolve(innerTo), (parent) => parent.type === blockquote)
     if (!range) continue
     const target = liftTarget(range)
     if (target !== null) tr.lift(range, target)
@@ -163,7 +165,9 @@ function wrapInQuote(tr: Transaction, from: number, to: number): boolean {
   const { schema } = tr.doc.type
   const blockquote = schema.nodes.blockquote
   if (!blockquote) return false
-  const range = tr.doc.resolve(from).blockRange(tr.doc.resolve(to), (parent) => parent.type === schema.topNodeType)
+  const range = tr.doc
+    .resolve(from)
+    .blockRange(tr.doc.resolve(to), (parent) => parent.type === schema.topNodeType)
   if (!range) return false
   const wrapping = findWrapping(range, blockquote)
   if (!wrapping) return false
@@ -172,12 +176,19 @@ function wrapInQuote(tr: Transaction, from: number, to: number): boolean {
   const quote = tr.doc.nodeAt(start)
   if (!quote) return true
   const end = start + quote.nodeSize
-  if (tr.doc.resolve(end).nodeAfter?.type === blockquote && canJoin(tr.doc, end)) tr.join(end)
-  if (tr.doc.resolve(start).nodeBefore?.type === blockquote && canJoin(tr.doc, start)) tr.join(start)
+  // Só une citações do mesmo tipo: um poema vizinho continua separado da prosa citada.
+  const sameKind = (neighbor: ProseMirrorNode | null) =>
+    neighbor?.type === blockquote && neighbor.attrs.kind === quote.attrs.kind
+  if (sameKind(tr.doc.resolve(end).nodeAfter) && canJoin(tr.doc, end)) tr.join(end)
+  if (sameKind(tr.doc.resolve(start).nodeBefore) && canJoin(tr.doc, start)) tr.join(start)
   return true
 }
 
-function paragraphAttrsFor(node: ProseMirrorNode, type: NodeType, overrides: Record<string, unknown>): Record<string, unknown> {
+function paragraphAttrsFor(
+  node: ProseMirrorNode,
+  type: NodeType,
+  overrides: Record<string, unknown>,
+): Record<string, unknown> {
   const attrs: Record<string, unknown> = {}
   for (const name of Object.keys(type.spec.attrs ?? {})) {
     if (name in overrides) attrs[name] = overrides[name]
@@ -186,7 +197,12 @@ function paragraphAttrsFor(node: ProseMirrorNode, type: NodeType, overrides: Rec
   return attrs
 }
 
-function setTextblockStyle(tr: Transaction, blocks: PositionedNode[], level: number, keepFormat: boolean): void {
+function setTextblockStyle(
+  tr: Transaction,
+  blocks: PositionedNode[],
+  level: number,
+  keepFormat: boolean,
+): void {
   const { schema } = tr.doc.type
   const heading = schema.nodes.heading
   const paragraph = schema.nodes.paragraph
@@ -199,7 +215,8 @@ function setTextblockStyle(tr: Transaction, blocks: PositionedNode[], level: num
     if (node.type !== type && !canBecome(tr.doc, mapped, type)) continue
     const overrides: Record<string, unknown> = level > 0 ? { level } : {}
     if (keepFormat) {
-      for (const name of ['indentStart', 'indentFirstLine', 'spaceBefore', 'spaceAfter', 'lineHeight']) overrides[name] = node.attrs[name] ?? null
+      for (const name of ['indentStart', 'indentFirstLine', 'spaceBefore', 'spaceAfter', 'lineHeight'])
+        overrides[name] = node.attrs[name] ?? null
     }
     tr.setNodeMarkup(mapped, type, paragraphAttrsFor(node, type, overrides))
     stripStyleMarks(tr, mapped + 1, mapped + node.nodeSize - 1)
@@ -273,7 +290,9 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
         ({ state, tr, dispatch }) => {
           const level = style === 'normal' ? 0 : Number(style.replace('heading', ''))
           if (!Number.isInteger(level) || level < 0 || level > 6) return false
-          const blocks = selectedTextblocks(state).filter(({ node }) => FORMATTED_TEXTBLOCKS.has(node.type.name))
+          const blocks = selectedTextblocks(state).filter(({ node }) =>
+            FORMATTED_TEXTBLOCKS.has(node.type.name),
+          )
           if (!blocks.length) return false
           if (dispatch) setTextblockStyle(tr, blocks, level, false)
           return true
@@ -283,9 +302,13 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
         (attributes) =>
         ({ state, commands }) => {
           const level = attributes.level
-          const blocks = selectedTextblocks(state).filter(({ node }) => FORMATTED_TEXTBLOCKS.has(node.type.name))
+          const blocks = selectedTextblocks(state).filter(({ node }) =>
+            FORMATTED_TEXTBLOCKS.has(node.type.name),
+          )
           if (!blocks.length) return false
-          const active = blocks.every(({ node }) => node.type.name === 'heading' && node.attrs.level === level)
+          const active = blocks.every(
+            ({ node }) => node.type.name === 'heading' && node.attrs.level === level,
+          )
           return commands.setParagraphStyle(active ? 'normal' : (`heading${level}` as ParagraphStyleName))
         },
 
@@ -310,8 +333,14 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
         () =>
         ({ state, tr, dispatch }) => {
           const { $from } = state.selection
-          if ($from.parent.type.name !== 'paragraph' || $from.depth < 2 || $from.node(-1).type.name !== 'blockquote') return false
-          if (dispatch) tr.setNodeAttribute($from.before(), 'attribution', $from.parent.attrs.attribution !== true)
+          if (
+            $from.parent.type.name !== 'paragraph' ||
+            $from.depth < 2 ||
+            $from.node(-1).type.name !== 'blockquote'
+          )
+            return false
+          if (dispatch)
+            tr.setNodeAttribute($from.before(), 'attribution', $from.parent.attrs.attribution !== true)
           return true
         },
 
@@ -349,8 +378,16 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
             const mapped = tr.mapping.slice(mapFrom).map(pos)
             const node = tr.doc.nodeAt(mapped)
             if (node?.type.name !== 'paragraph') continue
-            for (const name of ['textAlign', 'indentStart', 'indentFirstLine', 'spaceBefore', 'spaceAfter', 'lineHeight']) {
-              if (node.attrs[name] !== null && node.attrs[name] !== undefined) tr.setNodeAttribute(mapped, name, null)
+            for (const name of [
+              'textAlign',
+              'indentStart',
+              'indentFirstLine',
+              'spaceBefore',
+              'spaceAfter',
+              'lineHeight',
+            ]) {
+              if (node.attrs[name] !== null && node.attrs[name] !== undefined)
+                tr.setNodeAttribute(mapped, name, null)
             }
           }
           const mapping = tr.mapping.slice(mapFrom)
@@ -380,7 +417,9 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
             block: FORMATTED_TEXTBLOCKS.has(parent.type.name)
               ? {
                   type: parent.type.name,
-                  attrs: Object.fromEntries(Object.entries(parent.attrs).filter(([name]) => name !== 'id' && name !== 'attribution')),
+                  attrs: Object.fromEntries(
+                    Object.entries(parent.attrs).filter(([name]) => name !== 'id' && name !== 'attribution'),
+                  ),
                 }
               : null,
           }
@@ -401,7 +440,8 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
           for (const range of selection.ranges) {
             const from = range.$from.pos
             const to = range.$to.pos
-            for (const type of Object.values(schema.marks)) if (type.name !== 'link') tr.removeMark(from, to, type)
+            for (const type of Object.values(schema.marks))
+              if (type.name !== 'link') tr.removeMark(from, to, type)
             for (const mark of copied.marks) tr.addMark(from, to, mark)
           }
           const block = copied.block
@@ -419,7 +459,8 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
       indent:
         () =>
         ({ state, tr, dispatch, commands }) => {
-          for (const name of LIST_ITEM_TYPES) if (isNodeActive(state, name)) return commands.sinkListItem(name)
+          for (const name of LIST_ITEM_TYPES)
+            if (isNodeActive(state, name)) return commands.sinkListItem(name)
           const blocks = selectedTextblocks(state)
           return dispatch ? adjustIndent(tr, blocks, INDENT_STEP_PT) : blocks.length > 0
         },
@@ -427,7 +468,8 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
       outdent:
         () =>
         ({ state, tr, dispatch, commands }) => {
-          for (const name of LIST_ITEM_TYPES) if (isNodeActive(state, name)) return commands.liftListItem(name)
+          for (const name of LIST_ITEM_TYPES)
+            if (isNodeActive(state, name)) return commands.liftListItem(name)
           const blocks = selectedTextblocks(state)
           return dispatch ? adjustIndent(tr, blocks, -INDENT_STEP_PT) : blocks.length > 0
         },
@@ -435,9 +477,12 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
       setLineSpacing:
         (multiple) =>
         ({ state, tr, dispatch }) => {
-          if (!Number.isFinite(multiple) || multiple < MIN_LINE_SPACING || multiple > MAX_LINE_SPACING) return false
+          if (!Number.isFinite(multiple) || multiple < MIN_LINE_SPACING || multiple > MAX_LINE_SPACING)
+            return false
           const blocks = selectedTextblocks(state)
-          return dispatch ? setBlockAttribute(tr, blocks, 'lineHeight', roundTo(multiple, 3)) : blocks.length > 0
+          return dispatch
+            ? setBlockAttribute(tr, blocks, 'lineHeight', roundTo(multiple, 3))
+            : blocks.length > 0
         },
 
       setParagraphSpacing:
@@ -448,8 +493,14 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
           const blocks = selectedTextblocks(state)
           if (!dispatch) return blocks.length > 0
           let changed = false
-          if (before !== undefined) changed = setBlockAttribute(tr, blocks, 'spaceBefore', clamp(before, 0, MAX_PARAGRAPH_SPACING_PT)) || changed
-          if (after !== undefined) changed = setBlockAttribute(tr, blocks, 'spaceAfter', clamp(after, 0, MAX_PARAGRAPH_SPACING_PT)) || changed
+          if (before !== undefined)
+            changed =
+              setBlockAttribute(tr, blocks, 'spaceBefore', clamp(before, 0, MAX_PARAGRAPH_SPACING_PT)) ||
+              changed
+          if (after !== undefined)
+            changed =
+              setBlockAttribute(tr, blocks, 'spaceAfter', clamp(after, 0, MAX_PARAGRAPH_SPACING_PT)) ||
+              changed
           return changed
         },
 
@@ -511,7 +562,10 @@ export const ManuscriptCommands = Extension.create<Record<string, never>, Manusc
             tr.removeMark(from, to, linkType)
             tr.addMark(from, to, linkType.create({ href: safe }))
           } else {
-            const marks = state.doc.resolve(from).marks().filter((mark) => mark.type !== linkType)
+            const marks = state.doc
+              .resolve(from)
+              .marks()
+              .filter((mark) => mark.type !== linkType)
             tr.replaceWith(from, to, state.schema.text(display, [...marks, linkType.create({ href: safe })]))
             tr.setSelection(TextSelection.create(tr.doc, from + display.length))
           }

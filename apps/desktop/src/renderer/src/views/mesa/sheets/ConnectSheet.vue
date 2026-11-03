@@ -1,18 +1,19 @@
 <script setup lang="ts">
 /**
- * Primeira abertura: dois caminhos claros (assinar ou usar as próprias chaves) e "Decidir depois".
- * A Mesa mostra esta folha enquanto `settings.onboarding.completed` for falso; a escolha fica salva
- * em `settings.onboarding` e o evento `close` avisa quem a mostrou.
+ * Conectar o Pregar: dois caminhos claros (assinar ou usar as próprias chaves) e "Decidir depois".
+ * Abre pelo trilho, pelo fim do tour ou quando uma ação precisa de conta; a escolha fica salva em
+ * `settings.onboarding` e o evento `close` avisa quem a mostrou.
  */
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { ArrowLeft, Check, CircleCheck, ExternalLink, KeyRound, Sparkles } from 'lucide-vue-next'
+import { ArrowLeft, Check, CircleCheck, ExternalLink, KeyRound, Sparkles, X } from 'lucide-vue-next'
 import { providerName, suggestedModel } from '@pregar/core/ai/providers'
 import type { AIProvider } from '@pregar/core/ai/providers'
 import Sheet from '@/components/Sheet.vue'
 import PButton from '@/components/PButton.vue'
 import { errorMessage, invoke } from '@/lib/api'
+import { shortDatePt, parseDateKey } from '@pregar/core/util/dates'
 import { useAppStore } from '@/stores/app'
-import { formatBRL } from '../preferencias/format'
+import { formatBRL } from '../../preferencias/format'
 
 type Step = 'welcome' | 'estevao' | 'ai' | 'done'
 type Path = 'pro' | 'byok' | 'later'
@@ -42,9 +43,31 @@ const aiKey = ref('')
 const aiBusy = ref(false)
 const aiResult = ref<{ ok: boolean; text: string } | null>(null)
 
+const access = computed(() => app.liturgyAccess)
+const previewUntil = computed(() => {
+  const to = access.value.preview?.to
+  const date = to ? parseDateKey(to) : null
+  return date ? shortDatePt(date) : null
+})
+const statusLine = computed(() => {
+  switch (access.value.mode) {
+    case 'proxy':
+      return 'Leituras e revisão já funcionam pela sua assinatura.'
+    case 'direct':
+      return 'Leituras já funcionam com a sua chave da Estêvão API.'
+    case 'preview':
+      return previewUntil.value
+        ? `Você está na degustação: as leituras aparecem até ${previewUntil.value}. Conecte para ver qualquer data e revisar.`
+        : 'Você está na degustação: só as próximas semanas aparecem. Conecte para ver qualquer data e revisar.'
+    default:
+      return 'Sem conexão, o calendário e as leituras não carregam. Escolha um caminho abaixo.'
+  }
+})
 const hasEstevao = computed(() => app.secrets?.estevao === true)
 const hasAI = computed(() => PROVIDERS.some((item) => app.secrets?.[item.id] === true))
-const savedAIProviders = computed(() => PROVIDERS.filter((item) => app.secrets?.[item.id] === true).map((item) => providerName(item.id)))
+const savedAIProviders = computed(() =>
+  PROVIDERS.filter((item) => app.secrets?.[item.id] === true).map((item) => providerName(item.id)),
+)
 const currentProvider = computed(() => PROVIDERS.find((item) => item.id === provider.value) ?? PROVIDERS[0]!)
 
 function openExternal(url: string): void {
@@ -61,7 +84,8 @@ async function finish(path: Path): Promise<void> {
   finishing.value = path
   try {
     await app.updateSettings({ onboarding: { completed: true, path } })
-    if (path === 'pro') await invoke('app:openWindow', { window: 'preferencias', route: '/preferencias/conta' })
+    if (path === 'pro')
+      await invoke('app:openWindow', { window: 'preferencias', route: '/preferencias/conta' })
   } catch {
     // A escolha vale para esta sessão mesmo se a gravação falhar.
   } finally {
@@ -125,7 +149,9 @@ onMounted(async () => {
     const plans = await invoke('billing:plans')
     const monthly = plans.offers.find((offer) => offer.cycle === 'monthly')?.priceCents
     const yearly = plans.offers.find((offer) => offer.cycle === 'yearly')?.priceCents
-    const values = [monthly, yearly ? Math.round(yearly / 12) : undefined].filter((value): value is number => typeof value === 'number' && value > 0)
+    const values = [monthly, yearly ? Math.round(yearly / 12) : undefined].filter(
+      (value): value is number => typeof value === 'number' && value > 0,
+    )
     monthlyFrom.value = values.length ? Math.min(...values) : null
   } catch {
     monthlyFrom.value = null
@@ -134,34 +160,51 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Sheet label="Boas-vindas ao Pregar" :width="680" :dismissible="false">
+  <Sheet label="Conectar o Pregar" :width="680" @close="emit('close', 'later')">
     <div ref="body" class="onboarding">
+      <button type="button" class="onboarding__close" aria-label="Fechar" @click="emit('close', 'later')">
+        <X :size="15" />
+      </button>
       <!-- Boas-vindas e escolha do caminho -->
       <template v-if="step === 'welcome'">
         <header class="onboarding__welcome">
           <div class="onboarding__mark" aria-hidden="true">P</div>
           <div>
-            <h2 class="onboarding__title" tabindex="-1">Bem-vindo ao Pregar</h2>
+            <h2 class="onboarding__title" tabindex="-1">Conectar o Pregar</h2>
             <p class="onboarding__lead">
-              Prepare o sermão com o calendário litúrgico, as leituras do domingo, a sua biblioteca e uma revisão cuidadosa por IA.
+              Calendário litúrgico, leituras do domingo, a sua biblioteca e uma revisão cuidadosa por IA, num
+              só lugar.
             </p>
           </div>
         </header>
 
-        <p class="onboarding__question">Para buscar as leituras e revisar o texto, o Pregar precisa se conectar. Como você prefere?</p>
+        <p class="onboarding__status" :class="`onboarding__status--${access.mode}`" role="status">
+          {{ statusLine }}
+        </p>
+        <p class="onboarding__question">
+          Para buscar as leituras de qualquer data e revisar o texto, o Pregar precisa se conectar. Como você
+          prefere?
+        </p>
 
         <div class="paths">
           <section class="path path--recommended" aria-labelledby="path-pro">
             <span class="path__badge">Recomendado</span>
             <div class="path__icon" aria-hidden="true"><Sparkles :size="18" /></div>
             <h3 id="path-pro" class="path__title">Assinar o Pregar</h3>
-            <p class="path__text">O mais simples: não precisa configurar nada. Leituras, Bíblia e revisão por IA funcionam só com o seu email.</p>
+            <p class="path__text">
+              O mais simples: não precisa configurar nada. Leituras, Bíblia e revisão por IA funcionam só com
+              o seu email.
+            </p>
             <ul class="path__list">
               <li><Check :size="13" aria-hidden="true" />Pagamento por Pix</li>
               <li><Check :size="13" aria-hidden="true" />Cancele quando quiser</li>
-              <li v-if="monthlyFrom"><Check :size="13" aria-hidden="true" />A partir de {{ formatBRL(monthlyFrom) }} por mês</li>
+              <li v-if="monthlyFrom">
+                <Check :size="13" aria-hidden="true" />A partir de {{ formatBRL(monthlyFrom) }} por mês
+              </li>
             </ul>
-            <PButton variant="primary" class="path__action" :busy="finishing === 'pro'" @click="finish('pro')">Assinar o Pregar</PButton>
+            <PButton variant="primary" class="path__action" :busy="finishing === 'pro'" @click="finish('pro')"
+              >Assinar o Pregar</PButton
+            >
             <span class="path__hint">Já assina? O mesmo botão leva ao login.</span>
           </section>
 
@@ -169,7 +212,8 @@ onMounted(async () => {
             <div class="path__icon" aria-hidden="true"><KeyRound :size="18" /></div>
             <h3 id="path-byok" class="path__title">Usar minhas próprias chaves (grátis)</h3>
             <p class="path__text">
-              Para quem já tem ou quer criar chaves de API. O Pregar é gratuito; você paga direto ao provedor de IA pelo que usar.
+              Para quem já tem ou quer criar chaves de API. O Pregar é gratuito; você paga direto ao provedor
+              de IA pelo que usar.
             </p>
             <ul class="path__list">
               <li><Check :size="13" aria-hidden="true" />Dois passos curtos, com links</li>
@@ -180,8 +224,12 @@ onMounted(async () => {
         </div>
 
         <footer class="onboarding__footer">
-          <span class="onboarding__note">Você pode mudar isso a qualquer momento em Preferências.</span>
-          <PButton variant="ghost" :busy="finishing === 'later'" @click="finish('later')">Decidir depois</PButton>
+          <span class="onboarding__note"
+            >Você pode mudar isso a qualquer momento em Preferências › Conta.</span
+          >
+          <PButton variant="ghost" :busy="finishing === 'later'" @click="finish('later')">{{
+            access.mode === 'preview' ? 'Continuar na degustação' : 'Decidir depois'
+          }}</PButton>
         </footer>
       </template>
 
@@ -189,11 +237,15 @@ onMounted(async () => {
       <template v-else-if="step === 'estevao'">
         <p class="onboarding__step">Passo 1 de 2</p>
         <h2 class="onboarding__title" tabindex="-1">Chave da Estêvão API</h2>
-        <p class="onboarding__lead">A Estêvão API traz o calendário litúrgico, as leituras do domingo e os textos bíblicos.</p>
+        <p class="onboarding__lead">
+          A Estêvão API traz o calendário litúrgico, as leituras do domingo e os textos bíblicos.
+        </p>
         <ol class="steps">
           <li>
             Abra o site da Estêvão API e peça a sua chave.
-            <PButton variant="link" compact @click="openExternal(ESTEVAO_SITE)">Abrir o site <ExternalLink :size="11" aria-hidden="true" /></PButton>
+            <PButton variant="link" compact @click="openExternal(ESTEVAO_SITE)"
+              >Abrir o site <ExternalLink :size="11" aria-hidden="true"
+            /></PButton>
           </li>
           <li>Copie a chave. Ela começa com <code>estevao_</code>.</li>
           <li>Cole aqui embaixo e clique em <strong>Salvar e testar</strong>.</li>
@@ -209,13 +261,22 @@ onMounted(async () => {
             spellcheck="false"
             :placeholder="hasEstevao ? 'Chave salva; deixe vazio para mantê-la' : 'estevao_…'"
           />
-          <PButton :variant="estevaoResult?.ok ? 'secondary' : 'primary'" type="submit" :busy="estevaoBusy">Salvar e testar</PButton>
+          <PButton :variant="estevaoResult?.ok ? 'secondary' : 'primary'" type="submit" :busy="estevaoBusy"
+            >Salvar e testar</PButton
+          >
         </form>
-        <p v-if="estevaoResult" class="result" :class="{ 'result--ok': estevaoResult.ok }" :role="estevaoResult.ok ? 'status' : 'alert'">
+        <p
+          v-if="estevaoResult"
+          class="result"
+          :class="{ 'result--ok': estevaoResult.ok }"
+          :role="estevaoResult.ok ? 'status' : 'alert'"
+        >
           <CircleCheck v-if="estevaoResult.ok" :size="14" aria-hidden="true" />{{ estevaoResult.text }}
         </p>
         <footer class="onboarding__footer">
-          <PButton variant="ghost" @click="go('welcome')"><ArrowLeft :size="13" aria-hidden="true" />Voltar</PButton>
+          <PButton variant="ghost" @click="go('welcome')"
+            ><ArrowLeft :size="13" aria-hidden="true" />Voltar</PButton
+          >
           <span class="spacer" />
           <PButton v-if="hasEstevao" variant="primary" @click="go('ai')">Continuar</PButton>
           <PButton v-else variant="ghost" @click="go('ai')">Pular por enquanto</PButton>
@@ -227,15 +288,26 @@ onMounted(async () => {
         <p class="onboarding__step">Passo 2 de 2</p>
         <h2 class="onboarding__title" tabindex="-1">Chave de inteligência artificial</h2>
         <p class="onboarding__lead">
-          A revisão do sermão usa um provedor de IA. Você paga a ele direto pelo uso; uma revisão costuma custar centavos. Basta uma chave.
+          A revisão do sermão usa um provedor de IA. Você paga a ele direto pelo uso; uma revisão costuma
+          custar centavos. Basta uma chave.
         </p>
         <fieldset class="providers">
           <legend class="visually-hidden">Provedor de IA</legend>
-          <label v-for="item in PROVIDERS" :key="item.id" class="provider" :class="{ 'provider--selected': provider === item.id }">
+          <label
+            v-for="item in PROVIDERS"
+            :key="item.id"
+            class="provider"
+            :class="{ 'provider--selected': provider === item.id }"
+          >
             <input v-model="provider" class="visually-hidden" type="radio" name="provider" :value="item.id" />
             <span class="provider__name">
               {{ providerName(item.id) }}
-              <CircleCheck v-if="app.secrets?.[item.id]" :size="13" class="provider__saved" aria-label="chave salva" />
+              <CircleCheck
+                v-if="app.secrets?.[item.id]"
+                :size="13"
+                class="provider__saved"
+                aria-label="chave salva"
+              />
             </span>
             <span class="provider__note">{{ item.note }}</span>
           </label>
@@ -243,21 +315,44 @@ onMounted(async () => {
         <ol class="steps">
           <li>
             Crie uma conta no site do {{ providerName(provider) }} e gere uma chave de API.
-            <PButton variant="link" compact @click="openExternal(currentProvider.url)">Abrir o site <ExternalLink :size="11" aria-hidden="true" /></PButton>
+            <PButton variant="link" compact @click="openExternal(currentProvider.url)"
+              >Abrir o site <ExternalLink :size="11" aria-hidden="true"
+            /></PButton>
           </li>
           <li>Cole a chave aqui e clique em <strong>Salvar</strong>.</li>
         </ol>
         <form class="key-form" @submit.prevent="saveAI">
-          <label class="visually-hidden" for="onboarding-ai">Chave de API do {{ providerName(provider) }}</label>
-          <input id="onboarding-ai" v-model="aiKey" class="field" type="password" autocomplete="off" spellcheck="false" placeholder="Cole a chave da API" />
-          <PButton :variant="aiResult?.ok ? 'secondary' : 'primary'" type="submit" :busy="aiBusy">Salvar</PButton>
+          <label class="visually-hidden" for="onboarding-ai"
+            >Chave de API do {{ providerName(provider) }}</label
+          >
+          <input
+            id="onboarding-ai"
+            v-model="aiKey"
+            class="field"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Cole a chave da API"
+          />
+          <PButton :variant="aiResult?.ok ? 'secondary' : 'primary'" type="submit" :busy="aiBusy"
+            >Salvar</PButton
+          >
         </form>
-        <p v-if="aiResult" class="result" :class="{ 'result--ok': aiResult.ok }" :role="aiResult.ok ? 'status' : 'alert'">
+        <p
+          v-if="aiResult"
+          class="result"
+          :class="{ 'result--ok': aiResult.ok }"
+          :role="aiResult.ok ? 'status' : 'alert'"
+        >
           <CircleCheck v-if="aiResult.ok" :size="14" aria-hidden="true" />{{ aiResult.text }}
         </p>
-        <p class="onboarding__note">Sem chave de IA, o Pregar funciona normalmente; só a revisão fica desligada.</p>
+        <p class="onboarding__note">
+          Sem chave de IA, o Pregar funciona normalmente; só a revisão fica desligada.
+        </p>
         <footer class="onboarding__footer">
-          <PButton variant="ghost" @click="go('estevao')"><ArrowLeft :size="13" aria-hidden="true" />Voltar</PButton>
+          <PButton variant="ghost" @click="go('estevao')"
+            ><ArrowLeft :size="13" aria-hidden="true" />Voltar</PButton
+          >
           <span class="spacer" />
           <PButton v-if="hasAI" variant="primary" @click="go('done')">Continuar</PButton>
           <PButton v-else variant="ghost" @click="go('done')">Pular por enquanto</PButton>
@@ -272,20 +367,33 @@ onMounted(async () => {
             <CircleCheck :size="16" aria-hidden="true" />
             <span>
               <strong>Estêvão API:</strong>
-              {{ hasEstevao ? 'chave salva. O calendário e as leituras já carregam.' : 'sem chave. O calendário e as leituras não carregam ainda.' }}
+              {{
+                hasEstevao
+                  ? 'chave salva. O calendário e as leituras já carregam.'
+                  : 'sem chave. O calendário e as leituras não carregam ainda.'
+              }}
             </span>
           </li>
           <li :class="{ 'summary__item--ok': hasAI }" class="summary__item">
             <CircleCheck :size="16" aria-hidden="true" />
             <span>
               <strong>Inteligência artificial:</strong>
-              {{ hasAI ? `chave do ${savedAIProviders.join(', ')} salva.` : 'sem chave. A revisão fica desligada.' }}
+              {{
+                hasAI
+                  ? `chave do ${savedAIProviders.join(', ')} salva.`
+                  : 'sem chave. A revisão fica desligada.'
+              }}
             </span>
           </li>
         </ul>
-        <p class="onboarding__lead">Você pode completar ou trocar as chaves quando quiser em Preferências, ou assinar o Pregar e não usar chaves.</p>
+        <p class="onboarding__lead">
+          Você pode completar ou trocar as chaves quando quiser em Preferências, ou assinar o Pregar e não
+          usar chaves.
+        </p>
         <footer class="onboarding__footer">
-          <PButton variant="ghost" @click="go('ai')"><ArrowLeft :size="13" aria-hidden="true" />Voltar</PButton>
+          <PButton variant="ghost" @click="go('ai')"
+            ><ArrowLeft :size="13" aria-hidden="true" />Voltar</PButton
+          >
           <span class="spacer" />
           <PButton variant="primary" :busy="finishing === 'byok'" @click="finish('byok')">Começar</PButton>
         </footer>
@@ -296,9 +404,43 @@ onMounted(async () => {
 
 <style scoped>
 .onboarding {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+.onboarding__close {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+.onboarding__close:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.onboarding__status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-card);
+  background: var(--accent-softer);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.onboarding__status--preview {
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+}
+.onboarding__status--none {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border-color: var(--line);
 }
 .onboarding__welcome {
   display: flex;

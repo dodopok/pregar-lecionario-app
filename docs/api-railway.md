@@ -1,6 +1,6 @@
 # API do Pregar na Railway
 
-A API (`apps/api`) é um serviço Node com PostgreSQL. Ela cuida das contas, da assinatura por Pix no Asaas, do proxy de IA com cotas e do proxy da Estêvão API para assinantes. Quem usa o plano gratuito não passa por ela.
+A API (`apps/api`) é um serviço Node com PostgreSQL. Ela cuida das contas, da assinatura por Pix no Asaas, do proxy de IA com cotas, do proxy da Estêvão API para assinantes e da degustação (leituras das próximas semanas sem conta, se ligada). Quem usa o plano gratuito com a própria chave não passa por ela.
 
 ## Subir pela primeira vez
 
@@ -54,6 +54,8 @@ O comando termina com código 1 se houver falha. Rode de novo depois de cada aju
 | `BILLING_GRACE_DAYS` | não | Tolerância após o vencimento (padrão 5 dias) |
 | `LIMIT_*` | não | Limites do plano pago; ver a seção 10 do [plano](plano-multiplataforma.md) |
 | `ESTEVAO_PROXY_FOR_FREE` | não | `true` libera as leituras pelo servidor também para contas sem assinatura |
+| `ESTEVAO_PUBLIC_PREVIEW` | não | `true` liga a degustação: `GET /v1/public/estevao/days/<data>` e `GET /v1/public/estevao/days?from&to` sem conta, só de 7 dias atrás até `ESTEVAO_PREVIEW_DAYS` dias à frente (padrão 35, máximo 120). Um dia fora da janela responde 400 `preview_window`; um intervalo é recortado para a janela (400 se nada sobrar). Desligada, as rotas respondem 404 `preview_disabled`; `GET /v1/public/preview` informa ao app se está ligada e a janela |
+| `LIMIT_ESTEVAO_PREVIEW_PER_MINUTE` | não | Consultas da degustação por endereço IP e por minuto (padrão 20) |
 | `ADMIN_TOKEN` | não | Liga as rotas `/v1/admin` de suporte; sem ele, elas não existem |
 | `LEGAL_OPERATOR_NAME`, `LEGAL_OPERATOR_DOCUMENT`, `LEGAL_CONTACT_EMAIL` | sim | Identificação nas páginas `/legal/privacidade` e `/legal/termos` |
 | `CORS_ORIGINS` | não | Só se houver uma versão web; o app desktop não precisa |

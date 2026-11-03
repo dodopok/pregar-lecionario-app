@@ -3,12 +3,14 @@ import { appPaths } from './paths'
 import { LocalDatabase } from './storage/db'
 import { SettingsRepository } from './storage/settings'
 import { SermonRepository } from './storage/sermons'
+import { IdeaRepository } from './storage/ideas'
 import { SecretStore } from './secrets'
 import { FileIntegrationLog } from './log'
 import { WindowManager } from './windows'
 import { installGlobalSecurity } from './security'
 import { installRouter } from './ipc/router'
 import { registerCoreHandlers } from './ipc/core-handlers'
+import { registerIdeasHandlers } from './ipc/ideas-handlers'
 import { buildMenu } from './menu'
 import { makeHttp, makeKV } from './context'
 import type { MainContext } from './context'
@@ -60,12 +62,21 @@ async function start(): Promise<void> {
     apiBaseURL,
   })
   const updater = new UpdaterService((status) => windows.broadcast('updates:status', status))
+  // Degustação sem conta: descobre se a API pública está ligada e avisa as janelas quando o acesso muda.
+  const refreshPreview = (force = false) =>
+    liturgy
+      .refreshPreviewStatus(force)
+      .then((changed) => {
+        if (changed) windows.broadcast('account:changed', account.current())
+      })
+      .catch(() => undefined)
 
   const context: MainContext = {
     paths,
     database,
     settings,
     sermons: new SermonRepository(database),
+    ideas: new IdeaRepository(database),
     secrets,
     integrationLog,
     windows,
@@ -80,13 +91,21 @@ async function start(): Promise<void> {
     modules: {},
   }
 
+  let lastAPIBaseURL = settings.get().apiBaseURL
   const applyAppearance = () => {
     nativeTheme.themeSource = settings.get().appearance
+    windows.applyTextScale(settings.get().textScale)
+    // Outro servidor do Pregar pode ter a degustação ligada ou desligada.
+    if (settings.get().apiBaseURL !== lastAPIBaseURL) {
+      lastAPIBaseURL = settings.get().apiBaseURL
+      void refreshPreview(true)
+    }
   }
   applyAppearance()
   if (process.platform !== 'darwin') session.defaultSession.setSpellCheckerLanguages(['pt-BR', 'en-US'])
 
   registerCoreHandlers(context)
+  registerIdeasHandlers(context)
   registerExtensions(context)
 
   buildMenu({
@@ -107,6 +126,8 @@ async function start(): Promise<void> {
 
   windows.open('mesa')
   void account.refresh(false).catch(() => undefined)
+  void refreshPreview()
+  setInterval(() => void refreshPreview(), 6 * 60 * 60 * 1000)
   if (settings.get().updates.automatic) setTimeout(() => void updater.check(), 15_000)
 
   app.on('second-instance', () => windows.open('mesa'))

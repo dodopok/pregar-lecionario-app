@@ -28,9 +28,15 @@ try {
   if (!isolated || !info?.ok) throw new Error(`Isolamento ou ponte do app com problema: ${JSON.stringify({ isolated, info })}`)
   await window.screenshot({ path: process.argv[3] ?? 'smoke.png', timeout: 20000 })
 
-  // Digita e sai imediatamente, antes do salvamento agrupado (350 ms): o fechamento tem de esperar.
+  // Primeira abertura: o tour cobre a Mesa; pular deixa o manuscrito livre.
+  const skipTour = window.locator('.tour button', { hasText: 'Pular tour' })
+  if (await skipTour.isVisible().catch(() => false)) {
+    await skipTour.click()
+    await window.waitForSelector('.tour', { state: 'detached', timeout: 5000 })
+  }
   const later = window.locator('button', { hasText: 'Decidir depois' })
   if (await later.isVisible().catch(() => false)) await later.click()
+  // Digita e sai imediatamente, antes do salvamento agrupado (350 ms): o fechamento tem de esperar.
   await window.locator('.manuscript-editor').click()
   await window.keyboard.type(typed, { delay: 0 })
   const exited = new Promise((resolve) => app.process().once('exit', resolve))

@@ -82,7 +82,7 @@ function openDocument(): void {
 
 function openTablet(): void {
   void app.updateSettings({ tablet: { format: 'gdoc' } })
-  mesa.openSheet('tablet')
+  mesa.openSheet('pulpit')
 }
 
 onMounted(() => void ensureDriveStatus())

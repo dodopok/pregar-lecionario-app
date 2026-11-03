@@ -13,6 +13,7 @@ import { QuotaService } from './modules/ai/quota'
 import { aiRoutes } from './modules/ai/plugin'
 import type { AIRunner } from './modules/ai/runner'
 import { EstevaoProxy, estevaoRoutes } from './modules/estevao/proxy'
+import { estevaoPublicRoutes } from './modules/estevao/public'
 import { accountRoutes } from './modules/account/plugin'
 import { legalRoutes } from './modules/legal/pages'
 import { adminRoutes } from './modules/admin/plugin'
@@ -130,6 +131,7 @@ export async function buildApp(deps: AppDeps, runner: AIRunner, options: { logge
   accountRoutes(app, deps, { auth, billing, quota }, requireAuth)
   billingRoutes(app, deps, billing, requireAuth)
   estevaoRoutes(app, deps, estevao, billing, requireAuth)
+  estevaoPublicRoutes(app, deps, estevao)
   aiRoutes(app, deps, { billing, quota, runner }, requireAuth)
   adminRoutes(app, deps, { billing, quota })
   legalRoutes(app, deps)

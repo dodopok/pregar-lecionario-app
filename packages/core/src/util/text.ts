@@ -35,11 +35,41 @@ export function countWords(text: string): number {
   return matches ? matches.length : 0
 }
 
-/** Estimativa de minutos de pregação usada na barra de status (≈ 96 palavras por minuto). */
+/** Ritmo padrão de pregação usado nas estimativas (≈ 96 palavras por minuto, até o Ensaio medir o seu). */
 export const PREACHING_WORDS_PER_MINUTE = 96
 
-export function estimatedPreachingMinutes(wordCount: number): number {
-  return wordCount / PREACHING_WORDS_PER_MINUTE
+/** Limites aceitos para um ritmo medido ou digitado (fala muito lenta ou muito rápida). */
+export const PREACHING_WPM_RANGE = { min: 60, max: 180 } as const
+
+/** Palavras por página impressa na folha do púlpito (fonte 18 pt, entrelinha generosa). */
+export const PULPIT_WORDS_PER_PAGE = 260
+
+/** Minutos de pregação estimados para `wordCount` palavras no ritmo dado (padrão: 96 ppm). */
+export function estimatedPreachingMinutes(wordCount: number, wordsPerMinute = PREACHING_WORDS_PER_MINUTE): number {
+  const rate = Number.isFinite(wordsPerMinute) && wordsPerMinute > 0 ? wordsPerMinute : PREACHING_WORDS_PER_MINUTE
+  return wordCount / rate
+}
+
+/** Páginas estimadas da folha do púlpito (sempre pelo menos 1 quando há texto). */
+export function estimatedPulpitPages(wordCount: number, wordsPerPage = PULPIT_WORDS_PER_PAGE): number {
+  if (wordCount <= 0) return 0
+  return Math.max(1, Math.ceil(wordCount / wordsPerPage))
+}
+
+/** Ritmo medido no Ensaio, limitado à faixa plausível; nulo quando a medição não vale (muito curta). */
+export function measuredWordsPerMinute(words: number, elapsedSeconds: number): number | null {
+  if (words < 80 || elapsedSeconds < 30) return null
+  const rate = Math.round((words / elapsedSeconds) * 60)
+  return Math.min(PREACHING_WPM_RANGE.max, Math.max(PREACHING_WPM_RANGE.min, rate))
+}
+
+/** Texto curto da duração estimada: "≈ 18 min" ou "≈ 1 h 05". */
+export function formatMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  if (total < 60) return `${total} min`
+  const hours = Math.floor(total / 60)
+  const rest = total % 60
+  return `${hours} h ${String(rest).padStart(2, '0')}`
 }
 
 export function truncate(value: string, maximum: number): string {

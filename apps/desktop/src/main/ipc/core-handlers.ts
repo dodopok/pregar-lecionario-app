@@ -137,6 +137,13 @@ export function registerCoreHandlers(context: MainContext): void {
     context.sermons.search(z.enum(['passage', 'occasion', 'date', 'text']).parse(mode), z.string().max(200).parse(query)),
   )
   handle('sermons:states', ({ from, to }) => context.sermons.states(dateKey.parse(from), dateKey.parse(to)))
+  handle('sermons:related', ({ dateKey: key, references, occasion }) =>
+    context.sermons.related({
+      dateKey: dateKey.parse(key),
+      references: z.array(z.string().trim().max(200)).max(12).parse(references ?? []),
+      occasion: occasion ? z.string().trim().max(200).parse(occasion) : null,
+    }),
+  )
 
   handle('logs:tail', ({ lines }) => ({ path: context.integrationLog.file, text: context.integrationLog.tail(lines ?? 400) }))
   handle('logs:clear', () => context.integrationLog.clear())

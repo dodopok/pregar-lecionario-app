@@ -1,6 +1,8 @@
 /**
  * Conversão do JSON do editor para o modelo neutro (`RichDocument`) e derivados: texto corrido
- * da revisão, âncoras de bloco e lista de notas. Funciona só com JSON, sem esquema nem editor.
+ * da revisão, âncoras de bloco, contagem de palavras e lista de notas. Funciona só com JSON, sem
+ * esquema nem editor. As anotações (notas do pregador para si) ficam fora de tudo o que deriva do
+ * texto falado, salvo pedido explícito (`includeAnnotations`).
  */
 import type { JSONContent } from '@tiptap/core'
 import { Fragment, Node as ProseMirrorNode, Slice } from '@tiptap/pm/model'
@@ -14,6 +16,7 @@ import {
   type RichParagraph,
   type RichRun,
 } from '@pregar/core/document/model'
+import { countWords } from '@pregar/core/util/text'
 import { isSafeLinkHref, normalizeColor, parseLengthPt, primaryFontFamily } from './util'
 
 type JSONMark = NonNullable<JSONContent['marks']>[number]
@@ -23,8 +26,14 @@ export type ManuscriptContent = JSONContent | ProseMirrorNode | Fragment | Slice
 
 const LEAF_TYPES = new Set(['hardBreak', 'footnote', 'horizontalRule', 'image'])
 const TEXTBLOCK_TYPES = new Set(['paragraph', 'heading'])
-const LIST_TYPES: Record<string, ListKind> = { bulletList: 'bullet', orderedList: 'ordered', taskList: 'check' }
+const LIST_TYPES: Record<string, ListKind> = {
+  bulletList: 'bullet',
+  orderedList: 'ordered',
+  taskList: 'check',
+}
 const INLINE_TYPES = new Set(['text', 'hardBreak', 'footnote'])
+/** Anotação: nota do pregador para si, fora do texto falado. */
+const ANNOTATION_TYPE = 'annotation'
 
 export interface FlatPiece {
   kind: 'text' | 'break' | 'footnote'
@@ -43,6 +52,8 @@ export interface FlatParagraph {
   attrs: Record<string, unknown>
   quote: boolean
   attribution: boolean
+  /** Parágrafo dentro de uma anotação; só aparece com `includeAnnotations`. */
+  annotation?: boolean
   list?: { kind: ListKind; level: number; checked?: boolean; ordinal?: number }
   /** Posição ProseMirror do início do conteúdo do parágrafo. */
   contentPos: number
@@ -90,15 +101,31 @@ interface WalkContext {
   quote: boolean
   level: number
   list?: FlatParagraph['list']
+  annotation: boolean
+  includeAnnotations: boolean
+}
+
+export interface FlattenOptions {
+  /**
+   * Inclui os parágrafos das anotações, marcados com `annotation: true`. Padrão: false, porque
+   * tudo o que deriva do texto falado (exportações, revisão, contagem) ignora as anotações.
+   */
+  includeAnnotations?: boolean
 }
 
 /** Lista os parágrafos do documento na ordem de leitura, com posições e contexto de bloco. */
-export function flattenDocument(content: ManuscriptContent): FlatParagraph[] {
+export function flattenDocument(content: ManuscriptContent, options: FlattenOptions = {}): FlatParagraph[] {
   const doc = toDocumentJSON(content)
   const result: FlatParagraph[] = []
+  const context: WalkContext = {
+    quote: false,
+    level: -1,
+    annotation: false,
+    includeAnnotations: options.includeAnnotations === true,
+  }
   let pos = 0
   for (const child of doc.content ?? []) {
-    visitBlock(child, pos, { quote: false, level: -1 }, result)
+    visitBlock(child, pos, context, result)
     pos += jsonNodeSize(child)
   }
   return result
@@ -108,6 +135,12 @@ function visitBlock(node: JSONContent, start: number, context: WalkContext, out:
   const type = node.type ?? ''
   if (TEXTBLOCK_TYPES.has(type)) {
     out.push(flattenTextblock(node, start, context))
+    return
+  }
+  if (type === ANNOTATION_TYPE) {
+    // Fora do texto falado: só entra quando pedida, e então marcada.
+    if (context.includeAnnotations)
+      visitChildren(node, start, { ...context, annotation: true, list: undefined }, out)
     return
   }
   if (type === 'blockquote') {
@@ -130,7 +163,7 @@ function visitBlock(node: JSONContent, start: number, context: WalkContext, out:
         const isTextblock = TEXTBLOCK_TYPES.has(child.type ?? '')
         const childList = isTextblock && !marked ? list : undefined
         if (isTextblock) marked = true
-        visitBlock(child, itemPos, { quote: context.quote, level, list: childList }, out)
+        visitBlock(child, itemPos, { ...context, level, list: childList }, out)
         itemPos += jsonNodeSize(child)
       }
       pos += jsonNodeSize(item)
@@ -161,7 +194,13 @@ function flattenTextblock(node: JSONContent, start: number, context: WalkContext
     } else if (child.type === 'hardBreak') {
       pieces.push({ kind: 'break', text: '\n', marks, pos })
     } else if (child.type === 'footnote') {
-      const piece: FlatPiece = { kind: 'footnote', text: '', marks, pos, note: typeof child.attrs?.note === 'string' ? child.attrs.note : '' }
+      const piece: FlatPiece = {
+        kind: 'footnote',
+        text: '',
+        marks,
+        pos,
+        note: typeof child.attrs?.note === 'string' ? child.attrs.note : '',
+      }
       if (typeof child.attrs?.id === 'string') piece.footnoteId = child.attrs.id
       pieces.push(piece)
     }
@@ -177,6 +216,7 @@ function flattenTextblock(node: JSONContent, start: number, context: WalkContext
   }
   if (typeof attrs.id === 'string' && attrs.id) paragraph.id = attrs.id
   if (context.list) paragraph.list = context.list
+  if (context.annotation) paragraph.annotation = true
   return paragraph
 }
 
@@ -261,14 +301,25 @@ function sameRunStyle(a: RichRun, b: RichRun): boolean {
 
 function pushRun(runs: RichRun[], run: RichRun): void {
   const last = runs[runs.length - 1]
-  if (last && !last.hardBreak && !run.hardBreak && last.footnote === undefined && run.footnote === undefined && sameRunStyle(last, run)) {
+  if (
+    last &&
+    !last.hardBreak &&
+    !run.hardBreak &&
+    last.footnote === undefined &&
+    run.footnote === undefined &&
+    sameRunStyle(last, run)
+  ) {
     last.text += run.text
   } else {
     runs.push(run)
   }
 }
 
-function paragraphFromFlat(flat: FlatParagraph, nextFootnote: () => number, footnotes: RichFootnote[]): RichParagraph {
+function paragraphFromFlat(
+  flat: FlatParagraph,
+  nextFootnote: () => number,
+  footnotes: RichFootnote[],
+): RichParagraph {
   const runs: RichRun[] = []
   for (const piece of flat.pieces) {
     const style = runStyleFromMarks(piece.marks)
@@ -288,7 +339,8 @@ function paragraphFromFlat(flat: FlatParagraph, nextFootnote: () => number, foot
   if (typeof attrs.textAlign === 'string' && ALIGNMENTS.has(attrs.textAlign as ParagraphAlignment)) {
     paragraph.alignment = attrs.textAlign as ParagraphAlignment
   }
-  const numeric = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined)
+  const numeric = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : undefined
   const indentStart = numeric(attrs.indentStart)
   const indentFirstLine = numeric(attrs.indentFirstLine)
   const spaceBefore = numeric(attrs.spaceBefore)
@@ -305,23 +357,51 @@ function paragraphFromFlat(flat: FlatParagraph, nextFootnote: () => number, foot
   return paragraph
 }
 
+export interface RichDocumentOptions extends FlattenOptions {
+  title?: string
+}
+
 /**
  * Converte o documento do editor no modelo neutro. Notas de rodapé são numeradas na ordem do
- * texto; listas numeradas recebem o ordinal de cada item.
+ * texto; listas numeradas recebem o ordinal de cada item. As anotações não entram (nem as notas
+ * dentro delas), a menos que `includeAnnotations` seja pedido.
  */
-export function toRichDocument(content: ManuscriptContent, options: { title?: string } = {}): RichDocument {
+export function toRichDocument(content: ManuscriptContent, options: RichDocumentOptions = {}): RichDocument {
   const footnotes: RichFootnote[] = []
   let counter = 0
   const next = () => (counter += 1)
-  const paragraphs = flattenDocument(content).map((flat) => paragraphFromFlat(flat, next, footnotes))
+  const paragraphs = flattenDocument(content, options).map((flat) => paragraphFromFlat(flat, next, footnotes))
   const document: RichDocument = { paragraphs, footnotes }
   if (options.title !== undefined) document.title = options.title
   return document
 }
 
-/** Texto corrido enviado à revisão: igual a `documentPlainText` do modelo neutro. */
-export function manuscriptPlainText(content: ManuscriptContent, options: { includeFootnotes?: boolean } = {}): string {
-  return documentPlainText(toRichDocument(content), options)
+/**
+ * Texto falado do manuscrito, um parágrafo por linha, igual a `documentPlainText` do modelo
+ * neutro: é o que a revisão recebe e contra o que as citações são conferidas. As anotações ficam
+ * de fora, salvo `includeAnnotations`; `includeFootnotes` acrescenta a área de notas no fim.
+ */
+export function manuscriptPlainText(
+  content: ManuscriptContent,
+  options: { includeFootnotes?: boolean; includeAnnotations?: boolean } = {},
+): string {
+  return documentPlainText(
+    toRichDocument(content, { includeAnnotations: options.includeAnnotations }),
+    options,
+  )
+}
+
+/**
+ * Palavras do texto falado, para a estimativa de tempo de pregação: títulos, parágrafos, citações
+ * e itens de lista, sem as anotações, sem os marcadores de lista e sem os números das chamadas de
+ * nota (nem o texto das notas). Conta como `countWords` do núcleo, que é o contador do editor.
+ */
+export function manuscriptWordCount(content: ManuscriptContent): number {
+  let total = 0
+  for (const paragraph of flattenDocument(content)) {
+    total += countWords(paragraph.pieces.map((piece) => piece.text).join(''))
+  }
+  return total
 }
 
 export interface BlockAnchor {
@@ -342,7 +422,10 @@ function listPrefix(paragraph: RichParagraph): string {
   return `${list.ordinal ?? 1}. `
 }
 
-/** Âncoras de bloco para a revisão: id do parágrafo → texto e intervalo no texto corrido. */
+/**
+ * Âncoras de bloco para a revisão: id do parágrafo → texto e intervalo no texto corrido. Como o
+ * texto corrido, não inclui as anotações.
+ */
 export function blockAnchors(content: ManuscriptContent): BlockAnchor[] {
   const anchors: BlockAnchor[] = []
   let offset = 0
@@ -364,10 +447,13 @@ export interface FootnoteEntry {
   pos: number
 }
 
-/** Notas na ordem do texto, para a lista exibida no fim do documento. */
+/**
+ * Notas na ordem do texto, para a lista exibida no fim do documento. Inclui as notas dentro de
+ * anotações, porque o editor também as numera; nas exportações elas somem junto com a anotação.
+ */
 export function footnotesOf(content: ManuscriptContent): FootnoteEntry[] {
   const entries: FootnoteEntry[] = []
-  for (const paragraph of flattenDocument(content)) {
+  for (const paragraph of flattenDocument(content, { includeAnnotations: true })) {
     for (const piece of paragraph.pieces) {
       if (piece.kind !== 'footnote') continue
       const entry: FootnoteEntry = { number: entries.length + 1, note: piece.note ?? '', pos: piece.pos }
@@ -381,8 +467,13 @@ export function footnotesOf(content: ManuscriptContent): FootnoteEntry[] {
 /**
  * Texto corrido com o mapa de posições: para cada caractere, a posição ProseMirror onde começa e
  * onde termina; caracteres sintéticos (marcadores de lista, quebras entre parágrafos) têm -1.
+ * Sem as anotações, como o texto da revisão de onde vêm as citações procuradas.
  */
-export function plainTextWithPositions(content: ManuscriptContent): { text: string; starts: number[]; ends: number[] } {
+export function plainTextWithPositions(content: ManuscriptContent): {
+  text: string
+  starts: number[]
+  ends: number[]
+} {
   let text = ''
   const starts: number[] = []
   const ends: number[] = []
@@ -398,7 +489,12 @@ export function plainTextWithPositions(content: ManuscriptContent): { text: stri
     if (index > 0) push('\n', -1, -1)
     const list = flat.list
     if (list) {
-      const prefix = list.kind === 'bullet' ? '• ' : list.kind === 'check' ? `${list.checked ? '☑' : '☐'} ` : `${list.ordinal ?? 1}. `
+      const prefix =
+        list.kind === 'bullet'
+          ? '• '
+          : list.kind === 'check'
+            ? `${list.checked ? '☑' : '☐'} `
+            : `${list.ordinal ?? 1}. `
       push(prefix, -1, -1)
     }
     for (const piece of flat.pieces) {

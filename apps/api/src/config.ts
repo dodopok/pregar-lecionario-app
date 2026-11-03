@@ -30,6 +30,10 @@ const schema = z.object({
   ESTEVAO_APP_INTERNAL_ID: z.string().optional(),
   /** Libera o proxy da Estêvão API também para contas sem assinatura. */
   ESTEVAO_PROXY_FOR_FREE: bool.default(false),
+  /** Liga a degustação: leituras das próximas semanas sem conta, em /v1/public/estevao. */
+  ESTEVAO_PUBLIC_PREVIEW: bool.default(false),
+  /** Quantos dias à frente a degustação alcança (ela também mostra os 7 dias anteriores). */
+  ESTEVAO_PREVIEW_DAYS: z.coerce.number().int().nonnegative().max(120).default(35),
 
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
@@ -58,6 +62,8 @@ const schema = z.object({
   LIMIT_AI_CALLS_PER_DAY: int(DEFAULT_PRO_LIMITS.dailyAICalls),
   LIMIT_MONTHLY_COST_USD: z.coerce.number().nonnegative().default(DEFAULT_PRO_LIMITS.monthlyCostCapUSD),
   LIMIT_ESTEVAO_PER_MINUTE: int(120),
+  /** Consultas da degustação por endereço IP e por minuto. */
+  LIMIT_ESTEVAO_PREVIEW_PER_MINUTE: int(20),
 
   ADMIN_TOKEN: z.string().min(32).optional(),
   CORS_ORIGINS: z.string().default(''),

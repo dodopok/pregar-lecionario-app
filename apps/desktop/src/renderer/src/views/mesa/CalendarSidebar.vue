@@ -1,40 +1,61 @@
 <script setup lang="ts">
+/**
+ * Calendário da Mesa: mês com os dias de pregar destacados, Hoje e Próximo domingo, as próximas
+ * celebrações com cor e estado por extenso, e o cartão compacto do ritmo da semana (desligável
+ * em Preferências › Ritmo e duração). Sem marca nem links: isso vive no trilho.
+ */
 import { computed, ref, watch } from 'vue'
-import { ChevronLeft, ChevronRight, Cross, Library, ScrollText, PanelLeftClose } from 'lucide-vue-next'
-import { dateKey, longDatePt, parseDateKey } from '@pregar/core/util/dates'
-import SectionLabel from '@/components/SectionLabel.vue'
+import { ChevronLeft, ChevronRight, PanelLeftClose, X } from 'lucide-vue-next'
+import type { LiturgicalDay } from '@pregar/core/liturgy/types'
+import { normalizeLiturgicalColor } from '@pregar/core/liturgy/types'
+import { addDays, dateKey, longDatePt, parseDateKey, weekdayNamePt } from '@pregar/core/util/dates'
+import { preachingDays } from '@shared/settings'
 import { invoke, shortcut } from '@/lib/api'
 import { useMesaStore } from '@/stores/mesa'
 import { useAppStore } from '@/stores/app'
-import { STATE_TITLES, WEEKDAY_INITIALS, monthCells, monthSundays, monthTitle, shiftDays, shiftMonth, weekRhythm } from './calendar'
+import { STATE_TITLES, WEEKDAY_INITIALS, monthCells, monthTitle, shiftDays, shiftMonth, weekRhythm } from './calendar'
 
+withDefaults(defineProps<{ popover?: boolean }>(), { popover: false })
 const emit = defineEmits<{ collapse: [] }>()
 const mesa = useMesaStore()
 const app = useAppStore()
 const today = ref(dateKey(new Date()))
-const sundayNames = ref<Record<string, string>>({})
+const days = ref<Record<string, LiturgicalDay>>({})
 
+const weekdays = computed(() => preachingDays(app.settings.rhythm))
 const cells = computed(() => monthCells(mesa.calendarMonth))
-const sundays = computed(() => monthSundays(mesa.calendarMonth))
-const rhythm = computed(() => weekRhythm(new Date(), mesa.states[weekRhythm(new Date(), 'empty').sunday] ?? 'empty'))
+const rhythm = computed(() => {
+  const next = weekRhythm(new Date(), 'empty', weekdays.value)
+  return weekRhythm(new Date(), mesa.states[next.sunday] ?? 'empty', weekdays.value)
+})
+const nextLabel = computed(() => (weekdays.value.length === 1 && weekdays.value[0] === 0 ? 'Próximo domingo' : 'Próximo dia de pregar'))
 
-async function loadSundayNames(): Promise<void> {
+/** Próximas celebrações: domingos e festas a partir de hoje, dentro do mês visível (e um pouco depois). */
+const upcoming = computed(() => {
+  const start = today.value < `${mesa.calendarMonth}-01` ? `${mesa.calendarMonth}-01` : today.value
+  return Object.values(days.value)
+    .filter((day) => day.date >= start && (day.sundayName || day.celebration || day.isHolyDay))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 8)
+})
+
+async function loadMonth(): Promise<void> {
   const month = mesa.calendarMonth
   const from = `${month}-01`
-  const last = sundays.value.at(-1) ?? `${month}-28`
+  const to = shiftDays(from, 45)
   try {
-    const days = await invoke('liturgy:calendar', { from, to: last > `${month}-31` ? last : shiftDays(`${month}-01`, 40) })
+    const loaded = await invoke('liturgy:calendar', { from, to })
     if (month !== mesa.calendarMonth) return
-    sundayNames.value = Object.fromEntries(days.filter((day) => day.sundayName).map((day) => [day.date, day.sundayName!]))
+    days.value = Object.fromEntries(loaded.map((day) => [day.date, day]))
   } catch {
-    sundayNames.value = {}
+    days.value = {}
   }
 }
 
 watch(
   () => [mesa.calendarMonth, app.settings.liturgy.prayerBook, app.settings.liturgy.language, app.liturgyAccess.mode],
   () => {
-    void loadSundayNames()
+    void loadMonth()
     void mesa.loadStates()
   },
   { immediate: true },
@@ -48,19 +69,39 @@ function dayNumber(key: string): number {
   return parseDateKey(key)?.getDate() ?? 0
 }
 
-function shortSunday(key: string): string {
-  const date = parseDateKey(key)
-  return date ? `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}` : key
-}
-
 function longLabel(key: string): string {
   const date = parseDateKey(key)
   return date ? longDatePt(date) : key
 }
 
-function stateGlyph(key: string): string {
-  const state = mesa.states[key] ?? 'empty'
-  return state === 'exported' ? '●' : state === 'inProgress' ? '◐' : '○'
+function shortLabel(key: string): string {
+  const date = parseDateKey(key)
+  if (!date) return key
+  const weekday = weekdayNamePt(date.getDay()).slice(0, 3)
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function isPreachingDay(key: string): boolean {
+  const date = parseDateKey(key)
+  return date ? weekdays.value.includes(date.getDay()) : false
+}
+
+function hasFeast(key: string): boolean {
+  const day = days.value[key]
+  return Boolean(day && (day.celebration || day.isHolyDay))
+}
+
+function dayName(day: LiturgicalDay): string {
+  return day.sundayName ?? day.celebration?.name ?? day.season?.name ?? longLabel(day.date)
+}
+
+function colorOf(day: LiturgicalDay): string | null {
+  return normalizeLiturgicalColor(day.color) ?? null
+}
+
+function stateText(key: string): string | null {
+  const state = mesa.states[key]
+  return state && state !== 'empty' ? STATE_TITLES[state] : null
 }
 
 function onGridKeydown(event: KeyboardEvent): void {
@@ -70,29 +111,46 @@ function onGridKeydown(event: KeyboardEvent): void {
   event.preventDefault()
   select(shiftDays(mesa.selectedDateKey, step))
 }
+
+function goToday(): void {
+  select(today.value)
+}
+
+function goNext(): void {
+  const current = parseDateKey(mesa.selectedDateKey) ?? new Date()
+  // A partir do dia aberto, o próximo dia de pregar depois dele.
+  const next = weekRhythm(addDays(current, 1), 'empty', weekdays.value).sunday
+  select(next)
+}
 </script>
 
 <template>
-  <aside class="calendar" aria-label="Calendário litúrgico">
-    <div class="calendar__brand drag-region">
-      <span class="calendar__mark" aria-hidden="true"><Cross :size="13" /></span>
-      <span class="serif calendar__name">Pregar</span>
+  <aside class="calendar" :class="{ 'calendar--popover': popover }" aria-label="Calendário litúrgico">
+    <header class="calendar__header" :class="{ 'drag-region': !popover }">
+      <h2 class="eyebrow">Calendário</h2>
       <span class="spacer" />
-      <button class="calendar__collapse no-drag" type="button" :title="`Ocultar calendário (${shortcut('⇧⌥⌘1')})`" aria-label="Ocultar calendário" @click="emit('collapse')">
-        <PanelLeftClose :size="15" />
+      <button
+        class="calendar__collapse no-drag"
+        type="button"
+        :title="popover ? 'Fechar calendário (Esc)' : `Ocultar calendário (${shortcut('⇧⌥⌘1')})`"
+        :aria-label="popover ? 'Fechar calendário' : 'Ocultar calendário'"
+        @click="emit('collapse')"
+      >
+        <X v-if="popover" :size="15" />
+        <PanelLeftClose v-else :size="15" />
       </button>
-    </div>
+    </header>
 
     <div class="scroll calendar__scroll">
       <section class="calendar__month card" aria-label="Mês">
         <header class="calendar__month-header">
-          <h2 class="serif">{{ monthTitle(mesa.calendarMonth) }}</h2>
+          <h3 class="serif">{{ monthTitle(mesa.calendarMonth) }}</h3>
           <span class="spacer" />
           <button type="button" class="nav" aria-label="Mês anterior" @click="mesa.calendarMonth = shiftMonth(mesa.calendarMonth, -1)"><ChevronLeft :size="14" /></button>
           <button type="button" class="nav" aria-label="Próximo mês" @click="mesa.calendarMonth = shiftMonth(mesa.calendarMonth, 1)"><ChevronRight :size="14" /></button>
         </header>
         <div class="grid" role="grid" aria-label="Dias do mês" tabindex="0" @keydown="onGridKeydown">
-          <span v-for="(label, index) in WEEKDAY_INITIALS" :key="`w${index}`" class="weekday" :class="{ 'weekday--sunday': index === 0 }" aria-hidden="true">{{ label }}</span>
+          <span v-for="(label, index) in WEEKDAY_INITIALS" :key="`w${index}`" class="weekday" :class="{ 'weekday--preach': weekdays.includes(index) }" aria-hidden="true">{{ label }}</span>
           <template v-for="(cell, index) in cells" :key="index">
             <span v-if="!cell" class="cell cell--empty" />
             <button
@@ -103,59 +161,58 @@ function onGridKeydown(event: KeyboardEvent): void {
               :class="{
                 'cell--selected': cell === mesa.selectedDateKey,
                 'cell--today': cell === today,
-                'cell--sunday': parseDateKey(cell)?.getDay() === 0,
+                'cell--preach': isPreachingDay(cell),
+                'cell--feast': hasFeast(cell),
               }"
               :aria-selected="cell === mesa.selectedDateKey"
-              :aria-label="`${longLabel(cell)}${mesa.states[cell] ? ` · ${STATE_TITLES[mesa.states[cell]!]}` : ''}`"
-              :title="longLabel(cell)"
+              :aria-label="`${longLabel(cell)}${days[cell] ? ` · ${dayName(days[cell]!)}` : ''}${stateText(cell) ? ` · ${stateText(cell)}` : ''}`"
+              :title="days[cell] ? `${dayName(days[cell]!)}${stateText(cell) ? ` · ${stateText(cell)}` : ''}` : longLabel(cell)"
               tabindex="-1"
               @click="select(cell)"
             >
               {{ dayNumber(cell) }}
-              <span v-if="mesa.states[cell] && mesa.states[cell] !== 'empty'" class="cell__dot" aria-hidden="true" />
+              <span v-if="stateText(cell)" class="cell__dot" :class="`cell__dot--${mesa.states[cell]}`" aria-hidden="true" />
             </button>
           </template>
         </div>
+        <div class="week-nav">
+          <button type="button" class="week-nav__button" title="Abrir o dia de hoje" @click="goToday">Hoje</button>
+          <button type="button" class="week-nav__button week-nav__button--accent" :title="`Abrir o ${nextLabel.toLowerCase()}`" @click="goNext">{{ nextLabel }}</button>
+        </div>
       </section>
 
-      <div class="week-nav">
-        <button type="button" class="nav nav--boxed" aria-label="Semana anterior" @click="select(shiftDays(mesa.selectedDateKey, -7))"><ChevronLeft :size="14" /></button>
-        <button type="button" class="today" title="Voltar para hoje" @click="select(today)">Hoje</button>
-        <button type="button" class="nav nav--boxed" aria-label="Próxima semana" @click="select(shiftDays(mesa.selectedDateKey, 7))"><ChevronRight :size="14" /></button>
-      </div>
-
-      <section class="sundays" aria-label="Domingos do mês">
-        <SectionLabel title="Domingos" />
+      <section v-if="upcoming.length > 0" class="upcoming" aria-label="Próximas celebrações">
+        <p class="eyebrow upcoming__label">Próximas celebrações</p>
         <button
-          v-for="sunday in sundays"
-          :key="sunday"
+          v-for="day in upcoming"
+          :key="day.date"
           type="button"
-          class="sunday"
-          :class="{ 'sunday--selected': sunday === mesa.selectedDateKey }"
-          :title="`${sundayNames[sunday] ?? 'Domingo'} · ${STATE_TITLES[mesa.states[sunday] ?? 'empty']}`"
-          @click="select(sunday)"
+          class="feast"
+          :class="{ 'feast--selected': day.date === mesa.selectedDateKey }"
+          :data-color="colorOf(day) ?? undefined"
+          :title="`${longLabel(day.date)} · ${dayName(day)}`"
+          @click="select(day.date)"
         >
-          <span class="sunday__glyph" :class="`sunday__glyph--${mesa.states[sunday] ?? 'empty'}`" :aria-label="STATE_TITLES[mesa.states[sunday] ?? 'empty']">{{ stateGlyph(sunday) }}</span>
-          <span class="sunday__date">{{ shortSunday(sunday) }}</span>
-          <span class="sunday__name">{{ sundayNames[sunday] ?? 'Domingo' }}</span>
+          <span class="feast__date">{{ shortLabel(day.date) }}</span>
+          <span class="feast__swatch" aria-hidden="true" />
+          <span class="feast__name">{{ dayName(day) }}</span>
+          <span v-if="stateText(day.date)" class="feast__state" :class="`feast__state--${mesa.states[day.date]}`">
+            <span class="feast__state-dot" aria-hidden="true" />{{ stateText(day.date) }}
+          </span>
         </button>
       </section>
     </div>
 
-    <button type="button" class="rhythm" title="Abrir a preparação do próximo domingo" @click="select(rhythm.sunday)">
+    <button v-if="app.settings.rhythm.weekTips" type="button" class="rhythm" :title="`Abrir a preparação de ${longLabel(rhythm.sunday)}`" @click="select(rhythm.sunday)">
       <span class="rhythm__head">
-        <SectionLabel title="Próximo domingo" tag="span" />
+        <span class="eyebrow">{{ nextLabel }}</span>
         <span class="rhythm__countdown">{{ rhythm.countdown }}</span>
       </span>
-      <span class="serif rhythm__name">{{ sundayNames[rhythm.sunday] ?? longLabel(rhythm.sunday) }}</span>
-      <span class="rhythm__state">{{ STATE_TITLES[mesa.states[rhythm.sunday] ?? 'empty'] }}</span>
-      <span class="rhythm__guidance">{{ rhythm.guidance }}</span>
+      <span class="serif rhythm__name">{{ days[rhythm.sunday] ? dayName(days[rhythm.sunday]!) : longLabel(rhythm.sunday) }}</span>
+      <span class="rhythm__line">
+        <span v-if="stateText(rhythm.sunday)" class="rhythm__state">{{ stateText(rhythm.sunday) }} · </span>{{ rhythm.guidance }}
+      </span>
     </button>
-
-    <nav class="links" aria-label="Janelas">
-      <button type="button" class="link" @click="invoke('app:openWindow', { window: 'arquivo' })"><ScrollText :size="14" /> Arquivo de sermões</button>
-      <button type="button" class="link" @click="invoke('app:openWindow', { window: 'biblioteca' })"><Library :size="14" /> Biblioteca de PDFs</button>
-    </nav>
   </aside>
 </template>
 
@@ -168,27 +225,16 @@ function onGridKeydown(event: KeyboardEvent): void {
   border-right: 1px solid var(--line);
   min-width: 0;
 }
-.calendar__brand {
-  height: var(--header-height);
+.calendar--popover {
+  border-right: none;
+}
+.calendar__header {
+  height: 44px;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 0 10px 0 calc(14px + var(--window-controls-inset));
-}
-.calendar__mark {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  display: grid;
-  place-items: center;
-  color: var(--accent-contrast);
-  background: var(--accent);
-  transition: background 0.3s;
-}
-.calendar__name {
-  font-size: 17px;
-  font-weight: 600;
+  gap: 8px;
+  padding: 0 8px 0 16px;
 }
 .calendar__collapse {
   border: none;
@@ -205,13 +251,13 @@ function onGridKeydown(event: KeyboardEvent): void {
 }
 .calendar__scroll {
   flex: 1;
-  padding: 4px 12px 12px;
+  padding: 0 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 .calendar__month {
-  padding: 10px 9px;
+  padding: 10px 9px 9px;
   background: var(--paper);
 }
 .calendar__month-header {
@@ -219,7 +265,7 @@ function onGridKeydown(event: KeyboardEvent): void {
   align-items: center;
   padding: 0 5px 8px;
 }
-.calendar__month-header h2 {
+.calendar__month-header h3 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
@@ -237,12 +283,6 @@ function onGridKeydown(event: KeyboardEvent): void {
 .nav:hover {
   background: color-mix(in srgb, var(--ink) 7%, transparent);
 }
-.nav--boxed {
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--line);
-  background: var(--paper);
-}
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -254,15 +294,15 @@ function onGridKeydown(event: KeyboardEvent): void {
   border-radius: 6px;
 }
 .weekday {
-  height: 13px;
-  font-size: 9px;
+  height: 16px;
+  font-size: var(--text-xs);
   font-weight: 500;
   text-align: center;
-  color: color-mix(in srgb, var(--muted) 75%, transparent);
+  color: var(--muted);
 }
-.weekday--sunday {
+.weekday--preach {
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .cell {
   position: relative;
@@ -270,18 +310,30 @@ function onGridKeydown(event: KeyboardEvent): void {
   border: none;
   border-radius: 7px;
   background: none;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--ink);
 }
 .cell:hover {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
-.cell--sunday {
-  color: var(--accent);
+.cell--preach {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.cell--feast::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.7;
 }
 .cell--today {
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 .cell--selected,
@@ -290,88 +342,135 @@ function onGridKeydown(event: KeyboardEvent): void {
   color: var(--accent-contrast);
   background: var(--accent);
 }
+.cell--selected::after {
+  background: var(--accent-contrast);
+}
 .cell__dot {
   position: absolute;
   bottom: 3px;
   left: 50%;
-  width: 3px;
-  height: 3px;
-  margin-left: -1.5px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
   border-radius: 50%;
   background: currentColor;
+  opacity: 0.6;
+}
+.cell__dot--exported {
+  opacity: 1;
 }
 .week-nav {
   display: flex;
   gap: 6px;
+  margin-top: 8px;
 }
-.today {
-  flex: 1;
+.week-nav__button {
+  flex: none;
   height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--paper);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.today:hover {
+.week-nav__button:hover {
   background: color-mix(in srgb, var(--ink) 4%, var(--paper));
 }
-.sundays {
+.week-nav__button--accent {
+  flex: 1;
+  min-width: 0;
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.upcoming {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.sundays > :first-child {
+.upcoming__label {
   padding: 0 6px 4px;
 }
-.sunday {
+.feast {
   display: grid;
-  grid-template-columns: 14px 40px 1fr;
+  grid-template-columns: 54px 8px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 7px;
   align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  padding: 4px 6px;
+  min-height: 34px;
+  padding: 5px 6px;
   border: none;
   border-radius: 7px;
   background: none;
   text-align: left;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
-.sunday:hover {
+.feast:hover {
   background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
-.sunday--selected {
+.feast--selected {
   background: var(--accent-soft);
-  font-weight: 600;
 }
-.sunday__glyph {
-  font-size: 9px;
-  color: var(--accent);
-}
-.sunday__glyph--empty {
-  opacity: 0.55;
-}
-.sunday__date {
+.feast__date {
+  grid-row: 1 / span 2;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink-soft);
 }
-.sunday__name {
-  font-size: 11px;
-  color: var(--muted);
+.feast__swatch {
+  grid-row: 1 / span 2;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.feast[data-color='green'] .feast__swatch { background: rgb(46 122 81); }
+.feast[data-color='purple'] .feast__swatch { background: rgb(120 87 171); }
+.feast[data-color='red'] .feast__swatch { background: rgb(194 64 59); }
+.feast[data-color='rose'] .feast__swatch { background: rgb(212 110 145); }
+.feast[data-color='white'] .feast__swatch,
+.feast[data-color='gold'] .feast__swatch { background: rgb(184 150 71); }
+.feast[data-color='blue'] .feast__swatch { background: rgb(52 104 176); }
+.feast[data-color='black'] .feast__swatch { background: rgb(100 100 104); }
+.feast__name {
+  font-weight: 500;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.feast__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.feast__state-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.55;
+}
+.feast__state--exported .feast__state-dot {
+  opacity: 1;
 }
 .rhythm {
-  margin: 0 12px 8px;
-  padding: 10px 12px;
+  margin: 0 12px 12px;
+  padding: 9px 12px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 3px;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: var(--paper);
   text-align: left;
+  min-width: 0;
+  max-width: calc(100% - 24px);
 }
 .rhythm:hover {
   border-color: var(--accent);
@@ -380,45 +479,30 @@ function onGridKeydown(event: KeyboardEvent): void {
   width: 100%;
   display: flex;
   align-items: center;
+  gap: 6px;
 }
 .rhythm__countdown {
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-ink);
+  white-space: nowrap;
 }
 .rhythm__name {
   font-size: 13px;
   font-weight: 600;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rhythm__line {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  line-height: 1.4;
 }
 .rhythm__state {
-  font-size: 10px;
+  color: var(--ink-soft);
   font-weight: 500;
-  color: var(--muted);
-}
-.rhythm__guidance {
-  font-size: 10px;
-  color: var(--muted);
-}
-.links {
-  padding: 0 8px 10px;
-  display: flex;
-  flex-direction: column;
-}
-.link {
-  height: 34px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 6px;
-  border: none;
-  border-radius: 7px;
-  background: none;
-  color: var(--muted);
-  font-size: 12px;
-}
-.link:hover {
-  color: var(--ink);
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
 </style>

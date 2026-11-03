@@ -6,6 +6,7 @@ import type { LocalDatabase } from './storage/db'
 import { KeyValueStore } from './storage/db'
 import type { SettingsRepository } from './storage/settings'
 import type { SermonRepository } from './storage/sermons'
+import type { IdeaRepository } from './storage/ideas'
 import type { SecretStore } from './secrets'
 import type { FileIntegrationLog } from './log'
 import type { WindowManager } from './windows'
@@ -52,6 +53,7 @@ export interface MainContext {
   database: LocalDatabase
   settings: SettingsRepository
   sermons: SermonRepository
+  ideas: IdeaRepository
   secrets: SecretStore
   integrationLog: FileIntegrationLog
   windows: WindowManager

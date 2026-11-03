@@ -31,9 +31,10 @@ export const SHORTCUT_TABLES: ShortcutTable[] = [
       { keys: '⌥⌘C · ⌥⌘V · ⌘\\', action: 'Copiar formatação · Colar formatação · Limpar formatação' },
       { keys: '⇧⌘V', action: 'Colar sem formatação' },
       { keys: '⌘F · ⇧⌘H', action: 'Localizar · Localizar e substituir' },
-      { keys: '⌘S · ⌘P', action: 'Salvar agora · Imprimir' },
+      { keys: '⇧⌘A', action: 'Anotação só para você (fora da contagem e do púlpito)' },
+      { keys: '⌘S · ⌘P', action: 'Salvar agora · Imprimir direto' },
       { keys: '⌥/ · ⌘/', action: 'Pesquisar comandos · Ver atalhos' },
-      { keys: '⌘+ · ⌘− · ⌘0', action: 'Aumentar zoom · Diminuir zoom · Zoom 100%' },
+      { keys: '⌘+ · ⌘− · ⌥⌘0', action: 'Aumentar · Diminuir · Tamanho padrão do manuscrito na tela' },
     ],
   },
   {
@@ -42,8 +43,12 @@ export const SHORTCUT_TABLES: ShortcutTable[] = [
       { keys: '⌘0 · ⌘1 · ⌘2 · ⌘3 · ⌘4', action: 'Mesa · Bíblia · Leitor · Biblioteca · Arquivo' },
       { keys: '⌘,', action: 'Preferências' },
       { keys: '⇧⌥⌘1 · ⇧⌥⌘2 · ⇧⌥⌘3', action: 'Mostrar ou ocultar calendário, leituras e materiais' },
-      { keys: '⇧⌘F', action: 'Modo de escrita' },
-      { keys: '⇧⌥⌘R · ⇧⌥⌘E · ⇧⌘T · ⇧⌥⌘H', action: 'Revisar · Ensaio · Tablet · Histórico de versões' },
+      { keys: '⇧⌘F · ⇧⌥⌘L', action: 'Foco · Leituras em tela cheia' },
+      { keys: '⇧⌘I', action: 'Guardar uma ideia' },
+      {
+        keys: '⇧⌥⌘R · ⇧⌥⌘E · ⇧⌘T · ⇧⌥⌘H',
+        action: 'Revisar · Ensaio · Levar para o púlpito · Histórico de versões',
+      },
     ],
   },
   {
@@ -96,7 +101,12 @@ export type MesaCommandId =
   | 'structure'
   | 'questions'
   | 'rehearsal'
-  | 'tablet'
+  | 'pulpit'
+  | 'print'
+  | 'readingsFullscreen'
+  | 'captureIdea'
+  | 'connect'
+  | 'tour'
   | 'history'
   | 'drive'
   | 'shortcuts'
@@ -118,6 +128,8 @@ export type MesaCommandId =
   | 'underline'
   | 'strike'
   | 'quote'
+  | 'poem'
+  | 'annotation'
   | 'bulletList'
   | 'orderedList'
   | 'undo'
@@ -147,21 +159,47 @@ export const MESA_COMMANDS: MesaCommand[] = [
     group: 'Preparação',
     keywords: 'mapa do sermão introdução conclusão ideia dominante',
   },
-  { id: 'questions', title: 'Perguntas de emergência…', group: 'Preparação', keywords: 'ia dúvidas' },
+  {
+    id: 'questions',
+    title: 'Perguntas para destravar…',
+    group: 'Preparação',
+    keywords: 'ia dúvidas emergência travado',
+  },
   {
     id: 'rehearsal',
-    title: 'Ensaio',
+    title: 'Ensaiar em tela cheia',
     group: 'Preparação',
     shortcut: '⇧⌥⌘E',
-    keywords: 'cronômetro tempo leitura em voz alta',
+    keywords: 'cronômetro tempo leitura em voz alta ritmo',
   },
   {
-    id: 'tablet',
-    title: 'Cópia para o tablet…',
+    id: 'pulpit',
+    title: 'Levar para o púlpito…',
     group: 'Preparação',
     shortcut: '⇧⌘T',
-    keywords: 'pdf google doc exportar pregar',
+    keywords: 'pdf google doc exportar pregar imprimir tablet texto simples',
   },
+  {
+    id: 'print',
+    title: 'Imprimir direto',
+    group: 'Preparação',
+    shortcut: '⌘P',
+    keywords: 'impressora folha',
+  },
+  {
+    id: 'captureIdea',
+    title: 'Guardar uma ideia',
+    group: 'Preparação',
+    shortcut: '⇧⌘I',
+    keywords: 'anotar nota rápida',
+  },
+  {
+    id: 'connect',
+    title: 'Conectar leituras e revisão…',
+    group: 'Preparação',
+    keywords: 'assinar conta chaves degustação login',
+  },
+  { id: 'tour', title: 'Rever o tour da Mesa', group: 'Preparação', keywords: 'ajuda primeiros passos' },
   {
     id: 'history',
     title: 'Histórico de versões',
@@ -180,10 +218,17 @@ export const MESA_COMMANDS: MesaCommand[] = [
   },
   {
     id: 'focusMode',
-    title: 'Modo de escrita',
+    title: 'Foco',
     group: 'Painéis',
     shortcut: '⇧⌘F',
-    keywords: 'foco concentração',
+    keywords: 'modo de escrita concentração só o manuscrito',
+  },
+  {
+    id: 'readingsFullscreen',
+    title: 'Leituras em tela cheia',
+    group: 'Painéis',
+    shortcut: '⇧⌥⌘L',
+    keywords: 'ler textos do dia',
   },
   { id: 'toggleCalendar', title: 'Mostrar ou ocultar calendário', group: 'Painéis', shortcut: '⇧⌥⌘1' },
   { id: 'toggleReadings', title: 'Mostrar ou ocultar leituras', group: 'Painéis', shortcut: '⇧⌥⌘2' },
@@ -194,7 +239,7 @@ export const MESA_COMMANDS: MesaCommand[] = [
     group: 'Painéis',
     keywords: 'pdf sites artigos comentários',
   },
-  { id: 'tabIdeas', title: 'Ver ideias do celular', group: 'Painéis', keywords: 'notas google drive' },
+  { id: 'tabIdeas', title: 'Ver ideias', group: 'Painéis', keywords: 'notas google drive celular' },
   { id: 'tabReview', title: 'Ver revisões do manuscrito', group: 'Painéis', keywords: 'apontamentos mapa' },
   {
     id: 'openBible',
@@ -230,6 +275,14 @@ export const MESA_COMMANDS: MesaCommand[] = [
   { id: 'underline', title: 'Sublinhado', group: 'Escrita', shortcut: '⌘U' },
   { id: 'strike', title: 'Tachado', group: 'Escrita', shortcut: '⇧⌘X' },
   { id: 'quote', title: 'Citação em bloco', group: 'Escrita', keywords: 'epígrafe recuo' },
+  { id: 'poem', title: 'Poema ou versos', group: 'Escrita', keywords: 'salmo hino estrofe citação' },
+  {
+    id: 'annotation',
+    title: 'Anotação só para você',
+    group: 'Escrita',
+    shortcut: '⇧⌘A',
+    keywords: 'nota pessoal lembrete fora do púlpito',
+  },
   { id: 'bulletList', title: 'Lista com marcadores', group: 'Escrita', shortcut: '⇧⌘8' },
   { id: 'orderedList', title: 'Lista numerada', group: 'Escrita', shortcut: '⇧⌘7' },
   { id: 'undo', title: 'Desfazer', group: 'Escrita', shortcut: '⌘Z' },

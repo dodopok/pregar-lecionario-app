@@ -10,20 +10,25 @@ import {
   footnotesOf,
   linkEditingState,
   manuscriptPlainText,
+  manuscriptWordCount,
   parseManuscriptJSON,
   selectionFormatting,
 } from '@pregar/editor'
 import type { FootnoteEntry, ManuscriptShortcutAction, SelectionFormatting } from '@pregar/editor'
+import { DEFAULT_SETTINGS } from '@shared/settings'
 import PButton from '@/components/PButton.vue'
-import { on, shortcut } from '@/lib/api'
+import { errorMessage, on, shortcut } from '@/lib/api'
 import { activeEditor } from '@/lib/editorBridge'
 import { useAppStore } from '@/stores/app'
 import { useMesaStore } from '@/stores/mesa'
+import { useToasts } from '@/stores/toasts'
+import { printPulpitSheet } from '../pulpit'
 import EditorToolbar from './EditorToolbar.vue'
 import FindBar from './FindBar.vue'
 
 const mesa = useMesaStore()
 const app = useAppStore()
+const toasts = useToasts()
 const formatting = shallowRef<SelectionFormatting | null>(null)
 const footnotes = shallowRef<FootnoteEntry[]>([])
 const findOpen = ref<null | 'find' | 'replace'>(null)
@@ -61,7 +66,9 @@ function onShortcut(action: ManuscriptShortcutAction, detail?: { footnoteId?: st
       void mesa.flush()
       return true
     case 'print':
-      mesa.openSheet('tablet')
+      void printPulpitSheet(mesa, app)
+        .then((result) => result.message && toasts.show(result.message, 'error'))
+        .catch((error) => toasts.show(errorMessage(error), 'error'))
       return true
     case 'commandSearch':
       mesa.openSheet('commands')
@@ -76,7 +83,7 @@ function onShortcut(action: ManuscriptShortcutAction, detail?: { footnoteId?: st
       setZoom(zoom.value - 0.1)
       return true
     case 'zoomReset':
-      setZoom(1)
+      setZoom(DEFAULT_SETTINGS.editor.zoom)
       return true
     case 'footnoteInserted':
       requestAnimationFrame(() => focusFootnote(detail?.footnoteId))
@@ -88,7 +95,7 @@ function onShortcut(action: ManuscriptShortcutAction, detail?: { footnoteId?: st
 
 const editor = useEditor({
   extensions: createManuscriptExtensions({
-    placeholder: 'Comece a escrever. Use # para título, > para citação e - para lista; ⌘B e ⌘I para negrito e itálico.',
+    placeholder: `Comece a escrever. Use # para título, > para citação e - para lista; ${shortcut('⌘B')} e ${shortcut('⌘I')} para negrito e itálico. ${shortcut('⇧⌘A')} abre uma anotação só para você.`,
     onShortcut,
   }),
   editorProps: MANUSCRIPT_EDITOR_PROPS as never,
@@ -113,8 +120,8 @@ function scheduleWordCount(current: Editor): void {
   if (wordsTimer) return
   wordsTimer = setTimeout(() => {
     wordsTimer = null
-    const words = (current.storage as { characterCount?: { words(): number } }).characterCount?.words()
-    if (typeof words === 'number') mesa.wordCount = words
+    // Conta só o texto falado: anotações só para você, marcadores e notas ficam de fora.
+    mesa.wordCount = manuscriptWordCount(current.state.doc as never)
   }, 400)
 }
 
@@ -228,7 +235,7 @@ onMounted(() => {
         save: () => void mesa.flush(),
         zoomIn: () => setZoom(zoom.value + 0.1),
         zoomOut: () => setZoom(zoom.value - 0.1),
-        zoomReset: () => setZoom(1),
+        zoomReset: () => setZoom(DEFAULT_SETTINGS.editor.zoom),
         pastePlain: () => {
           void navigator.clipboard.readText().then((text) => current.chain().focus().insertContent(text).run())
         },
@@ -286,9 +293,9 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
             <button type="button" class="tip__close" aria-label="Dispensar dica" @click="dismissTip"><X :size="13" /></button>
             <strong class="serif">Como funciona a Mesa</strong>
             <ol>
-              <li>Escolha o domingo no calendário.</li>
-              <li>Marque o texto principal nas leituras.</li>
-              <li>Escreva aqui; quando quiser, peça uma revisão ({{ shortcut('⇧⌥⌘R') }}).</li>
+              <li>O dia de pregar fica no botão de data; troque quando quiser.</li>
+              <li>Nas leituras, marque a que o sermão vai seguir como texto principal.</li>
+              <li>Escreva aqui. Anotações só suas ({{ shortcut('⇧⌘A') }}) ficam fora do púlpito; a revisão ({{ shortcut('⇧⌥⌘R') }}) aponta, nunca reescreve.</li>
             </ol>
           </aside>
           <EditorContent v-if="editor" :editor="editor" />
@@ -320,14 +327,15 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--doc-canvas);
-  --manuscript-ink: var(--doc-ink);
-  --manuscript-link: var(--doc-blue);
+  background: var(--editor-surface);
+  --manuscript-ink: var(--ink);
+  --manuscript-link: var(--accent-ink);
+  --manuscript-accent: var(--accent);
 }
 @media (prefers-color-scheme: dark) {
   .manuscript {
     --manuscript-quote-paper: rgb(255 255 255 / 0.05);
-    --manuscript-quote-ink: var(--doc-ink);
+    --manuscript-quote-ink: var(--ink);
   }
 }
 .manuscript__surface {
@@ -345,9 +353,9 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
   position: relative;
   height: 18px;
   margin-bottom: 6px;
-  border-bottom: 1px solid var(--doc-border);
-  font-size: 9px;
-  color: var(--doc-muted);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-xs);
+  color: var(--muted);
 }
 .ruler__tick {
   position: absolute;
@@ -361,13 +369,15 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
   bottom: -3px;
   width: 1px;
   height: 4px;
-  background: var(--doc-border);
+  background: var(--line-strong);
 }
 .page {
   min-height: 1123px;
   padding: 72px 96px 120px;
-  background: var(--doc-paper);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px var(--doc-border);
+  background: var(--manuscript);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.1),
+    0 0 0 1px var(--line);
   cursor: text;
 }
 .page :deep(.manuscript-editor) {
@@ -401,13 +411,13 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
   margin-top: 32px;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 10pt;
-  color: var(--doc-ink);
+  color: var(--ink);
 }
 .notes hr {
   width: 33%;
   margin: 0 0 8px;
   border: none;
-  border-top: 1px solid var(--doc-border);
+  border-top: 1px solid var(--line-strong);
 }
 .note {
   display: flex;
@@ -419,7 +429,7 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
   font-size: 0.8em;
   vertical-align: super;
   min-width: 14px;
-  color: var(--doc-blue);
+  color: var(--accent-ink);
 }
 .note__input {
   flex: 1;
@@ -432,12 +442,12 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
   field-sizing: content;
 }
 .note__input:focus {
-  background: color-mix(in srgb, var(--doc-blue) 6%, transparent);
+  background: var(--accent-softer);
 }
 .note__remove {
   border: none;
   background: none;
-  color: var(--doc-muted);
+  color: var(--muted);
   opacity: 0;
 }
 .note:hover .note__remove,

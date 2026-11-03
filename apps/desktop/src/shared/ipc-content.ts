@@ -66,6 +66,10 @@ export interface ContentInvokeChannels {
     req: { dateKey: string; html: string; title: string; choosePath: boolean }
     res: { path: string; record: SermonRecord } | null
   }
+  /** Abre o diálogo de impressão do sistema com a folha do púlpito (sem gerar PDF). */
+  'tablet:print': { req: { html: string; title: string }; res: { printed: boolean; message: string | null } }
+  /** Salva o manuscrito como texto simples (.txt), para colar em qualquer lugar. */
+  'tablet:saveText': { req: { dateKey: string; text: string; title: string }; res: { path: string } | null }
 
   'backup:create': { req: void; res: { path: string } | null }
   'backup:restore': { req: void; res: { restored: boolean; message: string } }

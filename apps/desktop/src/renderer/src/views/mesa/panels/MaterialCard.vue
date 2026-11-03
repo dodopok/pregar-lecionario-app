@@ -18,6 +18,8 @@ const props = withDefaults(
     note?: string
     matchLabel?: string
     matchTone?: 'accent' | 'warning' | 'muted'
+    /** Idioma declarado da fonte ("PT", "EN"); nulo quando não se sabe. */
+    language?: string | null
     actionLabel?: string
     isOpen?: boolean
     busy?: boolean
@@ -30,6 +32,7 @@ const props = withDefaults(
     note: undefined,
     matchLabel: undefined,
     matchTone: 'accent',
+    language: null,
     actionLabel: 'Abrir',
     isOpen: false,
     busy: false,
@@ -61,7 +64,16 @@ function onAuxClick(event: MouseEvent): void {
         <Globe v-else :size="13" />
       </span>
       <div class="material__text">
-        <p class="serif material__title" :class="{ 'material__title--compact': compactTitle }">{{ title }}</p>
+        <p class="serif material__title" :class="{ 'material__title--compact': compactTitle }">
+          {{ title
+          }}<span
+            v-if="language"
+            class="material__language"
+            :class="{ 'material__language--pt': language === 'PT' }"
+            :title="language === 'PT' ? 'Em português' : `Idioma: ${language}`"
+            >{{ language }}</span
+          >
+        </p>
         <p
           v-for="(line, index) in lines"
           :key="index"
@@ -149,18 +161,32 @@ function onAuxClick(event: MouseEvent): void {
 .material__title--compact {
   font-size: 13px;
 }
+.material__language {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  vertical-align: 2px;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.material__language--pt {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+}
 .material__line {
   margin: 0;
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.material__line--first {
-  font-size: 11px;
-}
 .material__match {
   margin: 0;
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 .material__match--accent {
@@ -168,7 +194,7 @@ function onAuxClick(event: MouseEvent): void {
 }
 .material__match--warning,
 .material__match--muted {
-  color: var(--warning);
+  color: var(--warning-ink);
 }
 .material__actions {
   display: flex;
@@ -207,7 +233,7 @@ function onAuxClick(event: MouseEvent): void {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 .material__review input {

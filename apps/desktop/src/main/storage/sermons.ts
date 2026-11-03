@@ -1,7 +1,15 @@
 import { normalizeForSearch, countWords } from '@pregar/core/util/text'
 import { parseBrazilianDate } from '@pregar/core/util/dates'
 import { parseReference, passageRelation } from '@pregar/core/bible/reference'
-import type { ArchiveSearchMode, SermonPatch, SermonPreparationState, SermonRecord, SermonSummary } from '@shared/types'
+import type { PassageRelationKind, ScriptureReference } from '@pregar/core/bible/reference'
+import type {
+  ArchiveSearchMode,
+  RelatedSermon,
+  SermonPatch,
+  SermonPreparationState,
+  SermonRecord,
+  SermonSummary,
+} from '@shared/types'
 import type { LocalDatabase } from './db'
 
 interface SermonRow {
@@ -213,6 +221,48 @@ export class SermonRepository {
       to,
     )
     return Object.fromEntries(rows.map((row) => [row.date_key, preparationState(row)]))
+  }
+
+  /**
+   * Preparações anteriores (com texto) ligadas ao dia aberto: a passagem principal delas casa com alguma
+   * leitura do dia, ou a ocasião litúrgica é a mesma. Passagens iguais vêm antes; depois, as mais recentes.
+   */
+  related(input: { dateKey: string; references: string[]; occasion: string | null; limit?: number }): RelatedSermon[] {
+    const targets = input.references
+      .map((reference) => parseReference(reference))
+      .filter((reference): reference is ScriptureReference => reference !== null)
+    const occasion = input.occasion ? normalizeForSearch(input.occasion) : ''
+    if (targets.length === 0 && !occasion) return []
+    const rows = this.database.all<SermonRow>(
+      `select ${SUMMARY_COLUMNS} from sermons where word_count > 0 and date_key <> ? order by date_key desc`,
+      input.dateKey,
+    )
+    const rank: Record<PassageRelationKind, number> = { exact: 0, contains: 1, partial: 2, context: 3 }
+    const found: { item: RelatedSermon; order: number }[] = []
+    for (const row of rows) {
+      const candidate = row.main_reading_reference ? parseReference(row.main_reading_reference) : null
+      let matched: { kind: PassageRelationKind; reference: string } | null = null
+      if (candidate) {
+        for (const [index, target] of targets.entries()) {
+          const relation = passageRelation(candidate, target)
+          if (relation && (!matched || rank[relation.kind] < rank[matched.kind])) {
+            matched = { kind: relation.kind, reference: input.references[index] ?? '' }
+          }
+        }
+      }
+      if (matched) {
+        found.push({
+          item: { ...toSummary(row), relation: 'passage', relationKind: matched.kind, matchedReference: matched.reference },
+          order: rank[matched.kind],
+        })
+      } else if (occasion && normalizeForSearch(row.liturgical_occasion ?? '') === occasion) {
+        found.push({ item: { ...toSummary(row), relation: 'occasion', relationKind: null, matchedReference: null }, order: 4 })
+      }
+    }
+    return found
+      .sort((a, b) => a.order - b.order || b.item.dateKey.localeCompare(a.item.dateKey))
+      .slice(0, input.limit ?? 12)
+      .map((entry) => entry.item)
   }
 
   search(mode: ArchiveSearchMode, query: string): SermonSummary[] {

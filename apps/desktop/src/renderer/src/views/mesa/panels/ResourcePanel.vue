@@ -13,7 +13,6 @@ import { useMesaStore } from '@/stores/mesa'
 import IdeasTab from './IdeasTab.vue'
 import MaterialsTab from './MaterialsTab.vue'
 import ReviewTab from './ReviewTab.vue'
-import { driveStatus, ensureDriveStatus, ideaNotes, refreshIdeas } from './driveState'
 import { platformKeys } from '../sheets/commands'
 
 type ContextTab = 'materials' | 'ideas' | 'review'
@@ -33,8 +32,8 @@ const openCount = computed(() => {
   return latest ? openFindings(latest).length : 0
 })
 const badges = computed<Record<ContextTab, number>>(() => ({
-  materials: 0,
-  ideas: ideaNotes.value.length,
+  materials: mesa.related.length,
+  ideas: mesa.openIdeas.length,
   review: openCount.value,
 }))
 const collapseLabel = `Ocultar painel de materiais (${platformKeys('⇧⌥⌘3', isMac())})`
@@ -42,6 +41,8 @@ const collapseLabel = `Ocultar painel de materiais (${platformKeys('⇧⌥⌘3',
 function badgeLabel(tab: ContextTab): string {
   const count = badges.value[tab]
   if (tab === 'ideas') return `${count} ${count === 1 ? 'ideia' : 'ideias'}`
+  if (tab === 'materials')
+    return `${count} ${count === 1 ? 'preparação anterior sobre esta passagem' : 'preparações anteriores sobre esta passagem'}`
   return `${count} ${count === 1 ? 'apontamento aberto' : 'apontamentos abertos'}`
 }
 
@@ -72,11 +73,9 @@ function onKeydown(event: KeyboardEvent, index: number): void {
   void nextTick(() => tabButtons.value[tab]?.focus())
 }
 
-onMounted(async () => {
-  // Uma leitura das ideias ao abrir a Mesa, para o badge; nunca cria o documento.
-  await ensureDriveStatus()
-  if (driveStatus.value?.connected && driveStatus.value.ideasDocumentURL && mesa.contextTab !== 'ideas')
-    void refreshIdeas()
+onMounted(() => {
+  // As ideias locais alimentam o badge; o Google Drive só é consultado dentro da aba, a pedido.
+  if (mesa.ideas.length === 0) void mesa.loadIdeas()
 })
 </script>
 
@@ -101,7 +100,7 @@ onMounted(async () => {
         >
           {{ tab.label }}
           <span
-            v-if="tab.id !== 'materials' && badges[tab.id] > 0"
+            v-if="badges[tab.id] > 0"
             class="resource__badge"
             :class="`resource__badge--${tab.id}`"
             :aria-label="badgeLabel(tab.id)"
@@ -183,20 +182,25 @@ onMounted(async () => {
   box-shadow: 0 0 0 1px var(--line);
 }
 .resource__badge {
-  min-width: 16px;
-  height: 16px;
+  min-width: 17px;
+  height: 17px;
   display: inline-grid;
   place-items: center;
-  padding: 0 4px;
-  border-radius: 8px;
-  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: var(--text-xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--accent-contrast);
   background: var(--accent);
 }
 .resource__badge--ideas {
-  background: var(--warning);
+  background: var(--warning-ink);
+  color: #fff;
+}
+.resource__badge--materials {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 .resource__body {
   flex: 1;

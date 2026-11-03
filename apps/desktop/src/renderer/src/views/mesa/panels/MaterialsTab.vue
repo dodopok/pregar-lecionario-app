@@ -5,7 +5,7 @@
  * (só sob comando; envia passagem e ocasião, nunca o manuscrito).
  */
 import { computed, onActivated, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { BookOpen, Globe, RefreshCw, Settings, Sparkles } from 'lucide-vue-next'
+import { ArrowUpRight, BookOpen, Globe, History, RefreshCw, Settings, Sparkles } from 'lucide-vue-next'
 import type { AIResearchSource } from '@pregar/core/ai'
 import { parseReference } from '@pregar/core/bible/reference'
 import { isTabIncludedForReview } from '@pregar/core/reader'
@@ -24,6 +24,7 @@ import PButton from '@/components/PButton.vue'
 import SectionLabel from '@/components/SectionLabel.vue'
 import Spinner from '@/components/Spinner.vue'
 import { errorMessage, invoke, on } from '@/lib/api'
+import { useAppStore } from '@/stores/app'
 import { useMesaStore } from '@/stores/mesa'
 import { useToasts } from '@/stores/toasts'
 import MaterialCard from './MaterialCard.vue'
@@ -33,10 +34,14 @@ import {
   articleLines,
   findReaderTab,
   groupMaterials,
+  isPortugueseOrUnknown,
   joinParts,
+  languageTag,
   materialsEmptyMessage,
   pdfLines,
   pdfMaterialId,
+  relatedMetaLine,
+  relatedRelationLabel,
   researchLines,
   shortDateTime,
   showsPDFs,
@@ -52,6 +57,7 @@ import { isQuotaError, newRequestId } from './review'
 import { useAIAccess } from './useAIAccess'
 
 const mesa = useMesaStore()
+const app = useAppStore()
 const toasts = useToasts()
 const { access: researchAccess } = useAIAccess('research')
 
@@ -80,12 +86,25 @@ const searchKey = computed(() =>
 const visible = computed(() => mesa.contextTab === 'materials')
 const liturgicalDate = computed(() => parseDateKey(mesa.selectedDateKey) ?? new Date())
 
-const articles = computed(() => siteArticles(siteReport.value?.groups))
+const onlyPortuguese = computed(() => app.settings.materials.onlyPortuguese)
+const allArticles = computed(() => siteArticles(siteReport.value?.groups))
+const articles = computed(() =>
+  onlyPortuguese.value
+    ? allArticles.value.filter((article) => isPortugueseOrUnknown(article.site.language))
+    : allArticles.value,
+)
+const hiddenByLanguage = computed(() => allArticles.value.length - articles.value.length)
 const groups = computed(() => groupMaterials(pdfMatches.value, articles.value, filter.value))
+const related = computed(() => mesa.related)
+const relatedShown = computed(() => (showAllRelated.value ? related.value : related.value.slice(0, 4)))
+const showAllRelated = ref(false)
 const consultGroups = computed(() =>
   showsSites(filter.value) ? sitesToConsult(siteReport.value?.groups) : [],
 )
-const researchSources = computed(() => uniqueResearchSources(research.value?.sources ?? []))
+const researchSources = computed(() => {
+  const sources = uniqueResearchSources(research.value?.sources ?? [])
+  return onlyPortuguese.value ? sources.filter((source) => isPortugueseOrUnknown(source.language)) : sources
+})
 const busyLine = computed(() => {
   if (!reference.value) return null
   if (showsSites(filter.value) && (sitesLoading.value || (pending.value && searchable.value)))
@@ -388,6 +407,18 @@ function openPreferences(section: string): void {
   void invoke('app:openWindow', { window: 'preferencias', route: `/preferencias/${section}` })
 }
 
+function toggleLanguage(): void {
+  void app.updateSettings({ materials: { onlyPortuguese: !onlyPortuguese.value } })
+}
+
+function openRelatedInMesa(dateKey: string): void {
+  void mesa.selectDate(dateKey)
+}
+
+function openRelatedInArchive(dateKey: string): void {
+  void invoke('app:openWindow', { window: 'arquivo', route: `/arquivo?date=${dateKey}` })
+}
+
 // Ciclo de vida ----------------------------------------------------------------------------
 
 watch(
@@ -457,7 +488,71 @@ onBeforeUnmount(() => {
       >
         {{ option.label }}
       </button>
+      <button
+        type="button"
+        class="chip chip--language"
+        :class="{ 'chip--accent': onlyPortuguese }"
+        :aria-pressed="onlyPortuguese"
+        title="Mostrar só fontes que se declaram em português (PDFs sem idioma continuam)"
+        @click="toggleLanguage"
+      >
+        Em português
+      </button>
     </div>
+
+    <section v-if="related.length > 0" class="materials__group related" aria-label="Já preguei sobre isto">
+      <div class="group-heading">
+        <SectionLabel title="Já preguei sobre isto" tag="h3" class="tone--accent" />
+        <span class="group-heading__count">{{ related.length }}</span>
+        <span class="group-heading__rule" aria-hidden="true" />
+      </div>
+      <article
+        v-for="item in relatedShown"
+        :key="item.dateKey"
+        class="past"
+        :aria-label="`Preparação de ${item.dateKey}`"
+      >
+        <div class="past__head">
+          <History :size="13" class="past__icon" aria-hidden="true" />
+          <div class="past__text">
+            <p class="serif past__title">{{ item.title || item.mainReadingReference || 'Sem título' }}</p>
+            <p class="past__line">{{ relatedMetaLine(item) }}</p>
+            <p class="past__relation">
+              {{ relatedRelationLabel(item)
+              }}<template v-if="item.matchedReference && item.relation === 'passage'">
+                · {{ item.mainReadingReference }}</template
+              >
+            </p>
+          </div>
+        </div>
+        <div class="past__actions">
+          <button
+            type="button"
+            class="past__open"
+            title="Abrir esta preparação na Mesa (a de hoje fica salva)"
+            @click="openRelatedInMesa(item.dateKey)"
+          >
+            <ArrowUpRight :size="12" aria-hidden="true" /> Abrir na Mesa
+          </button>
+          <PButton
+            variant="link"
+            compact
+            title="Ver no Arquivo, com busca e trechos"
+            @click="openRelatedInArchive(item.dateKey)"
+            >Ver no Arquivo</PButton
+          >
+        </div>
+      </article>
+      <PButton
+        v-if="related.length > 4"
+        variant="link"
+        compact
+        class="materials__link"
+        @click="showAllRelated = !showAllRelated"
+      >
+        {{ showAllRelated ? 'Mostrar menos' : `Mostrar as outras ${related.length - 4}` }}
+      </PButton>
+    </section>
 
     <p v-if="!reference" class="materials__hint">
       Escolha o texto principal nas leituras para reunir comentários e artigos desta passagem.
@@ -490,6 +585,7 @@ onBeforeUnmount(() => {
           icon="web"
           :title="item.article.title"
           :lines="articleLines(item.article)"
+          :language="languageTag(item.article.site.language)"
           :match-label="favoriteSiteMatchLabel(item.article.match)"
           :match-tone="articleMatchTone(item.article)"
           :action-label="webAction(item.article.url)"
@@ -502,6 +598,14 @@ onBeforeUnmount(() => {
     </section>
 
     <p v-if="emptyMessage" class="materials__hint">{{ emptyMessage }}</p>
+    <p v-if="hiddenByLanguage > 0" class="materials__hint">
+      {{
+        hiddenByLanguage === 1
+          ? '1 artigo em outro idioma escondido'
+          : `${hiddenByLanguage} artigos em outros idiomas escondidos`
+      }}
+      pelo filtro Em português.
+    </p>
 
     <template v-if="showsSites(filter) && reference">
       <p v-if="sitesError" class="materials__warning" role="alert">{{ sitesError }}</p>
@@ -519,6 +623,7 @@ onBeforeUnmount(() => {
           compact-title
           :title="group.site.title"
           :lines="siteContext(group) ? [siteContext(group)] : []"
+          :language="languageTag(group.site.language)"
           :note="siteNote(group)"
           :action-label="
             webAction(
@@ -559,6 +664,7 @@ onBeforeUnmount(() => {
           icon="web"
           :title="source.title"
           :lines="researchLines(source)"
+          :language="languageTag(source.language)"
           :action-label="webAction(source.url)"
           :is-open="Boolean(tabFor('web', source.url))"
           :review="reviewState(tabFor('web', source.url))"
@@ -629,32 +735,85 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 6px;
 }
-.chip {
-  height: var(--control-compact);
-  padding: 0 11px;
-  border: none;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  color: color-mix(in srgb, var(--ink) 78%, transparent);
-  font-size: 11px;
-  font-weight: 500;
+.chip--language {
+  margin-left: auto;
 }
-.chip:hover:not(.chip--active) {
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
+.related {
+  padding: 10px 10px 8px;
+  border-radius: var(--radius-card);
+  background: var(--accent-softer);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
 }
-.chip--active {
-  background: var(--ink);
-  color: var(--canvas);
+.past {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 9px;
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--manuscript) 80%, transparent);
+  border: 1px solid var(--line);
+}
+.past__head {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.past__icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--accent-ink);
+}
+.past__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.past__title {
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.past__line {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.past__relation {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+.past__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 21px;
+}
+.past__open {
+  height: var(--control-compact);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.past__open:hover {
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
 }
 .materials__hint,
 .materials__meta {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--muted);
-}
-.materials__meta {
-  font-size: 10px;
 }
 .materials__busy {
   display: flex;
