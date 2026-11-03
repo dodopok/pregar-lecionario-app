@@ -44,6 +44,10 @@ mac:
 dmg:
   artifactName: Proper-${version}-mac.${ext}
   title: Proper ${version}
+  # APFS e lzfse: a imagem HFS+/zlib gerada no macOS 26 deu erro de leitura (-36) ao copiar o app.
+  # Os dois são lidos por qualquer macOS a partir do 10.13; o mínimo do app é o 12.
+  filesystem: APFS
+  format: ULFO
 
 win:
   icon: resources/icon.ico
