@@ -31,12 +31,16 @@ function envFileValue(name) {
 }
 const setting = (name) => process.env[name] || envFileValue(name)
 
+// Sem MAIN_VITE_PREGAR_API_URL, o app usa o endereço embutido em packages/core (PREGAR_API_DEFAULT_URL).
+const DEFAULT_API_URL = 'https://api.pregar.oficio.app'
+const apiURL = setting('MAIN_VITE_PREGAR_API_URL') || DEFAULT_API_URL
+
 const warnings = []
 const problems = []
-if (!setting('MAIN_VITE_PREGAR_API_URL')) problems.push('MAIN_VITE_PREGAR_API_URL não definido: o app usaria o endereço padrão da API.')
+if (!setting('MAIN_VITE_PREGAR_API_URL')) warnings.push(`MAIN_VITE_PREGAR_API_URL não definido: o app usa o endereço padrão ${DEFAULT_API_URL}.`)
 if (!setting('MAIN_VITE_GOOGLE_CLIENT_ID')) warnings.push('MAIN_VITE_GOOGLE_CLIENT_ID ausente: o Google Drive fica desligado nesta versão.')
 if (publish && !process.env.GH_TOKEN) problems.push('--publish exige GH_TOKEN (token do GitHub com permissão de escrita em releases).')
-if (publish && !isProductionURL(setting('MAIN_VITE_PREGAR_API_URL'))) {
+if (publish && !isProductionURL(apiURL)) {
   problems.push('--publish só aceita a API de produção (https, sem localhost nem domínio de teste); quem atualizar receberia esse endereço.')
 }
 
