@@ -87,7 +87,7 @@ try {
       .orderBy('users.created_at', 'desc')
       .execute()
     const billing = new BillingService(deps)
-    const rows = []
+    const rows: Record<string, string | number>[] = []
     for (const user of users) {
       const subscription = await billing.latestSubscription(user.id)
       rows.push({
