@@ -409,7 +409,7 @@ const rulerTicks = computed(() => Array.from({ length: 22 }, (_, index) => index
 }
 .notes {
   margin-top: 32px;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-serif);
   font-size: 10pt;
   color: var(--ink);
 }

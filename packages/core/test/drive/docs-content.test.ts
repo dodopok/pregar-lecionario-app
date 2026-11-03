@@ -269,7 +269,7 @@ describe('conversão do manuscrito para o Google Docs', () => {
     expect(content.styles).toHaveLength(1)
     expect(content.styles[0]).toMatchObject({
       range: { location: 0, length: 16 },
-      fontName: 'Arial',
+      fontName: 'Source Serif 4',
       fontSize: 11,
     })
 

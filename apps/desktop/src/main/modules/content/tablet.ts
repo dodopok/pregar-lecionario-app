@@ -4,8 +4,35 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { SERMON_KEY_PATTERN } from '@pregar/core/util/dates'
+import serifNormal from '@fontsource-variable/source-serif-4/files/source-serif-4-latin-opsz-normal.woff2?asset'
+import serifItalic from '@fontsource-variable/source-serif-4/files/source-serif-4-latin-opsz-italic.woff2?asset'
+import sansNormal from '@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2?asset'
+import sansItalic from '@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-italic.woff2?asset'
 import type { MainContext } from '../../context'
 import { handle } from '../../ipc/router'
+import { withEmbeddedFonts } from './print-fonts'
+import type { EmbeddedFont } from './print-fonts'
+
+/**
+ * Fontes embutidas do app que a folha do púlpito pode usar: Source Serif 4 e Source Sans 3, as mesmas
+ * da interface. Os arquivos saem do pacote pelo electron-vite (`?asset`) e entram no HTML em base64.
+ */
+const EMBEDDED_FONTS: EmbeddedFont[] = [
+  {
+    family: 'Source Serif 4',
+    files: [
+      { path: serifNormal, style: 'normal' },
+      { path: serifItalic, style: 'italic' },
+    ],
+  },
+  {
+    family: 'Source Sans 3',
+    files: [
+      { path: sansNormal, style: 'normal' },
+      { path: sansItalic, style: 'italic' },
+    ],
+  },
+]
 
 /** Pasta do Google Drive para computador, quando montada (sugestão de destino da cópia do tablet). */
 export function googleDriveFolder(): string | null {
@@ -59,7 +86,9 @@ async function openPrintWindow(html: string, parent?: BrowserWindow): Promise<Br
       spellcheck: false,
     },
   })
-  await window.loadURL(`data:text/html;charset=utf-8;base64,${Buffer.from(html, 'utf8').toString('base64')}`)
+  await window.loadURL(
+    `data:text/html;charset=utf-8;base64,${Buffer.from(withEmbeddedFonts(html, EMBEDDED_FONTS), 'utf8').toString('base64')}`,
+  )
   return window
 }
 

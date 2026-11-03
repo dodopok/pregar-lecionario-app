@@ -27,7 +27,9 @@ describe('formatação de caracteres (porta de DocumentEditorTests)', () => {
     editor.commands.toggleStrike()
     expect(editor.commands.applyLink({ href: 'https://example.org/reference' })).toBe(true)
     const runs = rich(editor).paragraphs[0]?.runs ?? []
-    expect(runs.some((run) => run.underline && run.strike && run.link === 'https://example.org/reference')).toBe(true)
+    expect(
+      runs.some((run) => run.underline && run.strike && run.link === 'https://example.org/reference'),
+    ).toBe(true)
   })
 
   it('tamanho de fonte fracionário, espaçamento personalizado e entrelinha mantêm os valores', () => {
@@ -97,7 +99,10 @@ describe('formatação de caracteres (porta de DocumentEditorTests)', () => {
 
 describe('links', () => {
   it('insere, edita e remove o link só com o cursor dentro (porta de DocumentEditorTests)', () => {
-    editor = createEditor({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Referência: ' }] }] })
+    editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Referência: ' }] }],
+    })
     editor.commands.setTextSelection(editor.state.doc.content.size - 1)
     editor.commands.applyLink({ href: 'https://example.org/one', text: 'Fonte' })
     expect(editor.getText()).toBe('Referência: Fonte')
@@ -133,7 +138,13 @@ describe('estilos de parágrafo', () => {
     editor.commands.setLineSpacing(1.5)
     editor.commands.setParagraphSpacing({ before: 6, after: 8 })
     const [heading, body] = rich(editor).paragraphs
-    expect(heading).toMatchObject({ headingLevel: 2, alignment: 'center', lineHeight: 1.5, spaceBeforePt: 6, spaceAfterPt: 8 })
+    expect(heading).toMatchObject({
+      headingLevel: 2,
+      alignment: 'center',
+      lineHeight: 1.5,
+      spaceBeforePt: 6,
+      spaceAfterPt: 8,
+    })
     expect(body?.headingLevel).toBe(0)
     expect(body?.alignment).toBeUndefined()
   })
@@ -162,7 +173,9 @@ describe('estilos de parágrafo', () => {
   })
 
   it('aplicar um estilo remove tamanho, cor e realce do texto, como o Swift', () => {
-    editor = createEditor('<p><span style="font-size: 18pt; color: #ff0000">Grande</span> <mark data-color="#ffff00">realce</mark> <em>itálico</em></p>')
+    editor = createEditor(
+      '<p><span style="font-size: 18pt; color: #ff0000">Grande</span> <mark data-color="#ffff00">realce</mark> <em>itálico</em></p>',
+    )
     editor.commands.setTextSelection(2)
     editor.commands.setParagraphStyle('heading3')
     const runs = rich(editor).paragraphs[0]?.runs ?? []
@@ -192,7 +205,9 @@ describe('estilos de parágrafo', () => {
     press(editor, 'Mod-Alt-0')
     expect(rich(editor).paragraphs[0]?.headingLevel).toBe(0)
     expect(press(editor, 'Mod-Shift-x')).toBe(true)
-    expect(editor.isActive('strike') || editor.state.storedMarks?.some((mark) => mark.type.name === 'strike')).toBe(true)
+    expect(
+      editor.isActive('strike') || editor.state.storedMarks?.some((mark) => mark.type.name === 'strike'),
+    ).toBe(true)
   })
 })
 
@@ -201,8 +216,17 @@ describe('citação em bloco', () => {
     editor = createEditor('<p>Antes</p><p>Uma frase citada.</p><p>Outra frase.</p><p>Depois</p>')
     editor.commands.setTextSelection({ from: findText(editor, 'Uma').from, to: findText(editor, 'Outra').to })
     editor.commands.toggleQuote()
-    expect(compact(editor.getJSON()).content?.map((node) => node.type)).toEqual(['paragraph', 'blockquote', 'paragraph'])
-    expect(rich(editor).paragraphs.map((paragraph) => paragraph.quote === true)).toEqual([false, true, true, false])
+    expect(compact(editor.getJSON()).content?.map((node) => node.type)).toEqual([
+      'paragraph',
+      'blockquote',
+      'paragraph',
+    ])
+    expect(rich(editor).paragraphs.map((paragraph) => paragraph.quote === true)).toEqual([
+      false,
+      true,
+      true,
+      false,
+    ])
     expect(manuscriptPlainText(editor.getJSON())).toBe('Antes\nUma frase citada.\nOutra frase.\nDepois')
     editor.commands.toggleQuote()
     expect(rich(editor).paragraphs.every((paragraph) => !paragraph.quote)).toBe(true)
@@ -222,7 +246,11 @@ describe('citação em bloco', () => {
     editor = createEditor('<blockquote><p>Um</p><p>Dois</p><p>Três</p></blockquote>')
     selectText(editor, 'Dois')
     editor.commands.toggleQuote()
-    expect(compact(editor.getJSON()).content?.map((node) => node.type)).toEqual(['blockquote', 'paragraph', 'blockquote'])
+    expect(compact(editor.getJSON()).content?.map((node) => node.type)).toEqual([
+      'blockquote',
+      'paragraph',
+      'blockquote',
+    ])
   })
 
   it('num parágrafo vazio prepara a citação do que for digitado', () => {
@@ -230,7 +258,12 @@ describe('citação em bloco', () => {
     editor.commands.setTextSelection(editor.state.doc.content.size - 1)
     editor.commands.toggleQuote()
     editor.commands.insertContent('Citado depois')
-    expect(rich(editor).paragraphs.map((paragraph) => [paragraph.quote === true, paragraph.runs.map((run) => run.text).join('')])).toEqual([
+    expect(
+      rich(editor).paragraphs.map((paragraph) => [
+        paragraph.quote === true,
+        paragraph.runs.map((run) => run.text).join(''),
+      ]),
+    ).toEqual([
       [false, 'Texto'],
       [true, 'Citado depois'],
     ])
@@ -251,7 +284,13 @@ describe('citação em bloco', () => {
     editor.commands.setTextSelection(5)
     expect(editor.commands.insertEpigraph('  Deus eterno, que nos guias.  ')).toBe(true)
     const document = rich(editor)
-    expect(document.paragraphs.map((paragraph) => [paragraph.quote === true, paragraph.attribution === true, paragraph.runs.map((run) => run.text).join('')])).toEqual([
+    expect(
+      document.paragraphs.map((paragraph) => [
+        paragraph.quote === true,
+        paragraph.attribution === true,
+        paragraph.runs.map((run) => run.text).join(''),
+      ]),
+    ).toEqual([
       [true, false, '“Deus eterno, que nos guias.”'],
       [true, true, '— Coleta do dia'],
       [false, false, 'Primeiro parágrafo.'],
@@ -296,15 +335,21 @@ describe('recuo, limpar e copiar formatação', () => {
   })
 
   it('limpar formatação volta ao corpo: sem marcas, sem título, sem citação', () => {
-    editor = createEditor('<h2 style="text-align: center">Título <strong>forte</strong></h2><blockquote><p><em><a href="https://example.org">citação</a></em></p></blockquote>')
+    editor = createEditor(
+      '<h2 style="text-align: center">Título <strong>forte</strong></h2><blockquote><p><em><a href="https://example.org">citação</a></em></p></blockquote>',
+    )
     editor.commands.selectAll()
     expect(press(editor, 'Mod-\\')).toBe(true)
     const paragraphs = rich(editor).paragraphs
-    expect(paragraphs.map((paragraph) => [paragraph.headingLevel, paragraph.quote === true, paragraph.alignment])).toEqual([
+    expect(
+      paragraphs.map((paragraph) => [paragraph.headingLevel, paragraph.quote === true, paragraph.alignment]),
+    ).toEqual([
       [0, false, undefined],
       [0, false, undefined],
     ])
-    expect(paragraphs.flatMap((paragraph) => paragraph.runs).every((run) => !run.bold && !run.italic && !run.link)).toBe(true)
+    expect(
+      paragraphs.flatMap((paragraph) => paragraph.runs).every((run) => !run.bold && !run.italic && !run.link),
+    ).toBe(true)
   })
 
   it('copiar e colar formatação aplica marcas e estilo de parágrafo (⌥⌘C, ⌥⌘V)', () => {
@@ -334,11 +379,13 @@ describe('selectQuote', () => {
 describe('selectionFormatting', () => {
   it('publica o estado da seleção para a barra', async () => {
     const { selectionFormatting } = await import('../src')
-    editor = createEditor('<h2 style="text-align: center"><strong>Título</strong></h2><ol><li><p>Item</p></li></ol>')
+    editor = createEditor(
+      '<h2 style="text-align: center"><strong>Título</strong></h2><ol><li><p>Item</p></li></ol>',
+    )
     editor.commands.setTextSelection(3)
     expect(selectionFormatting(editor)).toMatchObject({
       paragraphStyle: 'heading2',
-      fontFamily: 'Arial',
+      fontFamily: 'Source Serif 4',
       fontSizePt: 16,
       alignment: 'center',
       lineHeight: 1.15,
@@ -348,6 +395,11 @@ describe('selectionFormatting', () => {
       hasCopiedFormatting: false,
     })
     selectText(editor, 'Item')
-    expect(selectionFormatting(editor)).toMatchObject({ paragraphStyle: 'normal', fontSizePt: 11, list: 'ordered', bold: false })
+    expect(selectionFormatting(editor)).toMatchObject({
+      paragraphStyle: 'normal',
+      fontSizePt: 11,
+      list: 'ordered',
+      bold: false,
+    })
   })
 })

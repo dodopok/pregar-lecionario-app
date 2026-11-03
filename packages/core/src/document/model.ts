@@ -65,7 +65,10 @@ export interface RichDocument {
 export const QUOTE_INDENT_PT = 34
 export const QUOTE_SPACE_BEFORE_PT = 11
 export const QUOTE_SPACE_AFTER_PT = 12
-export const BODY_FONT_FAMILY = 'Arial'
+/** Fonte do corpo: a serifada embutida no app; runs em outra fonte (Arial dos RTFs antigos, por exemplo) guardam a sua. */
+export const BODY_FONT_FAMILY = 'Source Serif 4'
+/** Fonte do corpo do app para Mac (RTF): na importação, conta como "sem fonte", para o texto adotar a do app. */
+export const LEGACY_BODY_FONT_FAMILY = 'Arial'
 export const BODY_FONT_SIZE_PT = 11
 export const BODY_LINE_HEIGHT = 1.15
 
@@ -87,7 +90,10 @@ export function paragraphText(paragraph: RichParagraph): string {
  * Texto corrido do manuscrito, um parágrafo por linha, com marcadores de lista literais como no
  * RTF antigo ("• "). É este texto que a revisão recebe e contra o qual as citações são conferidas.
  */
-export function documentPlainText(document: RichDocument, options: { includeFootnotes?: boolean } = {}): string {
+export function documentPlainText(
+  document: RichDocument,
+  options: { includeFootnotes?: boolean } = {},
+): string {
   const lines = document.paragraphs.map((paragraph) => {
     const text = paragraphText(paragraph)
     if (!paragraph.list) return text

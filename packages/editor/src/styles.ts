@@ -6,6 +6,7 @@ import {
   BODY_FONT_FAMILY,
   BODY_FONT_SIZE_PT,
   BODY_LINE_HEIGHT,
+  LEGACY_BODY_FONT_FAMILY,
   QUOTE_INDENT_PT,
   QUOTE_SPACE_AFTER_PT,
   QUOTE_SPACE_BEFORE_PT,
@@ -15,6 +16,7 @@ export {
   BODY_FONT_FAMILY,
   BODY_FONT_SIZE_PT,
   BODY_LINE_HEIGHT,
+  LEGACY_BODY_FONT_FAMILY,
   QUOTE_INDENT_PT,
   QUOTE_SPACE_AFTER_PT,
   QUOTE_SPACE_BEFORE_PT,
@@ -140,7 +142,7 @@ export const SHORTCUTS: ReadonlyArray<{ label: string; keys: string }> = [
  */
 export const MANUSCRIPT_EDITOR_CSS = `
 .manuscript-editor {
-  font-family: ${BODY_FONT_FAMILY}, Helvetica, sans-serif;
+  font-family: "${BODY_FONT_FAMILY}", Georgia, serif;
   font-size: ${BODY_FONT_SIZE_PT}pt;
   line-height: ${BODY_LINE_HEIGHT};
   color: var(--manuscript-ink, #000);

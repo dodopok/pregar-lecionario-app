@@ -109,7 +109,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     researchModel: 'perplexity/sonar',
     preferOwnKeys: false,
   },
-  tablet: { fontFamily: 'Georgia', fontSize: 18, includeNotes: true, format: 'pdf', lastExportFolder: null },
+  tablet: { fontFamily: 'Source Serif 4', fontSize: 18, includeNotes: true, format: 'pdf', lastExportFolder: null },
   editor: { zoom: 1.2, showRuler: true, spellcheck: true },
   rehearsal: { fontSize: 22 },
   rhythm: {

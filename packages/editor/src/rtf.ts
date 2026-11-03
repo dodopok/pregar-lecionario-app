@@ -9,6 +9,7 @@
 import type { JSONContent } from '@tiptap/core'
 import {
   BODY_FONT_FAMILY,
+  LEGACY_BODY_FONT_FAMILY,
   BODY_FONT_SIZE_PT,
   BODY_LINE_HEIGHT,
   HEADING_SPACE_AFTER_PT,
@@ -21,14 +22,40 @@ import {
   QUOTE_SPACE_AFTER_PT,
   QUOTE_SPACE_BEFORE_PT,
 } from './styles'
-import { colorDistance, cssNumber, defaultIdGenerator, isSafeLinkHref, roundTo, type IdGenerator } from './util'
+import {
+  colorDistance,
+  cssNumber,
+  defaultIdGenerator,
+  isSafeLinkHref,
+  roundTo,
+  type IdGenerator,
+} from './util'
 
 type JSONMark = NonNullable<JSONContent['marks']>[number]
 
 export const PREGAR_STYLES_PREFIX = 'PregarDocumentStyles.v1:'
 
-export type SemanticStyle = 'normal' | 'title' | 'subtitle' | 'heading1' | 'heading2' | 'heading3' | 'heading4' | 'heading5' | 'heading6'
-const SEMANTIC_STYLES = new Set<string>(['normal', 'title', 'subtitle', 'heading1', 'heading2', 'heading3', 'heading4', 'heading5', 'heading6'])
+export type SemanticStyle =
+  | 'normal'
+  | 'title'
+  | 'subtitle'
+  | 'heading1'
+  | 'heading2'
+  | 'heading3'
+  | 'heading4'
+  | 'heading5'
+  | 'heading6'
+const SEMANTIC_STYLES = new Set<string>([
+  'normal',
+  'title',
+  'subtitle',
+  'heading1',
+  'heading2',
+  'heading3',
+  'heading4',
+  'heading5',
+  'heading6',
+])
 
 export interface RtfCharFormat {
   font: number
@@ -107,7 +134,8 @@ const defaultChar = (font = 0): RtfCharFormat => ({
 
 const defaultPar = (): RtfParFormat => ({ li: 0, fi: 0, ri: 0, sb: 0, sa: 0, sl: 0, slmult: 0, align: null })
 
-type Destination = 'text' | 'skip' | 'fonttbl' | 'colortbl' | 'info' | 'keywords' | 'fldinst' | 'listtext' | 'footnote'
+type Destination =
+  'text' | 'skip' | 'fonttbl' | 'colortbl' | 'info' | 'keywords' | 'fldinst' | 'listtext' | 'footnote'
 
 interface FieldContext {
   instruction: string
@@ -284,7 +312,8 @@ export function decodeSemanticStyles(keywords: string, length: number): RtfStyle
 
 /** Analisa o RTF em parágrafos e trechos com formatação, sem interpretar o significado. */
 export function parseRtf(input: string | Uint8Array): ParsedRtf {
-  const source = typeof input === 'string' ? input : Array.from(input, (byte) => String.fromCharCode(byte)).join('')
+  const source =
+    typeof input === 'string' ? input : Array.from(input, (byte) => String.fromCharCode(byte)).join('')
   const fonts = new Map<number, string>()
   const colors: Array<string | null> = []
   const paragraphs: RtfParagraph[] = []
@@ -313,7 +342,13 @@ export function parseRtf(input: string | Uint8Array): ParsedRtf {
   const appendRun = (text: string, extra?: { note: string }) => {
     if (!text && !extra) return
     const last = paragraph.runs[paragraph.runs.length - 1]
-    if (!extra && last && last.note === undefined && last.link === state.link && sameFormat(last.format, state.char)) {
+    if (
+      !extra &&
+      last &&
+      last.note === undefined &&
+      last.link === state.link &&
+      sameFormat(last.format, state.char)
+    ) {
       last.text += text
     } else {
       const run: RtfRun = { text, format: { ...state.char }, link: state.link }
@@ -665,7 +700,14 @@ export function parseRtf(input: string | Uint8Array): ParsedRtf {
     paragraph.format = { ...state.par }
     paragraphs.push(paragraph)
   }
-  return { paragraphs, fonts, colors, keywords, length: offset, styles: decodeSemanticStyles(keywords, offset) }
+  return {
+    paragraphs,
+    fonts,
+    colors,
+    keywords,
+    length: offset,
+    styles: decodeSemanticStyles(keywords, offset),
+  }
 }
 
 // MARK: - Fontes
@@ -710,7 +752,8 @@ export function fontInfo(name: string | undefined): FontInfo {
   const compact = base.replace(/\s+/g, '').toLowerCase()
   const known = KNOWN_FAMILIES[compact] ?? KNOWN_FAMILIES[compact.replace(/(psmt|mt|ps)$/, '')]
   if (known) return { family: known, bold, italic }
-  if (/\s/.test(base)) return { family: base.replace(/\s+(bold|italic|oblique)\b.*$/i, '').trim(), bold, italic }
+  if (/\s/.test(base))
+    return { family: base.replace(/\s+(bold|italic|oblique)\b.*$/i, '').trim(), bold, italic }
   const words = base
     .replace(/(PSMT|MT|PS)$/, '')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -755,7 +798,13 @@ function findMarkers(paragraph: RtfParagraph, paragraphIndex: number): Marker[] 
   paragraph.runs.forEach((run, runIndex) => {
     const pattern = run.format.superscript ? /[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\d+/g : /[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g
     for (const match of run.text.matchAll(pattern)) {
-      markers.push({ paragraph: paragraphIndex, run: runIndex, index: match.index ?? 0, length: match[0].length, key: markerKey(match[0]) })
+      markers.push({
+        paragraph: paragraphIndex,
+        run: runIndex,
+        index: match.index ?? 0,
+        length: match[0].length,
+        key: markerKey(match[0]),
+      })
     }
   })
   return markers
@@ -793,7 +842,8 @@ function levelForStyle(style: SemanticStyle | undefined): number {
 
 function detectList(text: string, listText: string | undefined): ParagraphPlan['list'] {
   if (text.startsWith('• ')) return { kind: 'bullet', markerLength: 2 }
-  if (text.startsWith('☐ ') || text.startsWith('☑ ')) return { kind: 'check', checked: text.startsWith('☑'), markerLength: 2 }
+  if (text.startsWith('☐ ') || text.startsWith('☑ '))
+    return { kind: 'check', checked: text.startsWith('☑'), markerLength: 2 }
   const ordered = /^(\d+)\. /.exec(text)
   if (ordered?.[1]) return { kind: 'ordered', number: Number(ordered[1]), markerLength: ordered[0].length }
   const marker = listText?.replace(/\t/g, '').trim()
@@ -826,12 +876,14 @@ export function rtfToTiptap(input: string | Uint8Array, options: RtfToTiptapOpti
         return
       }
     }
-    for (const marker of findMarkers(paragraph, index)) if (!seen.has(marker.key)) seen.set(marker.key, marker)
+    for (const marker of findMarkers(paragraph, index))
+      if (!seen.has(marker.key)) seen.set(marker.key, marker)
   })
   // A linha em branco que o Swift insere antes de cada nota sai junto com ela.
   for (const index of [...noteParagraphs]) {
     const previous = paragraphs[index - 1]
-    if (previous && !noteParagraphs.has(index - 1) && paragraphText(previous) === '' && !previous.listText) noteParagraphs.add(index - 1)
+    if (previous && !noteParagraphs.has(index - 1) && paragraphText(previous) === '' && !previous.listText)
+      noteParagraphs.add(index - 1)
   }
 
   const plans: ParagraphPlan[] = []
@@ -854,7 +906,12 @@ export function rtfToTiptap(input: string | Uint8Array, options: RtfToTiptapOpti
     const footnotes: ParagraphPlan['footnotes'] = []
     for (const [key, marker] of seen) {
       if (marker.paragraph !== index || !notes.has(key)) continue
-      footnotes.push({ run: marker.run, index: marker.index, length: marker.length, note: notes.get(key) ?? '' })
+      footnotes.push({
+        run: marker.run,
+        index: marker.index,
+        length: marker.length,
+        note: notes.get(key) ?? '',
+      })
     }
     const plan: ParagraphPlan = {
       source: paragraph,
@@ -870,7 +927,10 @@ export function rtfToTiptap(input: string | Uint8Array, options: RtfToTiptapOpti
   })
 
   const content = groupBlocks(plans, parsed, generateId)
-  return { type: 'doc', content: content.length ? content : [{ type: 'paragraph', attrs: { id: generateId('block') } }] }
+  return {
+    type: 'doc',
+    content: content.length ? content : [{ type: 'paragraph', attrs: { id: generateId('block') } }],
+  }
 }
 
 function groupBlocks(plans: ParagraphPlan[], parsed: ParsedRtf, generateId: IdGenerator): JSONContent[] {
@@ -882,7 +942,11 @@ function groupBlocks(plans: ParagraphPlan[], parsed: ParsedRtf, generateId: IdGe
     if (plan.quote) {
       const quoted: ParagraphPlan[] = []
       while (plans[index]?.quote) quoted.push(plans[index++] as ParagraphPlan)
-      blocks.push({ type: 'blockquote', attrs: { id: generateId('block') }, content: groupLists(quoted, parsed, generateId, true) })
+      blocks.push({
+        type: 'blockquote',
+        attrs: { id: generateId('block') },
+        content: groupLists(quoted, parsed, generateId, true),
+      })
       continue
     }
     const plain: ParagraphPlan[] = []
@@ -894,7 +958,12 @@ function groupBlocks(plans: ParagraphPlan[], parsed: ParsedRtf, generateId: IdGe
 
 const LIST_NODE = { bullet: 'bulletList', ordered: 'orderedList', check: 'taskList' } as const
 
-function groupLists(plans: ParagraphPlan[], parsed: ParsedRtf, generateId: IdGenerator, quote: boolean): JSONContent[] {
+function groupLists(
+  plans: ParagraphPlan[],
+  parsed: ParsedRtf,
+  generateId: IdGenerator,
+  quote: boolean,
+): JSONContent[] {
   const blocks: JSONContent[] = []
   let index = 0
   while (index < plans.length) {
@@ -923,7 +992,12 @@ function groupLists(plans: ParagraphPlan[], parsed: ParsedRtf, generateId: IdGen
   return blocks
 }
 
-function textblock(plan: ParagraphPlan, parsed: ParsedRtf, generateId: IdGenerator, quote: boolean): JSONContent {
+function textblock(
+  plan: ParagraphPlan,
+  parsed: ParsedRtf,
+  generateId: IdGenerator,
+  quote: boolean,
+): JSONContent {
   const { source } = plan
   const format = source.format
   const level = plan.headingLevel
@@ -971,7 +1045,9 @@ function textblock(plan: ParagraphPlan, parsed: ParsedRtf, generateId: IdGenerat
     // O marcador literal de lista ("• ", "1. ") sai do início do parágrafo.
     let cursor = Math.min(skip, run.text.length)
     skip -= cursor
-    const replacements = plan.footnotes.filter((footnote) => footnote.run === runIndex).sort((a, b) => a.index - b.index)
+    const replacements = plan.footnotes
+      .filter((footnote) => footnote.run === runIndex)
+      .sort((a, b) => a.index - b.index)
     for (const footnote of replacements) {
       if (footnote.index < cursor) continue
       pushText(content, run.text.slice(cursor, footnote.index), marks)
@@ -997,7 +1073,11 @@ function pushText(content: JSONContent[], text: string, marks: JSONMark[]): void
   })
 }
 
-function marksFor(run: RtfRun, parsed: ParsedRtf, context: { defaultSize: number; quote: boolean }): JSONMark[] {
+function marksFor(
+  run: RtfRun,
+  parsed: ParsedRtf,
+  context: { defaultSize: number; quote: boolean },
+): JSONMark[] {
   const format = run.format
   const font = fontInfo(parsed.fonts.get(format.font))
   const marks: JSONMark[] = []
@@ -1010,15 +1090,21 @@ function marksFor(run: RtfRun, parsed: ParsedRtf, context: { defaultSize: number
   if (run.link) marks.push({ type: 'link', attrs: { href: run.link } })
 
   const textStyle: Record<string, string> = {}
-  if (font.family && font.family !== BODY_FONT_FAMILY) textStyle.fontFamily = font.family
+  if (font.family && font.family !== BODY_FONT_FAMILY && font.family !== LEGACY_BODY_FONT_FAMILY)
+    textStyle.fontFamily = font.family
   const size = format.fontSize / 2
   if (size !== context.defaultSize) textStyle.fontSize = `${cssNumber(size)}pt`
   const color = format.color > 0 ? parsed.colors[format.color] : null
-  if (color && color !== '#000000' && !(context.quote && colorDistance(color, QUOTE_INK_COLOR) <= 8)) textStyle.color = color
+  if (color && color !== '#000000' && !(context.quote && colorDistance(color, QUOTE_INK_COLOR) <= 8))
+    textStyle.color = color
   if (Object.keys(textStyle).length) marks.push({ type: 'textStyle', attrs: textStyle })
 
   const background = format.background > 0 ? parsed.colors[format.background] : null
-  if (background && background !== '#ffffff' && !(context.quote && colorDistance(background, QUOTE_PAPER_COLOR) <= 8)) {
+  if (
+    background &&
+    background !== '#ffffff' &&
+    !(context.quote && colorDistance(background, QUOTE_PAPER_COLOR) <= 8)
+  ) {
     marks.push({ type: 'highlight', attrs: { color: background } })
   }
   return marks

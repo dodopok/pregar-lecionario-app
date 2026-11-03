@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import { router } from './router'
 import { useAppStore } from './stores/app'
+import './styles/fonts.css'
 import './styles/tokens.css'
 import './styles/base.css'
 

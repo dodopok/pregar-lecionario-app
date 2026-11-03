@@ -13,13 +13,26 @@ import PrefRow from './ui/PrefRow.vue'
 
 const MIN_SIZE = 12
 const MAX_SIZE = 32
-const FONTS = ['Georgia', 'Charter', 'Palatino', 'Times New Roman', 'Arial', 'Verdana', 'Helvetica']
+/** As duas primeiras vêm embutidas no app e saem iguais em qualquer sistema; as demais dependem do computador. */
+const FONTS = [
+  'Source Serif 4',
+  'Source Sans 3',
+  'Georgia',
+  'Charter',
+  'Palatino',
+  'Times New Roman',
+  'Arial',
+  'Verdana',
+  'Helvetica',
+]
 
 const app = useAppStore()
 const suggestedFolder = ref<string | null>(null)
 
 const tablet = computed(() => app.settings.tablet)
-const fontOptions = computed(() => (FONTS.includes(tablet.value.fontFamily) ? FONTS : [tablet.value.fontFamily, ...FONTS]))
+const fontOptions = computed(() =>
+  FONTS.includes(tablet.value.fontFamily) ? FONTS : [tablet.value.fontFamily, ...FONTS],
+)
 const folder = computed(() => tablet.value.lastExportFolder ?? suggestedFolder.value)
 
 function update(patch: Partial<AppSettings['tablet']>): void {
@@ -45,23 +58,46 @@ onMounted(async () => {
   <div class="section-stack">
     <PrefGroup label="Folha impressa ou em PDF">
       <PrefRow label="Fonte de leitura" for="tablet-font">
-        <select id="tablet-font" class="field select" :value="tablet.fontFamily" @change="update({ fontFamily: ($event.target as HTMLSelectElement).value })">
+        <select
+          id="tablet-font"
+          class="field select"
+          :value="tablet.fontFamily"
+          @change="update({ fontFamily: ($event.target as HTMLSelectElement).value })"
+        >
           <option v-for="font in fontOptions" :key="font" :value="font">{{ font }}</option>
         </select>
       </PrefRow>
       <PrefRow label="Tamanho">
         <div class="stepper" role="group" aria-label="Tamanho da letra">
-          <PButton variant="icon" compact label="Diminuir a letra" :disabled="tablet.fontSize <= MIN_SIZE" @click="setSize(tablet.fontSize - 1)">
+          <PButton
+            variant="icon"
+            compact
+            label="Diminuir a letra"
+            :disabled="tablet.fontSize <= MIN_SIZE"
+            @click="setSize(tablet.fontSize - 1)"
+          >
             <Minus :size="14" />
           </PButton>
           <output class="stepper__value" aria-live="polite">{{ tablet.fontSize }} pt</output>
-          <PButton variant="icon" compact label="Aumentar a letra" :disabled="tablet.fontSize >= MAX_SIZE" @click="setSize(tablet.fontSize + 1)">
+          <PButton
+            variant="icon"
+            compact
+            label="Aumentar a letra"
+            :disabled="tablet.fontSize >= MAX_SIZE"
+            @click="setSize(tablet.fontSize + 1)"
+          >
             <Plus :size="14" />
           </PButton>
         </div>
       </PrefRow>
       <PrefRow label="Prévia" top>
-        <p class="preview" :style="{ fontFamily: `'${tablet.fontFamily}', var(--font-serif)`, fontSize: `${tablet.fontSize}px` }">
+        <p
+          class="preview"
+          :style="{
+            fontFamily: `'${tablet.fontFamily}', var(--font-serif)`,
+            fontSize: `${tablet.fontSize}px`,
+          }"
+        >
           No princípio era o Verbo, e o Verbo estava com Deus, e o Verbo era Deus.
         </p>
       </PrefRow>
@@ -93,12 +129,19 @@ onMounted(async () => {
               ? 'Um PDF paginado para o tablet (pela pasta do Drive ou por um app de leitura). Imprimir direto e texto simples ficam na folha da Mesa.'
               : 'Um documento no seu Google Drive, que você abre no app Google Docs do tablet.'
           }}
-          <RouterLink v-if="tablet.format === 'gdoc'" to="/preferencias/drive" replace>Conectar o Google Drive</RouterLink>
+          <RouterLink v-if="tablet.format === 'gdoc'" to="/preferencias/drive" replace
+            >Conectar o Google Drive</RouterLink
+          >
         </p>
       </PrefRow>
       <PrefRow v-if="tablet.format === 'pdf'" label="Pasta dos PDFs">
         <div class="folder">
-          <span class="folder__path selectable" :class="{ 'folder__path--empty': !folder }" :title="folder ?? ''">{{ folder ?? 'Escolha uma pasta' }}</span>
+          <span
+            class="folder__path selectable"
+            :class="{ 'folder__path--empty': !folder }"
+            :title="folder ?? ''"
+            >{{ folder ?? 'Escolha uma pasta' }}</span
+          >
           <PButton compact @click="chooseFolder"><Folder :size="13" aria-hidden="true" />Escolher…</PButton>
         </div>
       </PrefRow>

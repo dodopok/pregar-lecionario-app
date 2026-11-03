@@ -38,7 +38,12 @@ import type { SelectionFormatting } from '@pregar/editor'
 import PopMenu from '@/components/PopMenu.vue'
 import { shortcut } from '@/lib/api'
 
-const props = defineProps<{ editor: Editor; formatting: SelectionFormatting; zoom: number; compact: boolean }>()
+const props = defineProps<{
+  editor: Editor
+  formatting: SelectionFormatting
+  zoom: number
+  compact: boolean
+}>()
 const emit = defineEmits<{ find: []; link: []; zoom: [value: number] }>()
 
 type Commands = Record<string, (...args: unknown[]) => { run(): boolean }>
@@ -57,13 +62,31 @@ const STYLES = [
   { value: 'heading5', label: 'Título 5' },
   { value: 'heading6', label: 'Título 6' },
 ]
-const FONTS = ['Arial', 'Georgia', 'Times New Roman', 'Garamond', 'Palatino', 'Book Antiqua', 'Helvetica', 'Verdana', 'Calibri', 'Cambria', 'Trebuchet MS', 'Courier New']
+/** As duas primeiras vêm embutidas no app; as demais dependem do computador. */
+const FONTS = [
+  'Source Serif 4',
+  'Source Sans 3',
+  'Arial',
+  'Georgia',
+  'Times New Roman',
+  'Garamond',
+  'Palatino',
+  'Book Antiqua',
+  'Helvetica',
+  'Verdana',
+  'Calibri',
+  'Cambria',
+  'Trebuchet MS',
+  'Courier New',
+]
 const COLORS = ['#000000', '#5f6368', '#c5221f', '#e37400', '#188038', '#1a73e8', '#7b1fa2', '#b06000']
 const HIGHLIGHTS = ['#fff475', '#ccff90', '#a7ffeb', '#cbf0f8', '#fdcfe8', '#e6c9a8']
 const SPACINGS = [1, 1.15, 1.5, 2]
 const ZOOMS = [0.9, 1, 1.1, 1.2, 1.35, 1.5, 1.75, 2]
 
-const fontSizeText = computed(() => String(Math.round(props.formatting.fontSizePt * 10) / 10).replace('.', ','))
+const fontSizeText = computed(() =>
+  String(Math.round(props.formatting.fontSizePt * 10) / 10).replace('.', ','),
+)
 // `formatting` muda a cada transação; os estados abaixo acompanham sem observar o editor.
 const annotationActive = computed(() => Boolean(props.formatting) && props.editor.isActive('annotation'))
 const quoteKind = computed<string | null>(() => {
@@ -94,39 +117,142 @@ function pick(kind: 'color' | 'highlight' | 'spacing', value: string | number | 
 </script>
 
 <template>
-  <div class="toolbar" :class="{ 'toolbar--compact': compact }" role="toolbar" aria-label="Formatação do manuscrito">
-    <button type="button" class="tool" :disabled="!formatting.canUndo" :title="`Desfazer (${shortcut('⌘Z')})`" aria-label="Desfazer" @click="run('undo')"><Undo2 :size="15" /></button>
-    <button type="button" class="tool" :disabled="!formatting.canRedo" :title="`Refazer (${shortcut('⇧⌘Z')})`" aria-label="Refazer" @click="run('redo')"><Redo2 :size="15" /></button>
+  <div
+    class="toolbar"
+    :class="{ 'toolbar--compact': compact }"
+    role="toolbar"
+    aria-label="Formatação do manuscrito"
+  >
+    <button
+      type="button"
+      class="tool"
+      :disabled="!formatting.canUndo"
+      :title="`Desfazer (${shortcut('⌘Z')})`"
+      aria-label="Desfazer"
+      @click="run('undo')"
+    >
+      <Undo2 :size="15" />
+    </button>
+    <button
+      type="button"
+      class="tool"
+      :disabled="!formatting.canRedo"
+      :title="`Refazer (${shortcut('⇧⌘Z')})`"
+      aria-label="Refazer"
+      @click="run('redo')"
+    >
+      <Redo2 :size="15" />
+    </button>
     <span class="sep" />
-    <select class="tool-select tool-select--style" :value="formatting.paragraphStyle" aria-label="Estilo do parágrafo" :title="`Estilo (${shortcut('⌥⌘0')}…${shortcut('⌥⌘6')})`" @change="run('setParagraphStyle', ($event.target as HTMLSelectElement).value)">
+    <select
+      class="tool-select tool-select--style"
+      :value="formatting.paragraphStyle"
+      aria-label="Estilo do parágrafo"
+      :title="`Estilo (${shortcut('⌥⌘0')}…${shortcut('⌥⌘6')})`"
+      @change="run('setParagraphStyle', ($event.target as HTMLSelectElement).value)"
+    >
       <option v-for="style in STYLES" :key="style.value" :value="style.value">{{ style.label }}</option>
     </select>
     <span class="sep" />
-    <button type="button" class="tool" :class="{ on: formatting.bold }" :aria-pressed="formatting.bold" :title="`Negrito (${shortcut('⌘B')})`" aria-label="Negrito" @click="run('toggleBold')"><Bold :size="15" /></button>
-    <button type="button" class="tool" :class="{ on: formatting.italic }" :aria-pressed="formatting.italic" :title="`Itálico (${shortcut('⌘I')})`" aria-label="Itálico" @click="run('toggleItalic')"><Italic :size="15" /></button>
-    <button type="button" class="tool" :class="{ on: formatting.underline }" :aria-pressed="formatting.underline" :title="`Sublinhado (${shortcut('⌘U')})`" aria-label="Sublinhado" @click="run('toggleUnderline')"><Underline :size="15" /></button>
+    <button
+      type="button"
+      class="tool"
+      :class="{ on: formatting.bold }"
+      :aria-pressed="formatting.bold"
+      :title="`Negrito (${shortcut('⌘B')})`"
+      aria-label="Negrito"
+      @click="run('toggleBold')"
+    >
+      <Bold :size="15" />
+    </button>
+    <button
+      type="button"
+      class="tool"
+      :class="{ on: formatting.italic }"
+      :aria-pressed="formatting.italic"
+      :title="`Itálico (${shortcut('⌘I')})`"
+      aria-label="Itálico"
+      @click="run('toggleItalic')"
+    >
+      <Italic :size="15" />
+    </button>
+    <button
+      type="button"
+      class="tool"
+      :class="{ on: formatting.underline }"
+      :aria-pressed="formatting.underline"
+      :title="`Sublinhado (${shortcut('⌘U')})`"
+      aria-label="Sublinhado"
+      @click="run('toggleUnderline')"
+    >
+      <Underline :size="15" />
+    </button>
     <span class="sep" />
     <PopMenu label="Citação" :width="220">
       <template #default="{ toggle, open }">
-        <button type="button" class="tool tool--split" :class="{ on: quoteKind !== null }" :aria-pressed="quoteKind !== null" :aria-expanded="open" aria-haspopup="menu" :title="quoteKind === 'poem' ? 'Poema ou versos' : 'Citação em bloco'" aria-label="Citação" @click="toggle">
+        <button
+          type="button"
+          class="tool tool--split"
+          :class="{ on: quoteKind !== null }"
+          :aria-pressed="quoteKind !== null"
+          :aria-expanded="open"
+          aria-haspopup="menu"
+          :title="quoteKind === 'poem' ? 'Poema ou versos' : 'Citação em bloco'"
+          aria-label="Citação"
+          @click="toggle"
+        >
           <Quote :size="15" /><ChevronDown :size="11" class="tool__caret" aria-hidden="true" />
         </button>
       </template>
       <template #menu>
-        <button type="button" role="menuitemradio" class="menu__item" :class="{ 'menu__item--active': quoteKind === 'quote' }" :aria-checked="quoteKind === 'quote'" @click="setQuote('quote')">
+        <button
+          type="button"
+          role="menuitemradio"
+          class="menu__item"
+          :class="{ 'menu__item--active': quoteKind === 'quote' }"
+          :aria-checked="quoteKind === 'quote'"
+          @click="setQuote('quote')"
+        >
           Citação em bloco<span class="menu__hint">Texto de outro autor, em itálico</span>
         </button>
-        <button type="button" role="menuitemradio" class="menu__item" :class="{ 'menu__item--active': quoteKind === 'poem' }" :aria-checked="quoteKind === 'poem'" @click="setQuote('poem')">
+        <button
+          type="button"
+          role="menuitemradio"
+          class="menu__item"
+          :class="{ 'menu__item--active': quoteKind === 'poem' }"
+          :aria-checked="quoteKind === 'poem'"
+          @click="setQuote('poem')"
+        >
           Poema ou versos<span class="menu__hint">Preserva as quebras de linha, com recuo</span>
         </button>
         <template v-if="quoteKind !== null">
           <div class="menu__separator" role="separator" />
-          <button type="button" role="menuitem" class="menu__item" @click="setQuote(null)">Voltar a texto normal</button>
+          <button type="button" role="menuitem" class="menu__item" @click="setQuote(null)">
+            Voltar a texto normal
+          </button>
         </template>
       </template>
     </PopMenu>
-    <button type="button" class="tool" :class="{ on: formatting.list === 'bullet' }" :title="`Lista com marcadores (${shortcut('⇧⌘8')})`" aria-label="Lista com marcadores" @click="run('toggleBulletList')"><List :size="15" /></button>
-    <button type="button" class="tool" :class="{ on: formatting.list === 'ordered' }" :title="`Lista numerada (${shortcut('⇧⌘7')})`" aria-label="Lista numerada" @click="run('toggleOrderedList')"><ListOrdered :size="15" /></button>
+    <button
+      type="button"
+      class="tool"
+      :class="{ on: formatting.list === 'bullet' }"
+      :title="`Lista com marcadores (${shortcut('⇧⌘8')})`"
+      aria-label="Lista com marcadores"
+      @click="run('toggleBulletList')"
+    >
+      <List :size="15" />
+    </button>
+    <button
+      type="button"
+      class="tool"
+      :class="{ on: formatting.list === 'ordered' }"
+      :title="`Lista numerada (${shortcut('⇧⌘7')})`"
+      aria-label="Lista numerada"
+      @click="run('toggleOrderedList')"
+    >
+      <ListOrdered :size="15" />
+    </button>
     <span class="sep" />
     <button
       type="button"
@@ -139,41 +265,167 @@ function pick(kind: 'color' | 'highlight' | 'spacing', value: string | number | 
     >
       <MessageSquareText :size="15" /><span v-if="!compact">Anotação</span>
     </button>
-    <button type="button" class="tool" :class="{ on: formatting.superscript }" :title="`Nota de rodapé (${shortcut('⌥⌘F')})`" aria-label="Inserir nota de rodapé" @click="run('insertFootnote', {})"><Superscript :size="15" /></button>
-    <button type="button" class="tool" :class="{ on: formatting.link }" :title="`Link (${shortcut('⌘K')})`" aria-label="Link" @click="emit('link')"><Link2 :size="15" /></button>
+    <button
+      type="button"
+      class="tool"
+      :class="{ on: formatting.superscript }"
+      :title="`Nota de rodapé (${shortcut('⌥⌘F')})`"
+      aria-label="Inserir nota de rodapé"
+      @click="run('insertFootnote', {})"
+    >
+      <Superscript :size="15" />
+    </button>
+    <button
+      type="button"
+      class="tool"
+      :class="{ on: formatting.link }"
+      :title="`Link (${shortcut('⌘K')})`"
+      aria-label="Link"
+      @click="emit('link')"
+    >
+      <Link2 :size="15" />
+    </button>
     <span class="sep" />
-    <PopMenu label="Mais formatação" align="left" :width="320" @open="moreOpen = true" @close="moreOpen = false">
+    <PopMenu
+      label="Mais formatação"
+      align="left"
+      :width="320"
+      @open="moreOpen = true"
+      @close="moreOpen = false"
+    >
       <template #default="{ toggle, open }">
-        <button type="button" class="tool tool--labeled" :aria-expanded="open" aria-haspopup="menu" title="Mais: fonte, cores, alinhamento, espaçamento, recuo e zoom" aria-label="Mais formatação" @click="toggle">
-          <SlidersHorizontal :size="15" /><span v-if="!compact">Mais</span><ChevronDown :size="11" class="tool__caret" aria-hidden="true" />
+        <button
+          type="button"
+          class="tool tool--labeled"
+          :aria-expanded="open"
+          aria-haspopup="menu"
+          title="Mais: fonte, cores, alinhamento, espaçamento, recuo e zoom"
+          aria-label="Mais formatação"
+          @click="toggle"
+        >
+          <SlidersHorizontal :size="15" /><span v-if="!compact">Mais</span
+          ><ChevronDown :size="11" class="tool__caret" aria-hidden="true" />
         </button>
       </template>
       <template #menu>
         <div class="more">
           <div class="more__row">
             <label class="more__label" for="editor-font">Fonte</label>
-            <select id="editor-font" class="field field--compact more__grow" :value="formatting.fontFamily" @change="run('setFontFamily', ($event.target as HTMLSelectElement).value)">
-              <option v-for="font in FONTS" :key="font" :value="font" :style="{ fontFamily: font }">{{ font }}</option>
-              <option v-if="!FONTS.includes(formatting.fontFamily)" :value="formatting.fontFamily">{{ formatting.fontFamily }}</option>
+            <select
+              id="editor-font"
+              class="field field--compact more__grow"
+              :value="formatting.fontFamily"
+              @change="run('setFontFamily', ($event.target as HTMLSelectElement).value)"
+            >
+              <option v-for="font in FONTS" :key="font" :value="font" :style="{ fontFamily: font }">
+                {{ font }}
+              </option>
+              <option v-if="!FONTS.includes(formatting.fontFamily)" :value="formatting.fontFamily">
+                {{ formatting.fontFamily }}
+              </option>
             </select>
-            <button type="button" class="tool" aria-label="Diminuir fonte" title="Diminuir fonte" @click="run('decreaseFontSize')">−</button>
-            <input class="tool-size" :value="fontSizeText" aria-label="Tamanho da fonte em pontos" inputmode="decimal" @change="setFontSize" @keydown.enter.prevent="setFontSize" />
-            <button type="button" class="tool" aria-label="Aumentar fonte" title="Aumentar fonte" @click="run('increaseFontSize')">+</button>
+            <button
+              type="button"
+              class="tool"
+              aria-label="Diminuir fonte"
+              title="Diminuir fonte"
+              @click="run('decreaseFontSize')"
+            >
+              −
+            </button>
+            <input
+              class="tool-size"
+              :value="fontSizeText"
+              aria-label="Tamanho da fonte em pontos"
+              inputmode="decimal"
+              @change="setFontSize"
+              @keydown.enter.prevent="setFontSize"
+            />
+            <button
+              type="button"
+              class="tool"
+              aria-label="Aumentar fonte"
+              title="Aumentar fonte"
+              @click="run('increaseFontSize')"
+            >
+              +
+            </button>
           </div>
           <div class="more__row">
             <span class="more__label">Alinhar</span>
-            <button type="button" class="tool" :class="{ on: formatting.alignment === 'left' }" :title="`À esquerda (${shortcut('⇧⌘L')})`" aria-label="Alinhar à esquerda" @click="run('setTextAlign', 'left')"><AlignLeft :size="15" /></button>
-            <button type="button" class="tool" :class="{ on: formatting.alignment === 'center' }" :title="`Centralizar (${shortcut('⇧⌘E')})`" aria-label="Centralizar" @click="run('setTextAlign', 'center')"><AlignCenter :size="15" /></button>
-            <button type="button" class="tool" :class="{ on: formatting.alignment === 'right' }" :title="`À direita (${shortcut('⇧⌘R')})`" aria-label="Alinhar à direita" @click="run('setTextAlign', 'right')"><AlignRight :size="15" /></button>
-            <button type="button" class="tool" :class="{ on: formatting.alignment === 'justify' }" :title="`Justificar (${shortcut('⇧⌘J')})`" aria-label="Justificar" @click="run('setTextAlign', 'justify')"><AlignJustify :size="15" /></button>
+            <button
+              type="button"
+              class="tool"
+              :class="{ on: formatting.alignment === 'left' }"
+              :title="`À esquerda (${shortcut('⇧⌘L')})`"
+              aria-label="Alinhar à esquerda"
+              @click="run('setTextAlign', 'left')"
+            >
+              <AlignLeft :size="15" />
+            </button>
+            <button
+              type="button"
+              class="tool"
+              :class="{ on: formatting.alignment === 'center' }"
+              :title="`Centralizar (${shortcut('⇧⌘E')})`"
+              aria-label="Centralizar"
+              @click="run('setTextAlign', 'center')"
+            >
+              <AlignCenter :size="15" />
+            </button>
+            <button
+              type="button"
+              class="tool"
+              :class="{ on: formatting.alignment === 'right' }"
+              :title="`À direita (${shortcut('⇧⌘R')})`"
+              aria-label="Alinhar à direita"
+              @click="run('setTextAlign', 'right')"
+            >
+              <AlignRight :size="15" />
+            </button>
+            <button
+              type="button"
+              class="tool"
+              :class="{ on: formatting.alignment === 'justify' }"
+              :title="`Justificar (${shortcut('⇧⌘J')})`"
+              aria-label="Justificar"
+              @click="run('setTextAlign', 'justify')"
+            >
+              <AlignJustify :size="15" />
+            </button>
             <span class="more__gap" />
-            <button type="button" class="tool" :title="`Diminuir recuo (${shortcut('⌘[')})`" aria-label="Diminuir recuo" @click="run('outdent')"><IndentDecrease :size="15" /></button>
-            <button type="button" class="tool" :title="`Aumentar recuo (${shortcut('⌘]')})`" aria-label="Aumentar recuo" @click="run('indent')"><IndentIncrease :size="15" /></button>
+            <button
+              type="button"
+              class="tool"
+              :title="`Diminuir recuo (${shortcut('⌘[')})`"
+              aria-label="Diminuir recuo"
+              @click="run('outdent')"
+            >
+              <IndentDecrease :size="15" />
+            </button>
+            <button
+              type="button"
+              class="tool"
+              :title="`Aumentar recuo (${shortcut('⌘]')})`"
+              aria-label="Aumentar recuo"
+              @click="run('indent')"
+            >
+              <IndentIncrease :size="15" />
+            </button>
           </div>
           <div class="more__row">
             <span class="more__label">Entrelinha</span>
             <div class="more__choices" role="radiogroup" aria-label="Espaçamento entre linhas">
-              <button v-for="value in SPACINGS" :key="value" type="button" role="radio" class="chip" :class="{ 'chip--active': formatting.lineHeight === value }" :aria-checked="formatting.lineHeight === value" @click="pick('spacing', value)">
+              <button
+                v-for="value in SPACINGS"
+                :key="value"
+                type="button"
+                role="radio"
+                class="chip"
+                :class="{ 'chip--active': formatting.lineHeight === value }"
+                :aria-checked="formatting.lineHeight === value"
+                @click="pick('spacing', value)"
+              >
                 {{ value === 1 ? 'Simples' : value === 2 ? 'Duplo' : String(value).replace('.', ',') }}
               </button>
             </div>
@@ -181,27 +433,83 @@ function pick(kind: 'color' | 'highlight' | 'spacing', value: string | number | 
           <div class="more__row">
             <span class="more__label"><Palette :size="13" aria-hidden="true" /> Cor</span>
             <div class="more__swatches" role="group" aria-label="Cor do texto">
-              <button v-for="color in COLORS" :key="color" type="button" class="swatch" :style="{ background: color }" :aria-label="`Cor ${color}`" @click="pick('color', color)" />
+              <button
+                v-for="color in COLORS"
+                :key="color"
+                type="button"
+                class="swatch"
+                :style="{ background: color }"
+                :aria-label="`Cor ${color}`"
+                @click="pick('color', color)"
+              />
               <button type="button" class="swatch-reset" @click="pick('color', null)">Automática</button>
             </div>
           </div>
           <div class="more__row">
             <span class="more__label"><Highlighter :size="13" aria-hidden="true" /> Realce</span>
             <div class="more__swatches" role="group" aria-label="Cor de realce">
-              <button v-for="color in HIGHLIGHTS" :key="color" type="button" class="swatch" :style="{ background: color }" :aria-label="`Realce ${color}`" @click="pick('highlight', color)" />
+              <button
+                v-for="color in HIGHLIGHTS"
+                :key="color"
+                type="button"
+                class="swatch"
+                :style="{ background: color }"
+                :aria-label="`Realce ${color}`"
+                @click="pick('highlight', color)"
+              />
               <button type="button" class="swatch-reset" @click="pick('highlight', null)">Nenhum</button>
             </div>
           </div>
           <div class="more__row more__row--tools">
-            <button type="button" class="tool tool--labeled" :class="{ on: formatting.strike }" :title="`Tachado (${shortcut('⇧⌘X')})`" @click="run('toggleStrike')"><Strikethrough :size="15" /> Tachado</button>
-            <button type="button" class="tool tool--labeled" :class="{ on: formatting.list === 'check' }" :title="`Lista de verificação (${shortcut('⇧⌘9')})`" @click="run('toggleTaskList')"><ListChecks :size="15" /> Verificação</button>
-            <button type="button" class="tool tool--labeled" :class="{ on: formatting.hasCopiedFormatting }" :title="`Copiar formatação (${shortcut('⌥⌘C')}) · colar (${shortcut('⌥⌘V')})`" @click="formatting.hasCopiedFormatting ? run('pasteFormatting') : run('copyFormatting')"><PaintRoller :size="15" /> {{ formatting.hasCopiedFormatting ? 'Colar formato' : 'Copiar formato' }}</button>
-            <button type="button" class="tool tool--labeled" :title="`Limpar formatação (${shortcut('⌘\\\\')})`" @click="run('clearFormatting')"><Eraser :size="15" /> Limpar</button>
+            <button
+              type="button"
+              class="tool tool--labeled"
+              :class="{ on: formatting.strike }"
+              :title="`Tachado (${shortcut('⇧⌘X')})`"
+              @click="run('toggleStrike')"
+            >
+              <Strikethrough :size="15" /> Tachado
+            </button>
+            <button
+              type="button"
+              class="tool tool--labeled"
+              :class="{ on: formatting.list === 'check' }"
+              :title="`Lista de verificação (${shortcut('⇧⌘9')})`"
+              @click="run('toggleTaskList')"
+            >
+              <ListChecks :size="15" /> Verificação
+            </button>
+            <button
+              type="button"
+              class="tool tool--labeled"
+              :class="{ on: formatting.hasCopiedFormatting }"
+              :title="`Copiar formatação (${shortcut('⌥⌘C')}) · colar (${shortcut('⌥⌘V')})`"
+              @click="formatting.hasCopiedFormatting ? run('pasteFormatting') : run('copyFormatting')"
+            >
+              <PaintRoller :size="15" />
+              {{ formatting.hasCopiedFormatting ? 'Colar formato' : 'Copiar formato' }}
+            </button>
+            <button
+              type="button"
+              class="tool tool--labeled"
+              :title="`Limpar formatação (${shortcut('⌘\\\\')})`"
+              @click="run('clearFormatting')"
+            >
+              <Eraser :size="15" /> Limpar
+            </button>
           </div>
           <div class="more__row">
             <label class="more__label" for="editor-zoom">Tamanho na tela</label>
-            <select id="editor-zoom" class="field field--compact" :value="zoom" title="Só muda o tamanho na tela; a folha do púlpito não muda" @change="emit('zoom', Number(($event.target as HTMLSelectElement).value))">
-              <option v-for="value in ZOOMS" :key="value" :value="value">{{ Math.round(value * 100) }}%</option>
+            <select
+              id="editor-zoom"
+              class="field field--compact"
+              :value="zoom"
+              title="Só muda o tamanho na tela; a folha do púlpito não muda"
+              @change="emit('zoom', Number(($event.target as HTMLSelectElement).value))"
+            >
+              <option v-for="value in ZOOMS" :key="value" :value="value">
+                {{ Math.round(value * 100) }}%
+              </option>
               <option v-if="!ZOOMS.includes(zoom)" :value="zoom">{{ Math.round(zoom * 100) }}%</option>
             </select>
             <span class="more__hint">{{ shortcut('⌘+') }} · {{ shortcut('⌘−') }}</span>
@@ -210,7 +518,15 @@ function pick(kind: 'color' | 'highlight' | 'spacing', value: string | number | 
       </template>
     </PopMenu>
     <span class="spacer" />
-    <button type="button" class="tool" :title="`Localizar e substituir (${shortcut('⌘F')})`" aria-label="Localizar e substituir" @click="emit('find')"><Search :size="15" /></button>
+    <button
+      type="button"
+      class="tool"
+      :title="`Localizar e substituir (${shortcut('⌘F')})`"
+      aria-label="Localizar e substituir"
+      @click="emit('find')"
+    >
+      <Search :size="15" />
+    </button>
   </div>
 </template>
 

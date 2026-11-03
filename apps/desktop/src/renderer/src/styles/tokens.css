@@ -70,8 +70,9 @@
   --text-xl: 16px;
   --text-title: 18px;
 
-  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-serif: 'Iowan Old Style', 'New York', Charter, 'Bitstream Charter', Georgia, 'Times New Roman', serif;
+  /* Fontes embutidas (styles/fonts.css); as demais só entram se o arquivo não carregar. */
+  --font-ui: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-serif: 'Source Serif 4', 'Iowan Old Style', 'New York', Charter, Georgia, 'Times New Roman', serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
   --shadow-sheet: 0 18px 48px rgb(0 0 0 / 0.18), 0 2px 8px rgb(0 0 0 / 0.08);

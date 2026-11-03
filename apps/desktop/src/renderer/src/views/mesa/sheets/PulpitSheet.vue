@@ -47,7 +47,10 @@ const app = useAppStore()
 const mesa = useMesaStore()
 const toasts = useToasts()
 
+/** As duas primeiras vêm embutidas no app (também na impressão); as demais dependem do computador. */
 const FONT_FAMILIES = [
+  'Source Serif 4',
+  'Source Sans 3',
   'Arial',
   'Georgia',
   'Times New Roman',

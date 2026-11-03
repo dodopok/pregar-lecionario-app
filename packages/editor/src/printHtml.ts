@@ -55,7 +55,8 @@ function runHTML(run: RichRun, base: number, defaultSize: number, includeFootnot
   if (decorations.length) css.push(`text-decoration:${decorations.join(' ')}`)
   if (run.color) css.push(`color:${run.color}`)
   if (run.highlight) css.push(`background-color:${run.highlight}`)
-  if (run.fontSizePt !== undefined && run.fontSizePt !== defaultSize) css.push(`font-size:${cssNumber(scaled(run.fontSizePt, base))}pt`)
+  if (run.fontSizePt !== undefined && run.fontSizePt !== defaultSize)
+    css.push(`font-size:${cssNumber(scaled(run.fontSizePt, base))}pt`)
   if (run.link && isSafeLinkHref(run.link)) inline = `<a href="${escapeHTML(run.link)}">${inline}</a>`
   if (run.superscript) inline = `<sup>${inline}</sup>`
   else if (run.subscript) inline = `<sub>${inline}</sub>`
@@ -70,15 +71,27 @@ function listMarker(paragraph: RichParagraph): string {
   return `${list.ordinal ?? 1}. `
 }
 
-function paragraphHTML(paragraph: RichParagraph, position: { first: boolean; last: boolean }, base: number, includeFootnotes: boolean): string {
+function paragraphHTML(
+  paragraph: RichParagraph,
+  position: { first: boolean; last: boolean },
+  base: number,
+  includeFootnotes: boolean,
+): string {
   const level = Math.min(6, Math.max(0, paragraph.headingLevel))
   const defaultSize = defaultFontSizePt(level)
   const quote = paragraph.quote === true
   const listIndent = paragraph.list ? (paragraph.list.level + 1) * LIST_HANG_PT : 0
   const start = (paragraph.indentStartPt ?? 0) + (quote ? QUOTE_INDENT_PT : 0) + listIndent
-  const firstLine = (paragraph.indentFirstLinePt ?? paragraph.indentStartPt ?? 0) + (quote ? QUOTE_INDENT_PT : 0) + (paragraph.list ? listIndent - LIST_HANG_PT : 0)
-  const before = paragraph.spaceBeforePt ?? (quote && position.first ? QUOTE_SPACE_BEFORE_PT : level > 0 ? HEADING_SPACE_BEFORE_PT : 0)
-  const after = paragraph.spaceAfterPt ?? (quote && position.last ? QUOTE_SPACE_AFTER_PT : level > 0 ? HEADING_SPACE_AFTER_PT : 0)
+  const firstLine =
+    (paragraph.indentFirstLinePt ?? paragraph.indentStartPt ?? 0) +
+    (quote ? QUOTE_INDENT_PT : 0) +
+    (paragraph.list ? listIndent - LIST_HANG_PT : 0)
+  const before =
+    paragraph.spaceBeforePt ??
+    (quote && position.first ? QUOTE_SPACE_BEFORE_PT : level > 0 ? HEADING_SPACE_BEFORE_PT : 0)
+  const after =
+    paragraph.spaceAfterPt ??
+    (quote && position.last ? QUOTE_SPACE_AFTER_PT : level > 0 ? HEADING_SPACE_AFTER_PT : 0)
   const css: string[] = []
   if (start) css.push(`margin-left:${cssNumber(start)}pt`)
   if (firstLine !== start) css.push(`text-indent:${cssNumber(firstLine - start)}pt`)
@@ -86,14 +99,24 @@ function paragraphHTML(paragraph: RichParagraph, position: { first: boolean; las
   if (before) css.push(`margin-top:${cssNumber(before)}pt`)
   if (after) css.push(`margin-bottom:${cssNumber(after)}pt`)
   if (paragraph.alignment && paragraph.alignment !== 'left') css.push(`text-align:${paragraph.alignment}`)
-  if (paragraph.lineHeight !== undefined && paragraph.lineHeight !== BODY_LINE_HEIGHT) css.push(`line-height:${cssNumber(paragraph.lineHeight)}`)
+  if (paragraph.lineHeight !== undefined && paragraph.lineHeight !== BODY_LINE_HEIGHT)
+    css.push(`line-height:${cssNumber(paragraph.lineHeight)}`)
   if (level > 0) css.push(`font-size:${cssNumber(scaled(defaultSize, base))}pt`)
   const tag = level > 0 ? `h${level}` : 'p'
   const marker = escapeHTML(listMarker(paragraph))
-  const content = marker + paragraph.runs.map((run) => runHTML(run, base, defaultSize, includeFootnotes)).join('')
+  const content =
+    marker + paragraph.runs.map((run) => runHTML(run, base, defaultSize, includeFootnotes)).join('')
   const style = css.length ? ` style="${escapeHTML(css.join(';'))}"` : ''
   const classes = [quote ? 'quote' : '', paragraph.attribution ? 'attribution' : ''].filter(Boolean).join(' ')
   return `<${tag}${classes ? ` class="${classes}"` : ''}${style}>${content || '<br>'}</${tag}>`
+}
+
+/** Reservas do mesmo estilo da família escolhida, para quando ela não existir no computador. */
+function fallbackFamilies(family: string): string {
+  const serif =
+    /serif|georgia|charter|palatino|times|garamond|cambria|book|literata|crimson/i.test(family) &&
+    !/sans/i.test(family)
+  return serif ? 'Georgia, "Times New Roman", serif' : 'Arial, sans-serif'
 }
 
 /** Documento HTML completo, pronto para `printToPDF`. */
@@ -113,7 +136,10 @@ export function htmlForPrint(document: RichDocument, options: PrintOptions = {})
   if (occasion) body += `<p class="print-occasion">${escapeHTML(occasion)}</p>`
   if (title || occasion) body += '<p class="print-gap"><br></p>'
   document.paragraphs.forEach((paragraph, index) => {
-    const position = { first: !document.paragraphs[index - 1]?.quote, last: !document.paragraphs[index + 1]?.quote }
+    const position = {
+      first: !document.paragraphs[index - 1]?.quote,
+      last: !document.paragraphs[index + 1]?.quote,
+    }
     body += paragraphHTML(paragraph, position, base, includeFootnotes)
   })
   if (includeFootnotes && document.footnotes.length) {
@@ -128,7 +154,7 @@ export function htmlForPrint(document: RichDocument, options: PrintOptions = {})
   const css = `
 @page { size: ${pageSize}; margin: ${cssNumber(margin)}pt; }
 html, body { margin: 0; padding: 0; background: #fff; }
-body { font-family: "${family}", Arial, sans-serif; font-size: ${cssNumber(base)}pt; line-height: ${BODY_LINE_HEIGHT}; color: #000; }
+body { font-family: "${family}", ${fallbackFamilies(family)}; font-size: ${cssNumber(base)}pt; line-height: ${BODY_LINE_HEIGHT}; color: #000; }
 p, h1, h2, h3, h4, h5, h6 { margin: 0; white-space: pre-wrap; orphans: 2; widows: 2; }
 h1, h2, h3, h4, h5, h6 { font-weight: 400; break-after: avoid; page-break-after: avoid; }
 h1.print-title { font-size: ${cssNumber(titleSize)}pt; font-weight: 700; margin: 0 0 3pt; }

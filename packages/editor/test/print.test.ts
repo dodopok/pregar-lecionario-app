@@ -17,20 +17,43 @@ const document: RichDocument = toRichDocument({
         { type: 'text', text: ' link', marks: [{ type: 'link', attrs: { href: 'https://example.org' } }] },
       ],
     },
-    { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'O amor de Deus' }] }, { type: 'paragraph', attrs: { attribution: true }, content: [{ type: 'text', text: '— Romanos 5:5' }] }] },
-    { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Uma promessa para hoje' }] }] }] },
+    {
+      type: 'blockquote',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'O amor de Deus' }] },
+        {
+          type: 'paragraph',
+          attrs: { attribution: true },
+          content: [{ type: 'text', text: '— Romanos 5:5' }],
+        },
+      ],
+    },
+    {
+      type: 'bulletList',
+      content: [
+        {
+          type: 'listItem',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Uma promessa para hoje' }] }],
+        },
+      ],
+    },
     { type: 'paragraph' },
   ],
 })
 
 describe('htmlForPrint (PDF do tablet)', () => {
   it('monta cabeçalho com título e ocasião, família e tamanho escolhidos', () => {
-    const html = htmlForPrint(document, { title: 'Mensagem & graça', occasion: 'LOC 2027 · Domingo', fontFamily: 'Georgia', fontSizePt: 14 })
+    const html = htmlForPrint(document, {
+      title: 'Mensagem & graça',
+      occasion: 'LOC 2027 · Domingo',
+      fontFamily: 'Georgia',
+      fontSizePt: 14,
+    })
     expect(html.startsWith('<!doctype html>')).toBe(true)
     expect(html).toContain('<title>Mensagem &amp; graça</title>')
     expect(html).toContain('<h1 class="print-title">Mensagem &amp; graça</h1>')
     expect(html).toContain('<p class="print-occasion">LOC 2027 · Domingo</p>')
-    expect(html).toContain('font-family: "Georgia", Arial, sans-serif; font-size: 14pt')
+    expect(html).toContain('font-family: "Georgia", Georgia, "Times New Roman", serif; font-size: 14pt')
     expect(html).toContain('h1.print-title { font-size: 18pt')
     expect(html).toContain('@page { size: A4; margin: 48pt; }')
   })
@@ -48,7 +71,9 @@ describe('htmlForPrint (PDF do tablet)', () => {
     expect(quote.getAttribute('style')).toContain('margin-left:34pt')
     expect(quote.getAttribute('style')).toContain('margin-top:11pt')
     expect(page.querySelector('p.attribution')?.textContent).toBe('— Romanos 5:5')
-    expect([...page.querySelectorAll('p')].some((node) => node.textContent === '• Uma promessa para hoje')).toBe(true)
+    expect(
+      [...page.querySelectorAll('p')].some((node) => node.textContent === '• Uma promessa para hoje'),
+    ).toBe(true)
     expect(page.querySelector('a')?.getAttribute('href')).toBe('https://example.org')
   })
 
