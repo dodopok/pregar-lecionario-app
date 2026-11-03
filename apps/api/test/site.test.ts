@@ -71,6 +71,13 @@ describe('site: página inicial e downloads', () => {
     const windows = await context.app.inject({ method: 'GET', url: '/baixar/windows' })
     expect(windows.statusCode).toBe(302)
     expect(windows.headers.location).toBe(RELEASES_PAGE)
+
+    // Um release publicado depois aparece em um minuto, sem esperar o cache de dez.
+    context.fake.routes.length = 0
+    context.fake.on('GET', /\/releases\/latest$/, () => RELEASE)
+    context.clock.advance(61_000)
+    const mac = await context.app.inject({ method: 'GET', url: '/baixar/mac' })
+    expect(mac.headers.location).toBe(`${DOWNLOAD}/Proper-0.2.0-mac.dmg`)
   })
 
   it('serve os arquivos estáticos do site e mantém as rotas da API', async () => {

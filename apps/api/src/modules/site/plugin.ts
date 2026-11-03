@@ -15,6 +15,8 @@ import type { AppDeps } from '../../lib/context'
 export const RELEASES_PAGE = 'https://github.com/dodopok/pregar-lecionario-app/releases'
 export const LATEST_RELEASE_API = 'https://api.github.com/repos/dodopok/pregar-lecionario-app/releases/latest'
 const CACHE_MS = 10 * 60 * 1000
+/** Sem release publicado, consulta de novo logo: assim um release recém-publicado aparece em um minuto. */
+const EMPTY_CACHE_MS = 60 * 1000
 const TIMEOUT_MS = 5_000
 
 export const DOWNLOAD_TARGETS = ['mac', 'windows', 'windows-arm', 'linux', 'linux-deb'] as const
@@ -67,7 +69,7 @@ export function createReleaseResolver(deps: Pick<AppDeps, 'fetch' | 'clock'>) {
   let cached: { at: number; info: ReleaseInfo | null } | null = null
   return async (): Promise<ReleaseInfo | null> => {
     const now = deps.clock.now().getTime()
-    if (cached && now - cached.at < CACHE_MS) return cached.info
+    if (cached && now - cached.at < (cached.info ? CACHE_MS : EMPTY_CACHE_MS)) return cached.info
     let info: ReleaseInfo | null = null
     try {
       const response = await deps.fetch(LATEST_RELEASE_API, {
