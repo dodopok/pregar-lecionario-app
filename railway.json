@@ -3,7 +3,7 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "apps/api/Dockerfile",
-    "watchPatterns": ["apps/api/**", "packages/core/**", "package-lock.json"]
+    "watchPatterns": ["apps/api/**", "apps/site/**", "packages/core/**", "package-lock.json"]
   },
   "deploy": {
     "startCommand": "node --enable-source-maps apps/api/dist/server.js",

@@ -19,6 +19,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 # O build da API é um bundle autossuficiente (tsup noExternal): a imagem final não precisa de node_modules.
 COPY --from=build --chown=node:node /app/apps/api/dist apps/api/dist
+# O site (página inicial e downloads) é servido pela API a partir de apps/site.
+COPY --chown=node:node apps/site apps/site
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

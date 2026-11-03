@@ -115,6 +115,10 @@ As versões públicas saem do computador de cada sistema com `npm run release -w
 - Pix Automático e Pix mensal pelo Asaas, ciclo da assinatura, limites de uso e o que acontece em atraso: [docs/assinatura-pix.md](docs/assinatura-pix.md).
 - IA com chaves próprias no modo gratuito: [docs/ia-byok.md](docs/ia-byok.md).
 
+## Site e downloads
+
+A página inicial do Proper fica em `apps/site` (HTML, CSS e fontes próprias, sem dependências) e é servida pela própria API em `/`. Os botões apontam para `/baixar/mac`, `/baixar/windows`, `/baixar/windows-arm`, `/baixar/linux` e `/baixar/linux-deb`, que redirecionam ao instalador do último release publicado no GitHub (consultado no servidor e guardado por dez minutos); sem release, caem na página de releases. A captura da Mesa em `apps/site/img` é do app real.
+
 ## Onde os dados ficam
 
 Tudo fica na pasta de dados do app:

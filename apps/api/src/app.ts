@@ -17,6 +17,7 @@ import { estevaoPublicRoutes } from './modules/estevao/public'
 import { accountRoutes } from './modules/account/plugin'
 import { legalRoutes } from './modules/legal/pages'
 import { adminRoutes } from './modules/admin/plugin'
+import { siteRoutes } from './modules/site/plugin'
 
 export interface AppServices {
   auth: AuthService
@@ -31,7 +32,11 @@ export interface BuiltApp {
   services: AppServices
 }
 
-export async function buildApp(deps: AppDeps, runner: AIRunner, options: { logger?: boolean } = {}): Promise<BuiltApp> {
+export async function buildApp(
+  deps: AppDeps,
+  runner: AIRunner,
+  options: { logger?: boolean } = {},
+): Promise<BuiltApp> {
   const { config } = deps
   const app = Fastify({
     logger:
@@ -93,7 +98,13 @@ export async function buildApp(deps: AppDeps, runner: AIRunner, options: { logge
     if (error instanceof ApiError) return sendError(reply, error)
     const status = (error as { statusCode?: number }).statusCode
     if (status === 429) {
-      return reply.status(429).send((error as unknown as { error?: unknown }).error ? error : { error: { code: 'rate_limited', message: 'Muitas requisições.' } })
+      return reply
+        .status(429)
+        .send(
+          (error as unknown as { error?: unknown }).error
+            ? error
+            : { error: { code: 'rate_limited', message: 'Muitas requisições.' } },
+        )
     }
     if (status && status >= 400 && status < 500) {
       const code = status === 413 ? 'payload_too_large' : 'bad_request'
@@ -101,7 +112,9 @@ export async function buildApp(deps: AppDeps, runner: AIRunner, options: { logge
       return reply.status(status).send({ error: { code, message } })
     }
     request.log.error({ err: error }, 'Erro inesperado')
-    return reply.status(500).send({ error: { code: 'internal', message: 'Erro inesperado no servidor. Tente novamente.' } })
+    return reply
+      .status(500)
+      .send({ error: { code: 'internal', message: 'Erro inesperado no servidor. Tente novamente.' } })
   })
   app.setNotFoundHandler((_request, reply) =>
     reply.status(404).send({ error: { code: 'not_found', message: 'Rota não encontrada.' } }),
@@ -121,12 +134,6 @@ export async function buildApp(deps: AppDeps, runner: AIRunner, options: { logge
       return reply.status(503).send({ ok: false })
     }
   })
-  app.get('/', async (_request, reply) =>
-    reply.type('text/html; charset=utf-8').send(
-      '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Proper API</title><body style="font-family:system-ui;max-width:640px;margin:40px auto;padding:0 16px"><h1>Proper API</h1><p>Serviço do aplicativo Proper.</p><p><a href="/legal/privacidade">Privacidade</a> · <a href="/legal/termos">Termos</a></p></body></html>',
-    ),
-  )
-
   authRoutes(app, deps, auth)
   accountRoutes(app, deps, { auth, billing, quota }, requireAuth)
   billingRoutes(app, deps, billing, requireAuth)
@@ -135,6 +142,7 @@ export async function buildApp(deps: AppDeps, runner: AIRunner, options: { logge
   aiRoutes(app, deps, { billing, quota, runner }, requireAuth)
   adminRoutes(app, deps, { billing, quota })
   legalRoutes(app, deps)
+  await siteRoutes(app, deps)
 
   return { app, services: { auth, billing, quota, estevao, runner } }
 }

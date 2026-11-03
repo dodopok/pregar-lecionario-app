@@ -2,6 +2,11 @@
 
 Atualizado em 3 de novembro de 2026.
 
+## Marca, ícone e site (3 de novembro de 2026)
+
+- **Marca.** Entre cinco opções desenhadas (canvas "Logo Proper · 5 opções"), ficou o pilcrow, o sinal ¶ das rubricas dos livros de oração, em papel sobre o verde litúrgico. `apps/desktop/resources/make-icon.py` gera os ícones dos três sistemas; o trilho e a tela Sobre mostram a marca.
+- **Site.** `apps/site` é a página inicial, servida pela API em `/` com os downloads em `/baixar/<alvo>` redirecionando ao último release do GitHub (`modules/site/plugin.ts`, com testes). Fontes próprias, captura real da Mesa, modo escuro, sem scripts externos. O `railway.json` passou a observar `apps/site/**`.
+
 ## API no ar na Railway (3 de novembro de 2026)
 
 - Projeto `pregar` na Railway com os serviços `api` (Dockerfile da raiz, 1 réplica, acompanha a `main`) e `Postgres` (volume de 5 GB). Domínio `api.pregar.oficio.app` verificado, e o app passou a embuti-lo como endereço padrão (`PREGAR_API_DEFAULT_URL`).
