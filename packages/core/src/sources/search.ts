@@ -16,19 +16,20 @@ import {
   favoriteSiteSearchURL,
 } from './favorites'
 import type { FavoriteAuthor, FavoritePassageContext, FavoriteSite } from './favorites'
-import { percentEncodeSearchQuery } from './urls'
+import { FavoriteSourceURLs, percentEncodeSearchQuery } from './urls'
 
 /**
  * Busca de artigos nas fontes favoritas. Porte de `FavoriteSiteSearch.swift`: consulta as APIs
- * públicas (WordPress REST, WordPress.com, feed JSON do Blogger, RSS/Atom) apenas com livro e
- * capítulo, aceita links só do domínio do perfil e em HTTPS, e classifica cada artigo pela
- * referência explícita no título; menções só no resumo ficam como contexto a conferir.
+ * públicas (WordPress REST, WordPress.com, feed JSON do Blogger, RSS/Atom), aceita links só do
+ * domínio do perfil e em HTTPS, e classifica cada artigo pela referência explícita. No Anglican
+ * Compass, a busca também usa a celebração para localizar artigos editoriais sem referência no título.
  */
 
 export const FAVORITE_SITES_INTEGRATION: IntegrationName = 'Fontes favoritas'
 export const FAVORITE_SITE_REQUEST_TIMEOUT_MS = 15_000
 export const FAVORITE_SITE_MAXIMUM_RESPONSE_BYTES = 2_000_000
 export const FAVORITE_SITE_MAXIMUM_ARTICLES = 6
+const FAVORITE_SITE_SEARCH_REVISION = 'occasion-context-v2'
 
 export const FAVORITE_SITE_INVALID_REFERENCE_MESSAGE =
   'Escolha uma passagem com livro, capítulo e versículos.'
@@ -100,6 +101,7 @@ export async function favoriteSiteSearchCacheKey(params: FavoriteSiteSearchParam
     params.authors ?? [],
   )
   return [
+    FAVORITE_SITE_SEARCH_REVISION,
     cleanReference,
     cleanOccasion,
     dateKey(params.date),
@@ -152,10 +154,17 @@ function jsonRequest(host: string, path: string, query: [string, string][]): Fav
 }
 
 /**
- * Requisição estruturada do site, enviando só "Livro capítulo" em inglês (nunca manuscrito,
- * título ou data). Working Preacher e busca por URL não têm requisição.
+ * Requisição estruturada: em geral envia só "Livro capítulo" em inglês; o Anglican Compass
+ * também recebe a celebração quando há uma página editorial própria. Working Preacher não é buscado
+ * por API porque o arquivo é aberto diretamente no site.
  */
-export function favoriteSiteRequest(site: FavoriteSite, reference: string): FavoriteSiteRequest | null {
+export function favoriteSiteRequest(
+  site: FavoriteSite,
+  reference: string,
+  occasion: string | null = null,
+  date: Date | null = null,
+  isSunday = false,
+): FavoriteSiteRequest | null {
   const target = parseReference(reference)
   if (!favoriteSiteHasStructuredSearch(site) || !target) return null
   const term = `${englishBookName(target)} ${target.chapter}`
@@ -181,8 +190,12 @@ export function favoriteSiteRequest(site: FavoriteSite, reference: string): Favo
       if (!base || !host) return null
       const basePath = base.pathname.replace(/^\/+|\/+$/g, '')
       const path = '/' + [basePath, 'wp-json/wp/v2/posts'].filter((part) => part !== '').join('/')
+      const editorialTerm =
+        site.adapter === 'anglicanCompass'
+          ? FavoriteSourceURLs.anglicanCompassEditorialLabel(occasion, date, isSunday)
+          : null
       return jsonRequest(host, path, [
-        ['search', term],
+        ['search', editorialTerm ?? term],
         ['per_page', '12'],
         ['_embed', 'author'],
         ['_fields', 'date,link,title,excerpt,_links,_embedded'],
@@ -312,6 +325,9 @@ export function favoriteSiteArticles(
   site: FavoriteSite,
   targetReference: string,
   authors: readonly FavoriteAuthor[] = [],
+  occasion: string | null = null,
+  date: Date | null = null,
+  isSunday = false,
 ): FavoriteSiteArticle[] {
   const target = parseReference(targetReference)
   if (!target) throw new FavoriteSiteSearchError('invalidReference')
@@ -326,7 +342,9 @@ export function favoriteSiteArticles(
     if (title === '') continue
     if (seen.has(url)) continue
     seen.add(url)
-    const relation = relationFor(title, candidate.excerpt, target)
+    const relation =
+      relationFor(title, candidate.excerpt, target) ??
+      editorialContextRelation(site, title, occasion, date, isSunday)
     if (!relation) continue
     const author = candidate.author !== null ? decodedText(candidate.author) : ''
     articles.push({
@@ -353,6 +371,19 @@ export function favoriteSiteArticles(
       return leftTime > rightTime ? -1 : 1
     })
     .slice(0, FAVORITE_SITE_MAXIMUM_ARTICLES)
+}
+
+function editorialContextRelation(
+  site: FavoriteSite,
+  title: string,
+  occasion: string | null,
+  date: Date | null,
+  isSunday: boolean,
+): FavoriteSitePassageRelation | null {
+  if (site.adapter !== 'anglicanCompass') return null
+  const editorialLabel = FavoriteSourceURLs.anglicanCompassEditorialLabel(occasion, date, isSunday)
+  if (!editorialLabel || !normalizeForSearch(title).includes(normalizeForSearch(editorialLabel))) return null
+  return { match: 'context', passageReference: null, overlapReference: null }
 }
 
 function isPreferredAuthor(value: string | null, authors: readonly FavoriteAuthor[]): boolean {
@@ -646,13 +677,14 @@ export interface FavoriteSiteSearchContext extends HttpContext {
 async function searchSite(
   context: FavoriteSiteSearchContext,
   site: FavoriteSite,
-  reference: string,
+  passageContext: FavoritePassageContext,
   searchURL: string,
   authors: readonly FavoriteAuthor[],
   now: () => Date,
 ): Promise<FavoriteSiteSearchGroup> {
   const searchedAt = now()
-  const request = favoriteSiteRequest(site, reference)
+  const { reference, occasion, date, isSunday } = passageContext
+  const request = favoriteSiteRequest(site, reference, occasion ?? null, date, isSunday)
   if (!request) return { site, searchURL, articles: [], searchedAt, errorMessage: null }
   const operation = `busca · ${site.title}`
   let alreadyLogged = false
@@ -676,7 +708,7 @@ async function searchSite(
     if (response.body.byteLength > FAVORITE_SITE_MAXIMUM_RESPONSE_BYTES) {
       throw new FavoriteSiteSearchError('invalidResponse')
     }
-    const articles = favoriteSiteArticles(response.body, site, reference, authors)
+    const articles = favoriteSiteArticles(response.body, site, reference, authors, occasion ?? null, date, isSunday)
     return { site, searchURL, articles, searchedAt, errorMessage: null }
   } catch (error) {
     if (!alreadyLogged) {
@@ -727,7 +759,7 @@ export async function searchFavoriteSites(
 
   const groups = await Promise.all(
     sites.map((site, index) =>
-      searchSite(context, site, reference, searchURLs[index] ?? site.baseURL, authors, now),
+      searchSite(context, site, passageContext, searchURLs[index] ?? site.baseURL, authors, now),
     ),
   )
   return { cacheKey, reference, searchedAt: now(), groups }

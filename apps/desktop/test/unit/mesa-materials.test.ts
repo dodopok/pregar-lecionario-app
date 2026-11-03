@@ -9,6 +9,7 @@ import {
   findReaderTab,
   groupMaterials,
   materialsEmptyMessage,
+  materialSearchOccasion,
   normalizedArticleURL,
   openModeFromEvent,
   pageRangeLabel,
@@ -80,6 +81,19 @@ function pdf(
 }
 
 describe('grupos de materiais', () => {
+  it('inclui a festa da coleta junto com o domingo ao montar o contexto da busca', () => {
+    const occasion = materialSearchOccasion('23º Domingo após Pentecostes', {
+      date: '2026-11-01',
+      sundayName: '23º Domingo após Pentecostes',
+      collect: [
+        { title: 'Todos os Santos e Santas', subtitle: 'Primeiro de novembro', text: 'Coleta da festa.' },
+        { title: '23º Domingo após Pentecostes', text: 'Coleta do domingo.' },
+      ],
+    })
+
+    expect(occasion).toBe('Todos os Santos e Santas · 23º Domingo após Pentecostes')
+  })
+
   it('leva "mesma passagem" e "seção maior" para "Sobre esta passagem"', () => {
     expect(articleGroup('same')).toBe('exact')
     expect(articleGroup('contains')).toBe('exact')

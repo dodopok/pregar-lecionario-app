@@ -4,6 +4,8 @@
  * duplicados, textos de vazio e linhas de metadados. Sem Vue nem IPC, para os testes.
  */
 import type { AIResearchSource } from '@pregar/core/ai'
+import type { LiturgicalDay } from '@pregar/core/liturgy/types'
+import { normalizeForSearch } from '@pregar/core/util/text'
 import type {
   FavoriteSite,
   FavoriteSiteArticle,
@@ -32,6 +34,34 @@ export const MATCH_GROUPS: { id: MatchGroupId; title: string; tone: MatchTone }[
 
 /** Atraso depois que passagem e data assentam, como a tarefa de 650 ms do app Swift. */
 export const MATERIALS_SEARCH_DELAY_MS = 650
+
+/**
+ * Ocasiões enviadas às buscas: as coletas identificam festas móveis que podem coexistir com o
+ * nome do domingo (por exemplo, Todos os Santos em 1º de novembro). Mantém os dois contextos.
+ */
+export function materialSearchOccasion(occasion: string | null, day: LiturgicalDay | null): string | null {
+  const collectNames = (day?.collect ?? [])
+    .map((collect) => collect.title?.trim() || collect.subtitle?.trim() || '')
+    .map((title) => title.split(/\s+[·|]\s+/)[0]?.trim() ?? '')
+  const names = [
+    ...collectNames,
+    ...(day?.celebrations ?? []).map((celebration) => celebration.name),
+    day?.celebration?.name,
+    day?.sundayName,
+    occasion,
+  ]
+  const unique: string[] = []
+  const seen = new Set<string>()
+  for (const value of names) {
+    const name = value?.trim()
+    if (!name) continue
+    const key = normalizeForSearch(name)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    unique.push(name)
+  }
+  return unique.length > 0 ? unique.join(' · ').slice(0, 120) : null
+}
 
 export interface PdfMaterial {
   kind: 'pdf'

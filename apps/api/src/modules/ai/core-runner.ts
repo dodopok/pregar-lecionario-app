@@ -111,7 +111,7 @@ export function createAIRunner(deps: AppDeps): AIRunner {
       try {
         const result = await searchResearchSources(request.reference, request.occasion ?? null, {
           ...cfg,
-          ...(request.preferredAuthors.length > 0 ? { priorityAuthors: request.preferredAuthors } : {}),
+          ...(request.preferredAuthors !== undefined ? { priorityAuthors: request.preferredAuthors } : {}),
         })
         const { usage, ...rest } = result
         return { result: rest, usage: runnerUsage(usage)! }

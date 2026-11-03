@@ -3,7 +3,12 @@ import {
   englishBookName,
   parseReference,
 } from '../bible/reference'
-import { liturgicalProperDay } from '../liturgy/calendar'
+import {
+  firstSundayOfAdvent,
+  liturgicalProperDay,
+  liturgicalYearLetter,
+} from '../liturgy/calendar'
+import { normalizeForSearch } from '../util/text'
 
 /**
  * Endereços das fontes favoritas embutidas. Porte de `FavoriteSourceURLs` do app Swift: o
@@ -53,12 +58,43 @@ function workingPreacher(reference: string): string {
   return searchURL('www.workingpreacher.org', englishReference(reference))
 }
 
+/** Ocasiões com uma página editorial própria no Anglican Compass. */
+function anglicanCompassEditorialLabel(
+  occasion: string | null | undefined,
+  date: Date | null,
+  isSunday: boolean,
+): string | null {
+  const normalized = normalizeForSearch(occasion ?? '')
+  if (normalized.includes('all saints') || normalized.includes('todos os santos'))
+    return 'All Saints Sunday'
+
+  if (date && isSunday && (normalized.includes('advent') || normalized.includes('advento'))) {
+    const firstAdvent = firstSundayOfAdvent(date.getFullYear())
+    if (
+      date.getFullYear() === firstAdvent.getFullYear() &&
+      date.getMonth() === firstAdvent.getMonth() &&
+      date.getDate() === firstAdvent.getDate()
+    ) {
+      const year = liturgicalYearLetter(date)
+      if (year) return `Advent 1${year}`
+    }
+  }
+
+  const proper = liturgicalProperDay(occasion, date, isSunday)
+  return proper?.year ? `Proper ${proper.number}${proper.year}` : null
+}
+
 function anglicanCompass(
   reference: string,
   occasion: string | null | undefined,
   date: Date | null = null,
   isSunday = false,
 ): string {
+  const editorialLabel = anglicanCompassEditorialLabel(occasion, date, isSunday)
+  if (editorialLabel === 'All Saints Sunday')
+    return 'https://anglicancompass.com/today-in-the-spirit-all-saints-sunday/'
+  if (editorialLabel?.startsWith('Advent 1'))
+    return `https://anglicancompass.com/today-in-the-spirit-advent-1${editorialLabel.slice(-1).toLowerCase()}/`
   const proper = liturgicalProperDay(occasion, date, isSunday)
   if (proper && proper.year !== '') {
     return `https://anglicancompass.com/today-in-the-spirit-proper-${proper.number}${proper.year.toLowerCase()}/`
@@ -74,6 +110,8 @@ function anglicanCompassDetail(
   date: Date | null,
   isSunday: boolean,
 ): string {
+  const editorialLabel = anglicanCompassEditorialLabel(occasion, date, isSunday)
+  if (editorialLabel) return `Today in the Spirit · ${editorialLabel}`
   const proper = liturgicalProperDay(occasion, date, isSunday)
   if (!proper || proper.year === '') return `Today in the Spirit · ${occasion ?? 'lecionário'}`
   return `Today in the Spirit · Proper ${proper.number}${proper.year}`
@@ -91,6 +129,7 @@ export const FavoriteSourceURLs = {
   workingPreacher,
   anglicanCompass,
   anglicanCompassDetail,
+  anglicanCompassEditorialLabel,
   myPastoralPonderings,
   bobCornwall,
 } as const

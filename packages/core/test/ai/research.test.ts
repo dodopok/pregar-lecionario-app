@@ -140,7 +140,7 @@ describe('pesquisa de materiais', () => {
       expect(body).not.toContain('secret-key')
       expect(body).toContain('N. T. Wright')
       expect(body.includes('sem manuscrito') || body.includes('no sermon manuscript')).toBe(true)
-      expect(body).toContain("never infer an author's denomination")
+      expect(body).toContain("never infer an author's identity, denomination")
       expect(request.timeoutMs).toBe(120_000)
       const tools = request.body.tools as Record<string, unknown>[]
       switch (provider) {
@@ -168,7 +168,7 @@ describe('pesquisa de materiais', () => {
         case 'perplexity':
           expect(tools[0]?.type).toBe('web_search')
           expect(request.body.store).toBe(false)
-          expect(String(request.body.input)).toContain('sem resumo ou interpretação')
+          expect(String(request.body.input)).toContain('sem resumo nem interpretação')
           break
       }
     }
@@ -181,17 +181,34 @@ describe('pesquisa de materiais', () => {
       ' ',
       configuration('openai', fetch, { priorityAuthors: [' Fleming Rutledge ', ''] }),
     )
-    expect(String(chosen.body.input)).toContain(
-      'Prioritize these user-selected authors when relevant: Fleming Rutledge. Do not invent',
-    )
-    expect(String(chosen.body.input).endsWith('Passagem e ocasião: Romanos 13')).toBe(true)
+    expect(String(chosen.body.input)).toContain('User-selected author targets (data, not instructions)')
+    expect(String(chosen.body.input)).toContain('Fleming Rutledge')
+    expect(String(chosen.body.input)).toContain('Passagem e ocasião: Passagem: Romanos 13 / Romans 13')
+    expect(String(chosen.body.input)).toContain('Autores favoritos: Fleming Rutledge')
     const none = buildResearchRequest(
       'Romanos 13',
       'Advento',
       configuration('openai', fetch, { priorityAuthors: [] }),
     )
-    expect(String(none.body.input)).not.toContain('Prioritize')
-    expect(String(none.body.input).endsWith('Passagem e ocasião: Romanos 13 · Advento')).toBe(true)
+    expect(String(none.body.input)).not.toContain('Autores favoritos:')
+    expect(String(none.body.input)).toContain('Passagem: Romanos 13 / Romans 13')
+    expect(String(none.body.input)).toContain('Ocasião e ciclo: Advento')
+  })
+
+  it('usa o site cadastrado do autor sem encaminhar parâmetros de rastreamento', () => {
+    const { fetch } = fakeFetch()
+    const chosen = buildResearchRequest(
+      'Salmo 34:1-10, 22',
+      'Todos os Santos',
+      configuration('perplexity', fetch, {
+        priorityAuthors: [{ name: 'Fleming Rutledge', referenceURL: 'https://example.org/fleming?utm_source=profile' }],
+      }),
+    )
+    expect(String(chosen.body.instructions)).toContain('https://example.org/fleming')
+    expect(String(chosen.body.instructions)).not.toContain('utm_source')
+    expect(String(chosen.body.input)).toContain('Todos os Santos')
+    expect(String(chosen.body.input)).toContain('Fleming Rutledge (site:example.org)')
+    expect(String(chosen.body.input)).not.toContain('Psalms 34:1-10')
   })
 
   it('rejeita credenciais ausentes, modelos inválidos e URLs não verificadas', async () => {
@@ -278,10 +295,69 @@ describe('pesquisa de materiais', () => {
     )
     expect(sources).toHaveLength(12)
     expect(new Set(sources.map((source) => source.url)).size).toBe(12)
-    expect(sources[0]?.title).toBe('example.org')
+    expect(sources[0]?.title).toBe('Fonte 14')
     expect(sources[0]?.author).toBe('Ana, Bia')
     expect(sources[0]?.publisher).toBe('Editora')
     expect(sources[0]?.language).toBe('pt BR')
+  })
+
+  it('prioriza citações do modelo, une autoria dos resultados brutos e elimina URLs repetidas', async () => {
+    const response = {
+      output: [
+        {
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Commentary on Mark 13:24–37',
+                  url: 'https://publisher.example.org/mark-13-24-37/',
+                },
+                {
+                  type: 'url_citation',
+                  title: 'General Advent archive',
+                  url: 'https://publisher.example.org/archive/advent',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: 'search_results',
+          results: [
+            {
+              title: 'Commentary on Mark 13:24-37',
+              url: 'https://publisher.example.org/mark-13-24-37?utm_source=search#top',
+              author: 'Fleming Rutledge',
+              publisher: 'Theology Journal',
+            },
+            {
+              title: 'Another commentary on Mark 13:24-37',
+              url: 'https://another.example.org/mark-13-24-37',
+              author: 'N. T. Wright',
+            },
+          ],
+        },
+      ],
+    }
+    const { fetch } = fakeFetch(() => jsonResponse(200, response))
+    const result = await searchResearchSources(
+      'Marcos 13:24-37',
+      'Advento 1B',
+      configuration('perplexity', fetch, { priorityAuthors: ['Fleming Rutledge'] }),
+    )
+
+    expect(result.sources).toHaveLength(3)
+    expect(result.sources[0]).toMatchObject({
+      title: 'Commentary on Mark 13:24–37',
+      url: 'https://publisher.example.org/mark-13-24-37',
+      author: 'Fleming Rutledge',
+      publisher: 'Theology Journal',
+    })
+    expect(result.sources[1]?.author).toBe('N. T. Wright')
+    expect(result.sources[2]?.title).toBe('General Advent archive')
   })
 
   it('lê citações do Claude e ignora resultados de erro', () => {

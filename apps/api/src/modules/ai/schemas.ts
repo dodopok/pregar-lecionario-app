@@ -35,6 +35,25 @@ export const aiResearchRequestSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
-  preferredAuthors: z.array(z.string().trim().max(120)).max(30).default([]),
+  // String mantém compatibilidade com clientes antigos; objetos podem incluir o site cadastrado.
+  preferredAuthors: z
+    .array(
+      z.union([
+        z.string().trim().min(1).max(120),
+        z.object({
+          name: z.string().trim().min(1).max(120),
+          referenceURL: z
+            .string()
+            .trim()
+            .url()
+            .max(2048)
+            .refine((value) => new URL(value).protocol === 'https:')
+            .optional()
+            .nullable(),
+        }),
+      ]),
+    )
+    .max(30)
+    .optional(),
   excludedDomains: z.array(z.string().trim().max(200)).max(50).default([]),
 })

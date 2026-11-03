@@ -317,25 +317,56 @@ export function registerAI(context: MainContext): void {
     }
   })
 
-  function researchKey(reference: string, occasion: string | null, day: string): string {
-    return `${reference.trim()}|${occasion?.trim() ?? ''}|${day}`
+  function researchAuthors() {
+    return favoriteAuthorsFromData(context.kv('sources').get<string>('profiles.authors') ?? null)
+      .map(({ name, referenceURL }) => ({ name: name.trim(), referenceURL: safeResearchAuthorURL(referenceURL) }))
+      .filter((author) => author.name.length > 0)
+  }
+
+  function safeResearchAuthorURL(value: string | null): string | null {
+    if (!value) return null
+    try {
+      const url = new URL(value)
+      if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) return null
+      url.search = ''
+      url.hash = ''
+      return url.href
+    } catch {
+      return null
+    }
+  }
+
+  function researchKey(
+    reference: string,
+    occasion: string | null,
+    day: string,
+    authors: ReturnType<typeof researchAuthors>,
+  ): string {
+    const authorContext = authors
+      .map((author) => [author.name, author.referenceURL])
+      .sort(([leftName, leftURL], [rightName, rightURL]) =>
+        `${leftName}|${leftURL ?? ''}`.localeCompare(`${rightName}|${rightURL ?? ''}`),
+      )
+    return `${reference.trim()}|${occasion?.trim() ?? ''}|${day}|${JSON.stringify(authorContext)}`
   }
 
   handle(
     'ai:researchCached',
-    ({ reference, occasion, dateKey: day }) =>
-      research.get<{ sources: AIResearchSource[]; searchedAt: string }>(
-        researchKey(reference, occasion, dateKey.parse(day)),
-      ) ?? null,
+    ({ reference, occasion, dateKey: day }) => {
+      const authors = researchAuthors()
+      return (
+        research.get<{ sources: AIResearchSource[]; searchedAt: string }>(
+          researchKey(reference, occasion, dateKey.parse(day), authors),
+        ) ?? null
+      )
+    },
   )
 
   handle('ai:research', async (request, event) => {
     const day = dateKey.parse(request.dateKey)
     const reference = z.string().trim().min(1).max(200).parse(request.reference)
     const occasion = request.occasion ? z.string().max(200).parse(request.occasion) : null
-    const authors = favoriteAuthorsFromData(
-      context.kv('sources').get<string>('profiles.authors') ?? null,
-    ).map((author) => author.name)
+    const authors = researchAuthors()
     const controller = begin(request.requestId, event.sender)
     try {
       let sources: AIResearchSource[]
@@ -365,7 +396,7 @@ export function registerAI(context: MainContext): void {
         sources = outcome.sources
       }
       const searchedAt = new Date().toISOString()
-      research.set(researchKey(reference, occasion, day), { sources, searchedAt })
+      research.set(researchKey(reference, occasion, day, authors), { sources, searchedAt })
       return { sources, searchedAt, usage }
     } finally {
       controllers.delete(request.requestId)

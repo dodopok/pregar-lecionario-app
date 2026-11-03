@@ -2,12 +2,13 @@
 /**
  * Aba Materiais: seções dos PDFs da Biblioteca e artigos das fontes favoritas que tratam da
  * passagem principal, agrupados por correspondência, e a pesquisa de outros materiais por IA
- * (só sob comando; envia passagem e ocasião, nunca o manuscrito).
+ * (só sob comando; envia passagem, ocasião e autores favoritos, nunca o manuscrito).
  */
 import { computed, onActivated, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { ArrowUpRight, BookOpen, Globe, History, RefreshCw, Settings, Sparkles } from 'lucide-vue-next'
 import type { AIResearchSource } from '@pregar/core/ai'
 import { parseReference } from '@pregar/core/bible/reference'
+import { firstSundayOfAdvent, liturgicalYearLetter } from '@pregar/core/liturgy/calendar'
 import { isTabIncludedForReview } from '@pregar/core/reader'
 import type { ReaderTab } from '@pregar/core/reader'
 import {
@@ -32,6 +33,7 @@ import {
   MATERIAL_FILTERS,
   MATERIALS_SEARCH_DELAY_MS,
   articleLines,
+  materialSearchOccasion,
   findReaderTab,
   groupMaterials,
   isPortugueseOrUnknown,
@@ -80,11 +82,31 @@ const openingId = ref<string | null>(null)
 
 const reference = computed(() => mesa.mainReference.trim())
 const searchable = computed(() => reference.value.length > 0 && parseReference(reference.value) !== null)
+const sourceOccasion = computed(() => materialSearchOccasion(mesa.occasion, mesa.day))
 const searchKey = computed(() =>
-  JSON.stringify([mesa.selectedDateKey, reference.value, mesa.occasion, mesa.isSunday]),
+  JSON.stringify([mesa.selectedDateKey, reference.value, sourceOccasion.value, mesa.isSunday]),
 )
 const visible = computed(() => mesa.contextTab === 'materials')
 const liturgicalDate = computed(() => parseDateKey(mesa.selectedDateKey) ?? new Date())
+const researchOccasion = computed(() => {
+  const year = liturgicalYearLetter(liturgicalDate.value)
+  const date = liturgicalDate.value
+  const advent = firstSundayOfAdvent(date.getFullYear())
+  const allSaints = sourceOccasion.value?.toLocaleLowerCase('pt-BR').includes('todos os santos')
+  const isFirstAdvent =
+    date.getFullYear() === advent.getFullYear() &&
+    date.getMonth() === advent.getMonth() &&
+    date.getDate() === advent.getDate()
+  const englishOccasion = allSaints ? 'All Saints Sunday' : isFirstAdvent && year ? `Advent 1${year}` : null
+  return [
+    sourceOccasion.value,
+    englishOccasion,
+    `Data litúrgica: ${mesa.selectedDateKey}`,
+    year ? `Lecionário Comum Revisado, Ano ${year}` : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ')
+})
 
 const onlyPortuguese = computed(() => app.settings.materials.onlyPortuguese)
 const allArticles = computed(() => siteArticles(siteReport.value?.groups))
@@ -123,8 +145,8 @@ const emptyMessage = computed(() => {
 })
 const researchHelp = computed(() =>
   researchAccess.value?.mode === 'pro'
-    ? 'Usa a sua assinatura do Proper (conta como uma pesquisa de materiais). Envia somente passagem e ocasião; o manuscrito não é enviado.'
-    : 'Usa o provedor de pesquisa escolhido. Envia somente passagem e ocasião; o manuscrito não é enviado. O provedor pode cobrar a busca.',
+    ? 'Usa a sua assinatura do Proper (conta como uma pesquisa de materiais). Envia passagem, ocasião e autores favoritos; o manuscrito não é enviado.'
+    : 'Usa o provedor de pesquisa escolhido. Envia passagem, ocasião e autores favoritos; o manuscrito não é enviado. O provedor pode cobrar a busca.',
 )
 
 // Busca ------------------------------------------------------------------------------------
@@ -203,7 +225,7 @@ async function loadSites(force: boolean): Promise<void> {
   try {
     const report = await invoke('sources:search', {
       reference: reference.value,
-      occasion: mesa.occasion,
+      occasion: sourceOccasion.value,
       dateKey: mesa.selectedDateKey,
       isSunday: mesa.isSunday,
       ...(force ? { force: true } : {}),
@@ -234,7 +256,7 @@ async function loadCachedResearch(): Promise<void> {
   try {
     const cached = await invoke('ai:researchCached', {
       reference: reference.value,
-      occasion: mesa.occasion,
+      occasion: researchOccasion.value,
       dateKey: mesa.selectedDateKey,
     })
     if (request === researchRequest && cached) research.value = cached
@@ -252,7 +274,7 @@ async function searchForMaterials(): Promise<void> {
     const result = await invoke('ai:research', {
       requestId: newRequestId(),
       reference: reference.value,
-      occasion: mesa.occasion,
+      occasion: researchOccasion.value,
       dateKey: mesa.selectedDateKey,
     })
     if (request === researchRequest)
@@ -391,14 +413,14 @@ function articleMatchTone(article: FavoriteSiteArticle): MatchTone {
 
 function siteContext(group: FavoriteSiteSearchGroup): string {
   const destination = favoriteSiteUsesAnglicanCompassDestination(group.site)
-    ? FavoriteSourceURLs.anglicanCompassDetail(mesa.occasion, liturgicalDate.value, mesa.isSunday)
+    ? FavoriteSourceURLs.anglicanCompassDetail(sourceOccasion.value, liturgicalDate.value, mesa.isSunday)
     : null
   return joinParts([destination, siteEditorialContext(group.site)])
 }
 
 function siteNote(group: FavoriteSiteSearchGroup): string {
   if (group.site.adapter === 'workingPreacherArchive')
-    return 'Arquivo da perícope. Confira o intervalo bíblico em cada resultado.'
+    return 'Abra o arquivo oficial da passagem para escolher um comentário.'
   if (group.site.adapter === 'websiteSearch') return 'Abra o site para buscar esta passagem.'
   return group.errorMessage ?? 'Nenhuma correspondência explícita nesta busca.'
 }
