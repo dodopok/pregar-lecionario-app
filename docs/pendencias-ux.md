@@ -4,7 +4,7 @@ Atualizado em 3 de novembro de 2026. Tudo o que não está aqui foi implementado
 
 ## API do Proper (Railway)
 
-1. **Ligar a degustação.** Defina `ESTEVAO_PUBLIC_PREVIEW=true` no serviço da API e faça o deploy. Opcionais: `ESTEVAO_PREVIEW_DAYS` (padrão 35, máximo 120) e `LIMIT_ESTEVAO_PREVIEW_PER_MINUTE` (padrão 20, por IP). `ESTEVAO_APP_INTERNAL_ID` continua obrigatório; sem ele a rota responde 503. Enquanto a flag estiver desligada, o app mostra "As leituras ainda não estão conectadas" para quem não tem conta nem chave, exatamente como antes.
+1. **Ligar a degustação.** Feito em 3 de novembro: ligada em `https://api.pregar.oficio.app` com `ESTEVAO_PREVIEW_DAYS=10` e conferida com uma leitura real. Para mudar a janela, troque `ESTEVAO_PREVIEW_DAYS` na Railway. Opcionais: `ESTEVAO_PREVIEW_DAYS` (padrão 35, máximo 120) e `LIMIT_ESTEVAO_PREVIEW_PER_MINUTE` (padrão 20, por IP). `ESTEVAO_APP_INTERNAL_ID` continua obrigatório; sem ele a rota responde 503. Enquanto a flag estiver desligada, o app mostra "As leituras ainda não estão conectadas" para quem não tem conta nem chave, exatamente como antes.
 2. **Testes da API no seu ambiente.** Os 35 testes da API (inclusive os 9 da degustação) passaram aqui contra um PostgreSQL 16 local. Rode `npm run verify` no seu computador antes de publicar; o CI continua sem GitHub Actions.
 3. **Limite por IP em memória.** O `WindowLimiter` da degustação é por instância, como o do proxy autenticado. Se a API rodar com mais de uma réplica, o limite real é multiplicado.
 

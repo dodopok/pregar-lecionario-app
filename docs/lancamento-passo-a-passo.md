@@ -1,6 +1,6 @@
 # Lançamento do Proper: passo a passo
 
-O código está pronto na branch `feat/multiplataforma`. Estes passos dependem de contas, chaves e máquinas suas. Siga na ordem: cada etapa usa a anterior. Os detalhes de cada item estão nos guias citados.
+O código está na `main`, que a Railway acompanha. Estado em 3 de novembro de 2026: a API está no ar em `https://api.pregar.oficio.app`, com as variáveis cadastradas, a degustação ligada (10 dias) e as páginas legais preenchidas; faltam o `doctor`, o teste de assinatura real e os instaladores. Estes passos dependem de contas, chaves e máquinas suas. Siga na ordem: cada etapa usa a anterior. Os detalhes de cada item estão nos guias citados.
 
 Tempo estimado: um dia de trabalho, sem contar as aprovações de terceiros. A conta do Asaas, o domínio na Resend, o Apple Developer e o certificado do Windows levam de horas a alguns dias para aprovar. Peça essas aprovações logo no começo.
 
@@ -13,16 +13,16 @@ Tempo estimado: um dia de trabalho, sem contar as aprovações de terceiros. A c
 
 ## 1. Juntar o código na `main`
 
-- [ ] Revise a branch `feat/multiplataforma` e faça o merge em `main` (posso abrir o PR se você pedir). Outra opção é apontar a Railway para a branch, no passo 2.
+- [x] Revise a branch `feat/multiplataforma` e faça o merge em `main` (posso abrir o PR se você pedir). Outra opção é apontar a Railway para a branch, no passo 2.
 
 ## 2. Subir a API na Railway
 
 Guia: [api-railway.md](api-railway.md).
 
-1. [ ] Crie um projeto na Railway a partir do repositório `dodopok/pregar-lecionario-app`. A Railway lê o `railway.json` e usa `apps/api/Dockerfile`.
-2. [ ] Adicione um PostgreSQL ao projeto (New › Database › PostgreSQL) e ative os backups dele.
-3. [ ] Gere um domínio público ou ligue o seu (o app usa `https://api.pregar.oficio.app` por padrão; se for outro, anote para o passo 9).
-4. [ ] Cadastre as variáveis mínimas no serviço da API:
+1. [x] Crie um projeto na Railway a partir do repositório `dodopok/pregar-lecionario-app`. A Railway lê o `railway.json` e usa `apps/api/Dockerfile`.
+2. [x] Adicione um PostgreSQL ao projeto (New › Database › PostgreSQL) e ative os backups dele.
+3. [x] Gere um domínio público ou ligue o seu (o app usa `https://api.pregar.oficio.app` por padrão; se for outro, anote para o passo 9).
+4. [x] Cadastre as variáveis mínimas no serviço da API:
 
    | Variável | Valor |
    | --- | --- |
@@ -31,21 +31,23 @@ Guia: [api-railway.md](api-railway.md).
    | `PUBLIC_BASE_URL` | o domínio do item 3, com `https://` |
    | `LEGAL_OPERATOR_NAME`, `LEGAL_OPERATOR_DOCUMENT`, `LEGAL_CONTACT_EMAIL` | nome, CPF/CNPJ e email de contato que aparecem nas páginas de privacidade e termos |
 
-5. [ ] Faça o deploy e abra `https://<seu-domínio>/health`. Deve responder `{"ok":true}`.
+5. [x] Faça o deploy e abra `https://<seu-domínio>/health`. Deve responder `{"ok":true}`.
 
 ## 3. Email do código de login (Resend)
 
-1. [ ] Crie a conta em resend.com e adicione o domínio do remetente (por exemplo `pregar.app`).
-2. [ ] Cadastre no DNS do domínio os registros que a Resend mostrar e espere aparecer "Verified".
-3. [ ] Crie uma chave de API e cadastre na Railway: `RESEND_API_KEY` e `EMAIL_FROM` (por exemplo `Proper <nao-responda@pregar.app>`).
+1. [x] Crie a conta em resend.com e adicione o domínio do remetente (por exemplo `pregar.app`).
+2. [x] Cadastre no DNS do domínio os registros que a Resend mostrar e espere aparecer "Verified".
+3. [x] Crie uma chave de API e cadastre na Railway: `RESEND_API_KEY` e `EMAIL_FROM` (por exemplo `Proper <nao-responda@pregar.app>`).
 
 ## 4. Leituras e IA dos assinantes
 
-1. [ ] `ESTEVAO_APP_INTERNAL_ID`: identificador usado pelo Ordo, enviado no header `X-App-Internal-Id` só pelo servidor.
-2. [ ] `ANTHROPIC_API_KEY`: chave do console da Anthropic (revisão e perguntas). Defina um limite de gastos mensal no console.
-3. [ ] `PERPLEXITY_API_KEY`: chave da Perplexity (pesquisa de materiais). Defina também um limite de gastos.
+1. [x] `ESTEVAO_APP_INTERNAL_ID`: identificador usado pelo Ordo, enviado no header `X-App-Internal-Id` só pelo servidor.
+2. [x] `ANTHROPIC_API_KEY`: chave do console da Anthropic (revisão e perguntas). Defina um limite de gastos mensal no console.
+3. [x] `PERPLEXITY_API_KEY`: chave da Perplexity (pesquisa de materiais). Defina também um limite de gastos.
 
 ## 5. Testar a assinatura no sandbox do Asaas
+
+Você foi direto para a conta de produção (seção 7). Os passos 4 a 9 desta seção valem do mesmo jeito, com a conta de produção e um pagamento real.
 
 Guia: [assinatura-pix.md](assinatura-pix.md).
 
@@ -88,9 +90,9 @@ Guia: [assinatura-pix.md](assinatura-pix.md).
 
 ## 7. Asaas em produção
 
-1. [ ] Na conta de produção, crie a chave Pix e a chave de API.
-2. [ ] Troque na Railway: `ASAAS_API_KEY` (a de produção) e `ASAAS_ENVIRONMENT=production`.
-3. [ ] Crie o webhook de produção igual ao do sandbox (mesma URL, mesmo token e mesmos eventos).
+1. [x] Na conta de produção, crie a chave Pix e a chave de API.
+2. [x] Troque na Railway: `ASAAS_API_KEY` (a de produção) e `ASAAS_ENVIRONMENT=production`.
+3. [x] Crie o webhook de produção igual ao do sandbox (mesma URL, mesmo token e mesmos eventos).
 4. [ ] Rode `node apps/api/dist/admin.js doctor` até aparecer **"Pronto para produção"**.
 5. [ ] Faça uma assinatura real de R$ 19,90 com a sua conta para conferir o fluxo inteiro. Depois, se quiser, cancele pelo app.
 

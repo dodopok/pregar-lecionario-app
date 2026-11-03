@@ -2,6 +2,12 @@
 
 Atualizado em 3 de novembro de 2026.
 
+## API no ar na Railway (3 de novembro de 2026)
+
+- Projeto `pregar` na Railway com os serviços `api` (Dockerfile da raiz, 1 réplica, acompanha a `main`) e `Postgres` (volume de 5 GB). Domínio `api.pregar.oficio.app` verificado, e o app passou a embuti-lo como endereço padrão (`PREGAR_API_DEFAULT_URL`).
+- Variáveis cadastradas: banco, segredo de login, Resend (`EMAIL_FROM` em `oficio.app`), Estêvão, Anthropic e Perplexity, Asaas em produção com o token do webhook, páginas legais, degustação ligada com 10 dias. Conferido no ar: `/health`, `/v1/public/preview`, uma leitura real de domingo pela degustação, a janela de datas e as páginas legais.
+- Falta: rodar `node apps/api/dist/admin.js doctor` no shell do serviço, o teste de ponta a ponta no app (entrar, assinar, revisar) e os instaladores. Quatro testes de `packages/core` (busca de materiais, calendário e prompts) estão desatualizados em relação às mudanças de pesquisa e revisão e derrubam o `npm run verify`.
+
 ## Nome Proper e tipografia própria (3 de novembro de 2026)
 
 - **Nome.** O app passou a se chamar **Proper** (o "próprio" do dia no lecionário). Trocados: `productName`, `appId` (`br.caminhoanglicano.proper`), executável, títulos de janela, menu, textos da interface, e-mails e páginas legais da API, nome das pastas de backup ("Proper Backup …"). A pasta de dados passa de `Pregar` para `Proper`: `migrateLegacyUserData` (com testes) move a pasta antiga na primeira abertura, ou só os arquivos do app se o Chromium já tiver criado a nova, e nunca sobrescreve um banco existente. Identificadores internos (`@pregar/*`, canal IPC, esquemas `pregar-pdf:`/`pregar-asset:`, `pregar.sqlite`, `PREGAR_*`) ficaram como estavam; "Pregar para Mac" continua sendo o nome do app antigo.
