@@ -186,6 +186,11 @@ describe('conversão do manuscrito para o Google Docs', () => {
     const offsets = updates.map((update) => (update.textStyle as Json).baselineOffset)
     expect(offsets).toContain('SUBSCRIPT')
     expect(offsets).toContain('SUPERSCRIPT')
+    // Texto comum leva NONE: a API do Docs rejeita qualquer outro nome para a linha de base.
+    expect(offsets).toContain('NONE')
+    expect(offsets.every((offset) => ['NONE', 'SUPERSCRIPT', 'SUBSCRIPT'].includes(offset as string))).toBe(
+      true,
+    )
     const georgia = updates.find(
       (update) => ((update.textStyle as Json).weightedFontFamily as Json).fontFamily === 'Georgia',
     )!

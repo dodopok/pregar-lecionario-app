@@ -407,7 +407,7 @@ export function googleDocsBatchUpdateBody(
           italic: false,
           underline: false,
           strikethrough: false,
-          baselineOffset: 'BASELINE',
+          baselineOffset: 'NONE',
           weightedFontFamily: { fontFamily: DOCS_BASE_FONT_FAMILY },
           fontSize: dimension(DOCS_BASE_FONT_SIZE_PT),
         },
@@ -433,7 +433,8 @@ export function googleDocsBatchUpdateBody(
         italic: style.italic,
         underline: style.underline,
         strikethrough: style.strikethrough,
-        baselineOffset: style.superscript ? 'SUPERSCRIPT' : style.subscript ? 'SUBSCRIPT' : 'BASELINE',
+        // Valores do enum BaselineOffset da API do Docs: NONE, SUPERSCRIPT ou SUBSCRIPT ("BASELINE" não existe).
+        baselineOffset: style.superscript ? 'SUPERSCRIPT' : style.subscript ? 'SUBSCRIPT' : 'NONE',
         weightedFontFamily: { fontFamily: style.fontName },
         fontSize: dimension(style.fontSize),
       }
