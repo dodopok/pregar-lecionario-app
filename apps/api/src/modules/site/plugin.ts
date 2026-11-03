@@ -19,7 +19,7 @@ const CACHE_MS = 10 * 60 * 1000
 const EMPTY_CACHE_MS = 60 * 1000
 const TIMEOUT_MS = 5_000
 
-export const DOWNLOAD_TARGETS = ['mac', 'windows', 'windows-arm', 'linux', 'linux-deb'] as const
+export const DOWNLOAD_TARGETS = ['mac', 'mac-dmg', 'windows', 'windows-arm', 'linux', 'linux-deb'] as const
 export type DownloadTarget = (typeof DOWNLOAD_TARGETS)[number]
 
 export interface ReleaseInfo {
@@ -33,7 +33,9 @@ interface GitHubAsset {
 }
 
 const ASSET_PATTERNS: Record<DownloadTarget, RegExp> = {
-  mac: /-mac\.dmg$/i,
+  // No macOS o download principal é o .zip (abrir e arrastar); a imagem de disco fica como alternativa.
+  mac: /-mac\.zip$/i,
+  'mac-dmg': /-mac\.dmg$/i,
   windows: /-Setup-.*-x64\.exe$/i,
   'windows-arm': /-Setup-.*-arm64\.exe$/i,
   linux: /-x64\.AppImage$/i,
