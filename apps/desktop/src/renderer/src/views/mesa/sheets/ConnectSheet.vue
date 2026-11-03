@@ -30,7 +30,8 @@ const PROVIDERS: { id: AIProvider; note: string; url: string }[] = [
 
 const app = useAppStore()
 const step = ref<Step>('welcome')
-const monthlyFrom = ref<number | null>(null)
+const monthlyPrice = ref<number | null>(null)
+const yearlyPrice = ref<number | null>(null)
 const finishing = ref<Path | null>(null)
 const body = ref<HTMLElement | null>(null)
 
@@ -147,14 +148,11 @@ async function saveAI(): Promise<void> {
 onMounted(async () => {
   try {
     const plans = await invoke('billing:plans')
-    const monthly = plans.offers.find((offer) => offer.cycle === 'monthly')?.priceCents
-    const yearly = plans.offers.find((offer) => offer.cycle === 'yearly')?.priceCents
-    const values = [monthly, yearly ? Math.round(yearly / 12) : undefined].filter(
-      (value): value is number => typeof value === 'number' && value > 0,
-    )
-    monthlyFrom.value = values.length ? Math.min(...values) : null
+    monthlyPrice.value = plans.offers.find((offer) => offer.cycle === 'monthly')?.priceCents ?? null
+    yearlyPrice.value = plans.offers.find((offer) => offer.cycle === 'yearly')?.priceCents ?? null
   } catch {
-    monthlyFrom.value = null
+    monthlyPrice.value = null
+    yearlyPrice.value = null
   }
 })
 </script>
@@ -198,8 +196,12 @@ onMounted(async () => {
             <ul class="path__list">
               <li><Check :size="13" aria-hidden="true" />Pagamento por Pix</li>
               <li><Check :size="13" aria-hidden="true" />Cancele quando quiser</li>
-              <li v-if="monthlyFrom">
-                <Check :size="13" aria-hidden="true" />A partir de {{ formatBRL(monthlyFrom) }} por mês
+              <li v-if="monthlyPrice">
+                <Check :size="13" aria-hidden="true" />{{ formatBRL(monthlyPrice) }} por mês<template
+                  v-if="yearlyPrice"
+                >
+                  ou {{ formatBRL(yearlyPrice) }} por ano</template
+                >
               </li>
             </ul>
             <PButton variant="primary" class="path__action" :busy="finishing === 'pro'" @click="finish('pro')"

@@ -36,15 +36,13 @@ const resubscribing = ref(false)
 const refreshing = ref(false)
 const paymentsKey = ref('')
 
-const cheapestMonthly = computed(() => {
-  const offers = plans.value?.offers ?? []
-  const monthly = offers.find((offer) => offer.cycle === 'monthly')
-  const yearly = offers.find((offer) => offer.cycle === 'yearly')
-  const candidates = [monthly?.priceCents, yearly ? Math.round(yearly.priceCents / 12) : undefined].filter(
-    (value): value is number => typeof value === 'number' && value > 0,
-  )
-  return candidates.length ? Math.min(...candidates) : null
-})
+/** Preço do plano mensal e do anual, como a API publica; o anual nunca aparece dividido por 12. */
+const monthlyPrice = computed(
+  () => plans.value?.offers.find((offer) => offer.cycle === 'monthly')?.priceCents ?? null,
+)
+const yearlyPrice = computed(
+  () => plans.value?.offers.find((offer) => offer.cycle === 'yearly')?.priceCents ?? null,
+)
 const hasLiveSubscription = computed(() => {
   const status = subscription.value?.status
   return status === 'active' || status === 'past_due' || (isPro.value && Boolean(subscription.value))
@@ -68,7 +66,8 @@ async function refresh(): Promise<void> {
   refreshing.value = true
   try {
     app.account = await invoke('account:get', { refresh: true })
-    if (app.account.loggedIn && !app.account.offline) subscription.value = await invoke('billing:subscription')
+    if (app.account.loggedIn && !app.account.offline)
+      subscription.value = await invoke('billing:subscription')
   } catch {
     // Sem rede: fica com o que está em cache; o aviso de conexão cobre o caso.
   } finally {
@@ -119,19 +118,35 @@ onMounted(() => {
           ? 'Mostrando os dados salvos da última vez. A assinatura continua valendo; confira a internet.'
           : 'Confira a internet para entrar ou assinar. Enquanto isso, o Proper funciona com as suas próprias chaves.'
       }}
-      <template #actions><PButton compact :busy="refreshing" @click="refresh">Tentar de novo</PButton></template>
+      <template #actions
+        ><PButton compact :busy="refreshing" @click="refresh">Tentar de novo</PButton></template
+      >
     </Notice>
 
     <template v-if="!loggedIn">
       <section class="hero" aria-labelledby="hero-title">
         <h3 id="hero-title" class="hero__title">Assine o Proper</h3>
-        <p class="hero__lead">O jeito mais simples de usar o Proper: você só entra com o email, sem chaves para configurar.</p>
+        <p class="hero__lead">
+          O jeito mais simples de usar o Proper: você só entra com o email, sem chaves para configurar.
+        </p>
         <ul class="hero__list">
-          <li><Check :size="15" aria-hidden="true" />Revisão por IA, perguntas de emergência e pesquisa de materiais.</li>
-          <li><Check :size="15" aria-hidden="true" />Calendário litúrgico, leituras e Bíblia sem chave da Estêvão API.</li>
-          <li><Check :size="15" aria-hidden="true" />Pagamento por Pix. Sem fidelidade: cancele quando quiser.</li>
+          <li>
+            <Check :size="15" aria-hidden="true" />Revisão por IA, perguntas de emergência e pesquisa de
+            materiais.
+          </li>
+          <li>
+            <Check :size="15" aria-hidden="true" />Calendário litúrgico, leituras e Bíblia sem chave da
+            Estêvão API.
+          </li>
+          <li>
+            <Check :size="15" aria-hidden="true" />Pagamento por Pix. Sem fidelidade: cancele quando quiser.
+          </li>
         </ul>
-        <p v-if="cheapestMonthly" class="hero__price">A partir de <strong>{{ formatBRL(cheapestMonthly) }}</strong> por mês.</p>
+        <p v-if="monthlyPrice" class="hero__price">
+          <strong>{{ formatBRL(monthlyPrice) }}</strong> por mês<template v-if="yearlyPrice"
+            >, ou {{ formatBRL(yearlyPrice) }} por ano</template
+          >.
+        </p>
       </section>
 
       <PrefGroup label="Entrar">
@@ -147,9 +162,12 @@ onMounted(() => {
 
     <template v-else>
       <Notice v-if="justActivated" tone="success" title="Assinatura ativa. Está tudo pronto!">
-        A revisão por IA, o calendário e as leituras já funcionam sem chaves. Pode voltar à Mesa e preparar o sermão.
+        A revisão por IA, o calendário e as leituras já funcionam sem chaves. Pode voltar à Mesa e preparar o
+        sermão.
         <template #actions>
-          <PButton variant="primary" compact @click="invoke('app:openWindow', { window: 'mesa' })">Abrir a Mesa</PButton>
+          <PButton variant="primary" compact @click="invoke('app:openWindow', { window: 'mesa' })"
+            >Abrir a Mesa</PButton
+          >
         </template>
       </Notice>
 
@@ -158,7 +176,11 @@ onMounted(() => {
       </PrefGroup>
 
       <PrefGroup v-if="hasLiveSubscription && subscription" label="Assinatura">
-        <SubscriptionPanel :subscription="subscription" @update="onSubscriptionUpdate" @resubscribe="resubscribing = true" />
+        <SubscriptionPanel
+          :subscription="subscription"
+          @update="onSubscriptionUpdate"
+          @resubscribe="resubscribing = true"
+        />
       </PrefGroup>
 
       <PrefGroup v-if="showSubscribe" :label="resubscribing ? 'Assinar de novo' : 'Assinar'">
@@ -193,9 +215,13 @@ onMounted(() => {
     </template>
 
     <nav class="account-section__legal" aria-label="Documentos legais">
-      <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/privacidade`)">Política de privacidade</PButton>
+      <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/privacidade`)"
+        >Política de privacidade</PButton
+      >
       <span aria-hidden="true">·</span>
-      <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/termos`)">Termos de uso</PButton>
+      <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/termos`)"
+        >Termos de uso</PButton
+      >
     </nav>
   </div>
 </template>

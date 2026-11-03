@@ -5,15 +5,43 @@ import { Plus } from 'lucide-vue-next'
 import type { BibleVersion } from '@pregar/core/liturgy/types'
 import Spinner from '@/components/Spinner.vue'
 
-const props = defineProps<{ available: BibleVersion[]; loading: boolean; error: string | null; hasCatalog: boolean }>()
+const props = defineProps<{
+  available: BibleVersion[]
+  loading: boolean
+  error: string | null
+  hasCatalog: boolean
+}>()
 const emit = defineEmits<{ add: [code: string]; retry: [] }>()
 
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 const list = ref<HTMLElement | null>(null)
 const button = ref<HTMLButtonElement | null>(null)
+const field = ref<HTMLInputElement | null>(null)
+const query = ref('')
 
 const nextCode = computed(() => props.available[0]?.code.toUpperCase() ?? 'Bíblia')
+
+/** Sem acentos e em minúsculas, para a busca aceitar "biblia" e "Bíblia" igual. */
+function fold(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+/** Traduções que batem com o que foi digitado, pela sigla ou pelo nome; sigla exata vem primeiro. */
+const filtered = computed(() => {
+  const needle = fold(query.value)
+  if (!needle) return props.available
+  const matches = props.available.filter((version) =>
+    [version.code, version.name, version.fullName ?? '', version.description ?? '', version.language ?? '']
+      .map(fold)
+      .some((text) => text.includes(needle)),
+  )
+  return matches.sort((a, b) => Number(fold(b.code) === needle) - Number(fold(a.code) === needle))
+})
 
 function items(): HTMLElement[] {
   return [...(list.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
@@ -22,10 +50,17 @@ function items(): HTMLElement[] {
 async function toggle(): Promise<void> {
   open.value = !open.value
   if (open.value) {
+    query.value = ''
     document.addEventListener('mousedown', onOutside)
     await nextTick()
-    items()[0]?.focus()
+    ;(field.value ?? items()[0])?.focus()
   } else close(false)
+}
+
+/** Enter no campo adiciona a primeira tradução que bate com o texto. */
+function submitQuery(): void {
+  const first = filtered.value[0]
+  if (first) choose(first.code)
 }
 
 function close(focusButton = true): void {
@@ -49,6 +84,15 @@ function onKeydown(event: KeyboardEvent): void {
   event.preventDefault()
   const all = items()
   const index = all.indexOf(document.activeElement as HTMLElement)
+  // Do campo, a seta desce para a lista; da primeira linha, a seta para cima volta ao campo.
+  if (index === -1) {
+    all[event.key === 'ArrowDown' ? 0 : all.length - 1]?.focus()
+    return
+  }
+  if (index === 0 && event.key === 'ArrowUp' && field.value) {
+    field.value.focus()
+    return
+  }
   const next = all[(index + (event.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length]
   next?.focus()
 }
@@ -69,7 +113,9 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onOutside))
       class="tmenu__button"
       :aria-expanded="open"
       aria-haspopup="menu"
-      :aria-label="available[0] ? `Adicionar tradução ${available[0].code.toUpperCase()}` : 'Adicionar tradução'"
+      :aria-label="
+        available[0] ? `Adicionar tradução ${available[0].code.toUpperCase()}` : 'Adicionar tradução'
+      "
       title="Adicionar tradução à comparação"
       @click="toggle"
     >
@@ -78,18 +124,44 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onOutside))
     <div v-if="open" ref="list" class="tmenu__popover" role="menu" aria-label="Adicionar tradução">
       <p v-if="loading" class="tmenu__state"><Spinner :size="12" /> Carregando traduções…</p>
       <template v-else-if="hasCatalog">
-        <p v-if="available.length === 0" class="tmenu__state">Todas as traduções disponíveis já estão abertas.</p>
+        <p v-if="available.length === 0" class="tmenu__state">
+          Todas as traduções disponíveis já estão abertas.
+        </p>
         <template v-else>
           <p class="tmenu__label">Adicionar tradução</p>
-          <button v-for="version in available" :key="version.code" type="button" role="menuitem" class="tmenu__item" @click="choose(version.code)">
+          <input
+            ref="field"
+            v-model="query"
+            class="tmenu__field"
+            type="text"
+            placeholder="Sigla ou nome, ex. NVI"
+            aria-label="Sigla ou nome da tradução"
+            autocomplete="off"
+            spellcheck="false"
+            @keydown.enter.prevent="submitQuery"
+          />
+          <p v-if="filtered.length === 0" class="tmenu__state">Nenhuma tradução do catálogo com esse nome.</p>
+          <button
+            v-for="version in filtered"
+            :key="version.code"
+            type="button"
+            role="menuitem"
+            class="tmenu__item"
+            @click="choose(version.code)"
+          >
             <span class="tmenu__code">{{ version.name }}</span>
-            <span class="tmenu__name">{{ version.fullName ?? version.description ?? '' }}<template v-if="version.language"> · {{ version.language }}</template></span>
+            <span class="tmenu__name"
+              >{{ version.fullName ?? version.description ?? ''
+              }}<template v-if="version.language"> · {{ version.language }}</template></span
+            >
           </button>
         </template>
       </template>
       <template v-else>
         <p class="tmenu__state">{{ error ?? 'Catálogo indisponível' }}</p>
-        <button type="button" role="menuitem" class="tmenu__item tmenu__item--action" @click="emit('retry')">Tentar novamente</button>
+        <button type="button" role="menuitem" class="tmenu__item tmenu__item--action" @click="emit('retry')">
+          Tentar novamente
+        </button>
       </template>
     </div>
   </div>
@@ -137,6 +209,22 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onOutside))
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+.tmenu__field {
+  width: calc(100% - 8px);
+  margin: 0 4px 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+}
+.tmenu__field:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
 }
 .tmenu__state {
   display: flex;
