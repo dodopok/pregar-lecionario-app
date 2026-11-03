@@ -18,7 +18,11 @@ import LogsSection from './LogsSection.vue'
 import { openExternal } from './composables'
 import { normalizeApiBaseURL, validateApiBaseURL } from './format'
 
-const PLATFORM_NAMES: Record<AppInfo['platform'], string> = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' }
+const PLATFORM_NAMES: Record<AppInfo['platform'], string> = {
+  darwin: 'macOS',
+  win32: 'Windows',
+  linux: 'Linux',
+}
 
 const app = useAppStore()
 const toasts = useToasts()
@@ -30,7 +34,9 @@ const apiError = ref<string | null>(null)
 let unsubscribe: (() => void) | null = null
 
 const legalBase = computed(() => (app.account.apiBaseURL || PREGAR_API_DEFAULT_URL).replace(/\/+$/, ''))
-const apiChanged = computed(() => normalizeApiBaseURL(apiDraft.value) !== normalizeApiBaseURL(app.settings.apiBaseURL))
+const apiChanged = computed(
+  () => normalizeApiBaseURL(apiDraft.value) !== normalizeApiBaseURL(app.settings.apiBaseURL),
+)
 const updateText = computed(() => {
   const status = update.value
   switch (status.state) {
@@ -94,12 +100,21 @@ onBeforeUnmount(() => unsubscribe?.())
 <template>
   <div class="section-stack">
     <div class="identity">
-      <div class="identity__mark" aria-hidden="true">P</div>
+      <svg class="identity__mark" viewBox="0 0 100 100" aria-hidden="true">
+        <rect width="100" height="100" rx="25" style="fill: var(--accent)" />
+        <g style="fill: var(--accent-contrast)" transform="translate(2.5 -1)">
+          <path d="M62 14H38a21 21 0 0 0 0 42h24z" />
+          <rect x="54" y="14" width="9" height="74" />
+          <rect x="69" y="14" width="9" height="74" />
+        </g>
+      </svg>
       <div>
         <h3 class="identity__name">Proper</h3>
         <p class="identity__version selectable">
           Versão {{ info?.version ?? '—' }}
-          <template v-if="info">· {{ PLATFORM_NAMES[info.platform] }} {{ info.arch }} · Electron {{ info.electron }}</template>
+          <template v-if="info"
+            >· {{ PLATFORM_NAMES[info.platform] }} {{ info.arch }} · Electron {{ info.electron }}</template
+          >
         </p>
         <p class="identity__tagline">Preparação de sermões com o calendário litúrgico. Caminho Anglicano.</p>
       </div>
@@ -145,13 +160,23 @@ onBeforeUnmount(() => unsubscribe?.())
     <PrefGroup label="Privacidade">
       <div class="links">
         <p class="links__text">
-          Seus sermões, a Biblioteca e as preferências ficam neste computador. Com as suas chaves, o texto vai direto ao provedor de IA; com a
-          assinatura, passa pelo servidor do Proper só para a revisão e não fica guardado.
+          Seus sermões, a Biblioteca e as preferências ficam neste computador. Com as suas chaves, o texto vai
+          direto ao provedor de IA; com a assinatura, passa pelo servidor do Proper só para a revisão e não
+          fica guardado.
         </p>
         <div class="links__row">
-          <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/privacidade`)">Política de privacidade <ExternalLink :size="11" aria-hidden="true" /></PButton>
-          <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/termos`)">Termos de uso <ExternalLink :size="11" aria-hidden="true" /></PButton>
-          <PButton v-if="info" variant="link" compact @click="invoke('app:showItemInFolder', { path: info.userDataPath })">
+          <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/privacidade`)"
+            >Política de privacidade <ExternalLink :size="11" aria-hidden="true"
+          /></PButton>
+          <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/termos`)"
+            >Termos de uso <ExternalLink :size="11" aria-hidden="true"
+          /></PButton>
+          <PButton
+            v-if="info"
+            variant="link"
+            compact
+            @click="invoke('app:showItemInFolder', { path: info.userDataPath })"
+          >
             Pasta de dados do Proper <FolderOpen :size="11" aria-hidden="true" />
           </PButton>
         </div>
@@ -168,7 +193,9 @@ onBeforeUnmount(() => unsubscribe?.())
     <details class="advanced">
       <summary>Avançado</summary>
       <div class="advanced__body">
-        <Notice tone="warning" compact>Só mude o endereço se o suporte do Proper pedir. A conta e a assinatura usam este servidor.</Notice>
+        <Notice tone="warning" compact
+          >Só mude o endereço se o suporte do Proper pedir. A conta e a assinatura usam este servidor.</Notice
+        >
         <form class="advanced__form" novalidate @submit.prevent="saveApi">
           <label for="api-base">Endereço da API do Proper</label>
           <div class="advanced__inline">
@@ -182,10 +209,14 @@ onBeforeUnmount(() => unsubscribe?.())
               aria-describedby="api-base-help"
             />
             <PButton type="submit" :disabled="!apiChanged">Salvar</PButton>
-            <PButton variant="ghost" :disabled="!app.settings.apiBaseURL" @click="resetApi">Usar o padrão</PButton>
+            <PButton variant="ghost" :disabled="!app.settings.apiBaseURL" @click="resetApi"
+              >Usar o padrão</PButton
+            >
           </div>
           <span v-if="apiError" id="api-base-help" class="advanced__error" role="alert">{{ apiError }}</span>
-          <span v-else id="api-base-help" class="advanced__hint">Vazio usa {{ PREGAR_API_DEFAULT_URL }}. Precisa começar com https://.</span>
+          <span v-else id="api-base-help" class="advanced__hint"
+            >Vazio usa {{ PREGAR_API_DEFAULT_URL }}. Precisa começar com https://.</span
+          >
         </form>
       </div>
     </details>
@@ -201,14 +232,7 @@ onBeforeUnmount(() => unsubscribe?.())
 .identity__mark {
   width: 56px;
   height: 56px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-serif);
-  font-size: 30px;
-  font-weight: 600;
-  color: var(--accent-contrast);
-  background: var(--accent);
+  flex: none;
 }
 .identity__name {
   margin: 0;

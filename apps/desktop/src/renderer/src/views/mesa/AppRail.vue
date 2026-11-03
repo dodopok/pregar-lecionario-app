@@ -77,7 +77,16 @@ function open(kind: WindowKind): void {
 
 <template>
   <nav class="rail" :class="{ 'rail--compact': compact }" aria-label="Áreas do Proper" data-tour="rail">
-    <div class="rail__mark drag-region" aria-hidden="true"><span class="serif">P</span></div>
+    <div class="rail__mark drag-region" aria-hidden="true">
+      <svg class="rail__badge" viewBox="0 0 100 100" aria-hidden="true">
+        <rect width="100" height="100" rx="30" style="fill: var(--accent)" />
+        <g style="fill: var(--accent-contrast)" transform="translate(2.5 -1)">
+          <path d="M62 14H38a21 21 0 0 0 0 42h24z" />
+          <rect x="54" y="14" width="9" height="74" />
+          <rect x="69" y="14" width="9" height="74" />
+        </g>
+      </svg>
+    </div>
     <button
       v-for="area in AREAS"
       :key="area.kind"
@@ -202,22 +211,16 @@ function open(kind: WindowKind): void {
   margin-bottom: 8px;
   padding-top: var(--window-controls-mesa-inset, 0px);
 }
-.rail__mark span {
+/* A marca do Proper: o pilcrow das rubricas, em papel sobre a cor litúrgica do dia. */
+.rail__badge {
   width: 30px;
   height: 30px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--accent-contrast);
-  background: var(--accent);
-  transition: background 0.3s;
+  display: block;
+  transition: fill 0.3s;
 }
-.rail--compact .rail__mark span {
+.rail--compact .rail__badge {
   width: 28px;
   height: 28px;
-  font-size: 16px;
 }
 .rail__item {
   width: 56px;
