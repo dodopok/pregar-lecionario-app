@@ -21,7 +21,7 @@ Guia: [api-railway.md](api-railway.md).
 
 1. [ ] Crie um projeto na Railway a partir do repositório `dodopok/pregar-lecionario-app`. A Railway lê o `railway.json` e usa `apps/api/Dockerfile`.
 2. [ ] Adicione um PostgreSQL ao projeto (New › Database › PostgreSQL) e ative os backups dele.
-3. [ ] Gere um domínio público ou ligue o seu (o app usa `https://api.pregar.app` por padrão; se for outro, anote para o passo 9).
+3. [ ] Gere um domínio público ou ligue o seu (o app usa `https://api.pregar.oficio.app` por padrão; se for outro, anote para o passo 9).
 4. [ ] Cadastre as variáveis mínimas no serviço da API:
 
    | Variável | Valor |

@@ -1,4 +1,4 @@
-# Imagem da API do Pregar. Contexto de build: raiz do repositório (monorepo).
+# Imagem da API do Proper. Contexto de build: raiz do repositório (monorepo).
 # NODE_IMAGE permite usar um espelho (ex.: public.ecr.aws/docker/library/node:22-bookworm-slim).
 ARG NODE_IMAGE=node:22-bookworm-slim
 FROM ${NODE_IMAGE} AS build

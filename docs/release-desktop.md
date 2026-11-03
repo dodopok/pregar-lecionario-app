@@ -15,7 +15,7 @@ Ficam no seu computador, nunca no repositório:
 
 | Nome | Onde | Uso |
 | --- | --- | --- |
-| `MAIN_VITE_PREGAR_API_URL` | `apps/desktop/.env.production.local` | Endereço da API embutido no app (ex.: `https://api.pregar.app`) |
+| `MAIN_VITE_PREGAR_API_URL` | `apps/desktop/.env.production.local` | Endereço da API embutido no app (ex.: `https://api.pregar.oficio.app`) |
 | `MAIN_VITE_GOOGLE_CLIENT_ID`, `MAIN_VITE_GOOGLE_CLIENT_SECRET` | `apps/desktop/.env.production.local` | Cliente OAuth "App para computador" do Google Drive (em apps de computador o Google não trata o segredo como confidencial) |
 | `MAIN_VITE_DRIVE_API_KEY` | `apps/desktop/.env.production.local` | Chave restrita à Drive API para importar pastas públicas (opcional) |
 | `CSC_LINK`, `CSC_KEY_PASSWORD` | terminal | Certificado (caminho ou base64 do .p12 no Mac, do .pfx no Windows) e senha. No Mac, o certificado instalado no Acesso às Chaves também serve |

@@ -189,4 +189,4 @@ export const AI_INPUT_LIMITS = {
   sourcesCount: 20,
 }
 
-export const PREGAR_API_DEFAULT_URL = 'https://api.pregar.app'
+export const PREGAR_API_DEFAULT_URL = 'https://api.pregar.oficio.app'
