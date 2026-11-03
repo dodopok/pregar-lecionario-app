@@ -1,6 +1,6 @@
 # Integração Google Drive
 
-Atualizado em 27 de setembro de 2026.
+Atualizado em 3 de novembro de 2026.
 
 O Drive faz parte da Mesa e do fluxo de preparação. A aba Tablet nas Preferências guarda apenas ajustes de leitura. A conexão com Google e as ações de criar, abrir, atualizar e inserir ideias ficam na própria preparação.
 
@@ -14,7 +14,7 @@ O Drive faz parte da Mesa e do fluxo de preparação. A aba Tablet nas Preferên
 - Antes de substituir conteúdo, o app confere a revisão do Google Doc e também exige essa revisão na operação atômica de escrita. Se o Drive mudou, o texto local é preservado e a substituição exige confirmação.
 - A aba Ideias atualiza o documento remoto quando aberta, mostra as notas e permite inserir uma nota no manuscrito sem apagar a origem.
 
-Ainda não houve autenticação real: falta criar o OAuth Client ID do app, e o usuário confirmou que ainda não tem um. Os testes atuais simulam respostas do OAuth/Drive/Docs e não enviam dados para a conta Google.
+O cliente OAuth e a chave de API foram criados em 3 de novembro de 2026 no projeto Google Cloud "Proper" (Drive API e Docs API ativadas, escopo `drive.file`, cliente do tipo App para computador). Os valores ficam fora do git, em `apps/desktop/.env` para desenvolvimento e `apps/desktop/.env.production.local` para os instaladores. Os testes automatizados continuam simulando as respostas do OAuth/Drive/Docs.
 
 ## Importar PDFs de uma pasta pública
 
@@ -39,11 +39,23 @@ Referências oficiais:
 
 ## Configuração Google Cloud
 
-1. Crie ou escolha um projeto no Google Cloud e ative **Google Drive API** e **Google Docs API**.
-2. Configure a tela de consentimento OAuth e inclua sua conta Google como usuária de teste enquanto o app estiver em desenvolvimento.
-3. Crie um cliente OAuth do tipo **Desktop app** e copie o **Client ID**. Não crie nem cole um client secret: o app instalado usa PKCE e não precisa de segredo embutido.
-4. Na Mesa, clique no estado do Drive na barra inferior (ou escolha Google Doc/Ideias) e informe o Client ID em **Conectar Google Drive**.
-5. Autorize a conta no navegador. Depois do retorno à Mesa, use o Google Doc ou abra **Ideias de sermões** no app Google Docs do iPhone.
+O app usa só o escopo `drive.file` e faz o login no navegador padrão, voltando por `127.0.0.1` com PKCE; não há URL de redirecionamento para cadastrar. O ID e o segredo do cliente vão embutidos no app pelas variáveis de build, como o Google espera de um app instalado (o segredo de um cliente "App para computador" não é tratado como segredo).
+
+1. **Projeto.** Em console.cloud.google.com, crie ou escolha o projeto e ative, em APIs e serviços › Biblioteca, a **Google Drive API** e a **Google Docs API**.
+2. **Marca.** Google Auth Platform › Branding: nome Proper, e-mail de suporte, página inicial e os links `https://api.pregar.oficio.app/legal/privacidade` e `https://api.pregar.oficio.app/legal/termos`, domínio autorizado `oficio.app`. Sem logotipo: logotipo exige a verificação de marca.
+3. **Público.** Google Auth Platform › Audience: tipo Externo; em teste, adicione os usuários de teste. No modo "Testing" o acesso expira a cada 7 dias; quando o fluxo funcionar, clique em **Publicar app**. Com só o `drive.file` não há formulário de verificação.
+4. **Escopo.** Google Auth Platform › Data Access: adicione `https://www.googleapis.com/auth/drive.file`, nada mais.
+5. **Cliente.** Google Auth Platform › Clients › Criar cliente: tipo **App para computador**. Copie o ID e o segredo.
+6. **Chave de API, opcional.** APIs e serviços › Credenciais › Chave de API, restrita à Google Drive API. Serve só para importar pastas públicas de PDFs na Biblioteca.
+7. **No repositório.** Em `apps/desktop/.env` (desenvolvimento) e `apps/desktop/.env.production.local` (instaladores), os dois ignorados pelo git:
+
+   ```sh
+   MAIN_VITE_GOOGLE_CLIENT_ID=<id>.apps.googleusercontent.com
+   MAIN_VITE_GOOGLE_CLIENT_SECRET=<segredo>
+   MAIN_VITE_DRIVE_API_KEY=<chave, se criada>
+   ```
+
+8. **No app.** Preferências › Google Drive › Conectar abre o navegador; depois de autorizar, Levar ao púlpito › Google Doc cria a pasta Sermões e o documento, e a aba Ideias oferece o documento de ideias.
 
 Referências oficiais:
 
