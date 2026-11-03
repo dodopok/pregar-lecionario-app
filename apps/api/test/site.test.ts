@@ -31,8 +31,8 @@ afterEach(async () => {
 describe('site: página inicial e downloads', () => {
   it('escolhe o instalador de cada sistema entre os arquivos do release', () => {
     expect(matchAssets(RELEASE.assets)).toEqual({
-      mac: `${DOWNLOAD}/Proper-0.2.0-universal-mac.zip`,
-      'mac-dmg': `${DOWNLOAD}/Proper-0.2.0-mac.dmg`,
+      mac: `${DOWNLOAD}/Proper-0.2.0-mac.dmg`,
+      'mac-zip': `${DOWNLOAD}/Proper-0.2.0-universal-mac.zip`,
       windows: `${DOWNLOAD}/Proper-Setup-0.2.0-x64.exe`,
       'windows-arm': `${DOWNLOAD}/Proper-Setup-0.2.0-arm64.exe`,
       linux: `${DOWNLOAD}/Proper-0.2.0-x64.AppImage`,
@@ -55,9 +55,9 @@ describe('site: página inicial e downloads', () => {
 
     const mac = await context.app.inject({ method: 'GET', url: '/baixar/mac' })
     expect(mac.statusCode).toBe(302)
-    expect(mac.headers.location).toBe(`${DOWNLOAD}/Proper-0.2.0-universal-mac.zip`)
-    const dmg = await context.app.inject({ method: 'GET', url: '/baixar/mac-dmg' })
-    expect(dmg.headers.location).toBe(`${DOWNLOAD}/Proper-0.2.0-mac.dmg`)
+    expect(mac.headers.location).toBe(`${DOWNLOAD}/Proper-0.2.0-mac.dmg`)
+    const zip = await context.app.inject({ method: 'GET', url: '/baixar/mac-zip' })
+    expect(zip.headers.location).toBe(`${DOWNLOAD}/Proper-0.2.0-universal-mac.zip`)
     const deb = await context.app.inject({ method: 'GET', url: '/baixar/linux-deb' })
     expect(deb.headers.location).toBe(`${DOWNLOAD}/Proper-0.2.0-x64.deb`)
     const unknown = await context.app.inject({ method: 'GET', url: '/baixar/ios' })
@@ -83,7 +83,7 @@ describe('site: página inicial e downloads', () => {
     context.fake.on('GET', /\/releases\/latest$/, () => RELEASE)
     context.clock.advance(61_000)
     const mac = await context.app.inject({ method: 'GET', url: '/baixar/mac' })
-    expect(mac.headers.location).toBe(`${DOWNLOAD}/Proper-0.2.0-universal-mac.zip`)
+    expect(mac.headers.location).toBe(`${DOWNLOAD}/Proper-0.2.0-mac.dmg`)
   })
 
   it('serve os arquivos estáticos do site e mantém as rotas da API', async () => {
