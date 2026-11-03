@@ -14,7 +14,7 @@ export interface AIAccess {
   mode: 'pro' | 'byok' | 'none'
   provider: AIProviderId
   model: string
-  /** "Claude · claude-sonnet-5-5" ou "Assinatura do Pregar". */
+  /** "Claude · claude-sonnet-5-5" ou "Assinatura do Proper". */
   label: string
   message: string
   usage: UsageSummary | null

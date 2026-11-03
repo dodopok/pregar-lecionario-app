@@ -61,7 +61,7 @@ if (process.platform === 'darwin') {
   if (!process.env.CSC_LINK) warnings.push('Sem CSC_LINK: o instalador sai sem assinatura e o SmartScreen vai avisar.')
 }
 
-console.log(`Pregar ${version} · ${process.platform} · ${publish ? 'publica no GitHub (rascunho)' : 'só gera os arquivos'}`)
+console.log(`Proper ${version} · ${process.platform} · ${publish ? 'publica no GitHub (rascunho)' : 'só gera os arquivos'}`)
 for (const warning of warnings) console.log(`aviso: ${warning}`)
 if (problems.length > 0) {
   for (const problem of problems) console.error(`erro: ${problem}`)

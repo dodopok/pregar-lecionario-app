@@ -138,7 +138,7 @@ describe('o que é enviado', () => {
         hasMaterials: true,
       }),
     ).toBe(
-      'O manuscrito, a leitura bíblica e as traduções disponíveis e os materiais marcados serão enviados diretamente a Claude ao clicar em Enviar revisão. A chamada usa sua chave, não passa pelo app Pregar, e nunca altera o manuscrito. Aplicam-se as regras de retenção do provedor.',
+      'O manuscrito, a leitura bíblica e as traduções disponíveis e os materiais marcados serão enviados diretamente a Claude ao clicar em Enviar revisão. A chamada usa sua chave, não passa pelo app Proper, e nunca altera o manuscrito. Aplicam-se as regras de retenção do provedor.',
     )
     expect(
       reviewPayloadDescription({
@@ -150,14 +150,14 @@ describe('o que é enviado', () => {
     ).toMatch(/^O manuscrito serão enviados diretamente a Gemini/)
   })
 
-  it('assinatura: passa pelo servidor do Pregar, sem guardar o manuscrito', () => {
+  it('assinatura: passa pelo servidor do Proper, sem guardar o manuscrito', () => {
     const text = reviewPayloadDescription({
       mode: 'pro',
       providerName: 'Claude',
       includesSources: false,
       hasMaterials: false,
     })
-    expect(text).toContain('servidor do Pregar')
+    expect(text).toContain('servidor do Proper')
     expect(text).toContain('não fica guardado')
     expect(text).not.toContain('sua chave')
   })

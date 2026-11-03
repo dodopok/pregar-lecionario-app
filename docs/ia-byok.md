@@ -141,7 +141,7 @@ Só recomendar um modelo após ele atender aos limites de autoria e fundamentaç
 
 ## 9. Implementação atual
 
-- As chaves existentes no Acesso às Chaves são lidas fora da thread principal e usadas diretamente pelo app; as chamadas seguem ao endpoint oficial do provedor, sem passar por um servidor Pregar. A tela informa o provedor e o modelo antes do envio.
+- As chaves existentes no Acesso às Chaves são lidas fora da thread principal e usadas diretamente pelo app; as chamadas seguem ao endpoint oficial do provedor, sem passar por um servidor Proper. A tela informa o provedor e o modelo antes do envio.
 - A ação Revisar permite selecionar Ortografia, Fidelidade, Estrutura, Clareza e Tom. O sermão só é enviado após o clique explícito em “Enviar revisão”. O app não fornece ao modelo ferramentas de edição.
 - Perguntas de emergência são uma ação separada, acionada manualmente, e retornam no máximo três perguntas curtas ancoradas em trechos literais do manuscrito. Resposta, ideia, interpretação, aplicação ou proposta de redação não fazem parte do formato; os resultados são temporários e não alteram nem são salvos no sermão.
 - Fidelidade exige que o texto bíblico principal esteja carregado. Apenas nessa categoria são incluídas as traduções disponíveis e as abas do Leitor que foram marcadas explicitamente. Abas antigas não são consideradas consentimento; páginas Web e PDFs novos começam desmarcados. PDFs enviam a seção localizada da referência ou da página, sem o caminho local do arquivo; para o Feasting, os ensaios e autores são preservados.

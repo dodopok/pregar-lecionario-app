@@ -1,7 +1,7 @@
 /**
  * Criação do pacote, como `PregarBackupService.create`: monta tudo numa pasta temporária oculta,
  * guarda cada PDF uma vez por SHA-256, reescreve os caminhos para `Files/<sha>.pdf`, valida o
- * pacote pronto e só então o publica com o nome "Pregar Backup yyyy-MM-dd HH.mm.ss".
+ * pacote pronto e só então o publica com o nome "Proper Backup yyyy-MM-dd HH.mm.ss".
  */
 import { sha256Hex } from '../util/hash'
 import { isDateKey } from '../util/dates'
@@ -160,12 +160,12 @@ export function normalizeSourcePath(path: string): string {
   return prefix + parts.join(separator)
 }
 
-/** "Pregar Backup 2026-11-01 14.05.09", com " (2)", " (3)"... se já existir. */
+/** "Proper Backup 2026-11-01 14.05.09", com " (2)", " (3)"... se já existir. */
 export function backupFolderName(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0')
   const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
   const time = `${pad(date.getHours())}.${pad(date.getMinutes())}.${pad(date.getSeconds())}`
-  return `Pregar Backup ${day} ${time}`
+  return `Proper Backup ${day} ${time}`
 }
 
 async function uniqueBackupName(target: BackupFileSystem, date: Date): Promise<string> {

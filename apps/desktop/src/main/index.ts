@@ -20,16 +20,29 @@ import { LiturgyService } from './services/liturgy'
 import { UpdaterService } from './services/updater'
 import { registerExtensions } from './extensions'
 import { installCrashGuards } from './crash-guard'
+import { migrateLegacyUserData } from './legacy-data'
 import { join } from 'node:path'
 
-app.setName('Pregar')
+app.setName('Proper')
+// Até novembro de 2026 o app chamava-se Pregar; quem já o usava encontra seus dados na pasta nova.
+try {
+  migrateLegacyUserData(join(app.getPath('appData'), 'Pregar'), app.getPath('userData'))
+} catch (error) {
+  console.error('Não foi possível migrar a pasta de dados antiga:', error)
+}
 installCrashGuards(join(app.getPath('userData'), 'Logs'))
 // Protocolos próprios precisam ser declarados antes do app ficar pronto.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'pregar-pdf', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
-  { scheme: 'pregar-asset', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
+  {
+    scheme: 'pregar-pdf',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+  {
+    scheme: 'pregar-asset',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
 ])
-app.setAppUserModelId('br.caminhoanglicano.pregar')
+app.setAppUserModelId('br.caminhoanglicano.proper')
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -51,8 +64,14 @@ async function start(): Promise<void> {
   const windows = new WindowManager(kv('window-bounds'))
   const http = makeHttp(integrationLog)
   const apiBaseURL = () => resolveAPIBaseURL(settings.get().apiBaseURL)
-  const api = new PregarAPIClient(() => http(), apiBaseURL, () => secrets.get('pregarSession'))
-  const account = new AccountService(api, secrets, kv('account'), apiBaseURL, (state) => windows.broadcast('account:changed', state))
+  const api = new PregarAPIClient(
+    () => http(),
+    apiBaseURL,
+    () => secrets.get('pregarSession'),
+  )
+  const account = new AccountService(api, secrets, kv('account'), apiBaseURL, (state) =>
+    windows.broadcast('account:changed', state),
+  )
   const liturgy = new LiturgyService({
     http: () => http(),
     settings: () => settings.get(),
@@ -95,7 +114,7 @@ async function start(): Promise<void> {
   const applyAppearance = () => {
     nativeTheme.themeSource = settings.get().appearance
     windows.applyTextScale(settings.get().textScale)
-    // Outro servidor do Pregar pode ter a degustação ligada ou desligada.
+    // Outro servidor do Proper pode ter a degustação ligada ou desligada.
     if (settings.get().apiBaseURL !== lastAPIBaseURL) {
       lastAPIBaseURL = settings.get().apiBaseURL
       void refreshPreview(true)
@@ -113,7 +132,8 @@ async function start(): Promise<void> {
     command: (command) => {
       if (!windows.sendToFocused('menu:command', { command })) windows.open('mesa')
     },
-    revealLog: () => void import('electron').then(({ shell }) => shell.showItemInFolder(integrationLog.ensureFile())),
+    revealLog: () =>
+      void import('electron').then(({ shell }) => shell.showItemInFolder(integrationLog.ensureFile())),
     checkUpdates: () => void updater.check(),
     privacyURL: () => {
       try {

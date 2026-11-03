@@ -6,7 +6,7 @@ const PRODUCTION = {
   NODE_ENV: 'production',
   PUBLIC_BASE_URL: 'https://api.pregar.test',
   RESEND_API_KEY: 're_chave_secreta_resend_123456',
-  EMAIL_FROM: 'Pregar <nao-responda@pregar.test>',
+  EMAIL_FROM: 'Proper <nao-responda@pregar.test>',
   ASAAS_API_KEY: '$aact_prod_chave_secreta_asaas_123456',
   ASAAS_ENVIRONMENT: 'production',
   ANTHROPIC_API_KEY: 'sk-ant-chave-secreta-123456',

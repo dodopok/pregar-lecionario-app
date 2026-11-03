@@ -14,7 +14,7 @@ Não faz: editar o manuscrito, ler leituras, revisar. Isso continua na Mesa. O c
 ## Como as ideias viajam
 
 ```
-iPhone (SwiftData, fila offline)  ⇄  API do Pregar (PostgreSQL, por conta)  ⇄  App de computador (SQLite, aba Ideias)
+iPhone (SwiftData, fila offline)  ⇄  API do Proper (PostgreSQL, por conta)  ⇄  App de computador (SQLite, aba Ideias)
 ```
 
 - A **conta** é a mesma: o token de sessão do iPhone é mais uma sessão em Preferências › Conta › Sessões.

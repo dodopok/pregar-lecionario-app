@@ -56,7 +56,7 @@ const steps = computed<Step[]>(() => [
     id: 'connect',
     icon: KeyRound,
     title: 'Conectar leituras e revisão',
-    text: 'Assine o Pregar ou use as suas chaves da Estêvão API e de um provedor de IA. Em degustação, só as próximas semanas aparecem.',
+    text: 'Assine o Proper ou use as suas chaves da Estêvão API e de um provedor de IA. Em degustação, só as próximas semanas aparecem.',
     status: connected.value
       ? app.liturgyAccess.message
       : app.liturgyAccess.mode === 'preview'
@@ -92,7 +92,7 @@ const steps = computed<Step[]>(() => [
     id: 'drive',
     icon: Cloud,
     title: 'Google Drive',
-    text: 'Opcional: o Google Doc do sermão na pasta do Drive e as ideias anotadas pelo celular. O Pregar só vê os arquivos que ele mesmo cria.',
+    text: 'Opcional: o Google Doc do sermão na pasta do Drive e as ideias anotadas pelo celular. O Proper só vê os arquivos que ele mesmo cria.',
     status: !driveStatus.value
       ? '…'
       : !driveStatus.value.available

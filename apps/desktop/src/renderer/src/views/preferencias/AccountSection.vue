@@ -113,19 +113,19 @@ onMounted(() => {
 
 <template>
   <div class="account-section">
-    <Notice v-if="app.account.offline" tone="offline" title="Sem conexão com o servidor do Pregar">
+    <Notice v-if="app.account.offline" tone="offline" title="Sem conexão com o servidor do Proper">
       {{
         loggedIn
           ? 'Mostrando os dados salvos da última vez. A assinatura continua valendo; confira a internet.'
-          : 'Confira a internet para entrar ou assinar. Enquanto isso, o Pregar funciona com as suas próprias chaves.'
+          : 'Confira a internet para entrar ou assinar. Enquanto isso, o Proper funciona com as suas próprias chaves.'
       }}
       <template #actions><PButton compact :busy="refreshing" @click="refresh">Tentar de novo</PButton></template>
     </Notice>
 
     <template v-if="!loggedIn">
       <section class="hero" aria-labelledby="hero-title">
-        <h3 id="hero-title" class="hero__title">Assine o Pregar</h3>
-        <p class="hero__lead">O jeito mais simples de usar o Pregar: você só entra com o email, sem chaves para configurar.</p>
+        <h3 id="hero-title" class="hero__title">Assine o Proper</h3>
+        <p class="hero__lead">O jeito mais simples de usar o Proper: você só entra com o email, sem chaves para configurar.</p>
         <ul class="hero__list">
           <li><Check :size="15" aria-hidden="true" />Revisão por IA, perguntas de emergência e pesquisa de materiais.</li>
           <li><Check :size="15" aria-hidden="true" />Calendário litúrgico, leituras e Bíblia sem chave da Estêvão API.</li>
@@ -139,7 +139,7 @@ onMounted(() => {
       </PrefGroup>
 
       <p class="account-section__aside">
-        Prefere não assinar? O Pregar também funciona de graça com as suas próprias chaves. Configure em
+        Prefere não assinar? O Proper também funciona de graça com as suas próprias chaves. Configure em
         <RouterLink to="/preferencias/estevao" replace>Estêvão API</RouterLink> e
         <RouterLink to="/preferencias/ia" replace>Inteligência artificial</RouterLink>.
       </p>

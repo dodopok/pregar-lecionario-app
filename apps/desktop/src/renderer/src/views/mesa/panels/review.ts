@@ -156,9 +156,9 @@ export function reviewPayloadDescription({
   }
   const subject = parts.length === 0 ? 'O manuscrito' : `O manuscrito, ${parts.join(' e ')}`
   if (mode === 'pro') {
-    return `${subject} serão enviados ao servidor do Pregar ao clicar em Enviar revisão. O servidor consulta o modelo, confere os trechos citados e devolve só os apontamentos; o manuscrito não fica guardado lá e nunca é alterado.`
+    return `${subject} serão enviados ao servidor do Proper ao clicar em Enviar revisão. O servidor consulta o modelo, confere os trechos citados e devolve só os apontamentos; o manuscrito não fica guardado lá e nunca é alterado.`
   }
-  return `${subject} serão enviados diretamente a ${providerName} ao clicar em Enviar revisão. A chamada usa sua chave, não passa pelo app Pregar, e nunca altera o manuscrito. Aplicam-se as regras de retenção do provedor.`
+  return `${subject} serão enviados diretamente a ${providerName} ao clicar em Enviar revisão. A chamada usa sua chave, não passa pelo app Proper, e nunca altera o manuscrito. Aplicam-se as regras de retenção do provedor.`
 }
 
 /** Escopo das perguntas de emergência (texto do app Swift para chaves próprias). */
@@ -176,9 +176,9 @@ export function questionsPayloadDescription(input: {
   const scope = included.join(', ')
   const capitalized = scope.charAt(0).toUpperCase() + scope.slice(1)
   if (input.mode === 'pro') {
-    return `${capitalized} serão enviados ao servidor do Pregar ao clicar em Pedir perguntas. Nada é guardado no servidor e nada é escrito no manuscrito.`
+    return `${capitalized} serão enviados ao servidor do Proper ao clicar em Pedir perguntas. Nada é guardado no servidor e nada é escrito no manuscrito.`
   }
-  return `${capitalized} serão enviados diretamente a ${input.providerName} ao clicar em Pedir perguntas. A chamada usa sua chave, não passa pelo app Pregar, e nada é escrito no manuscrito. Aplicam-se as regras de retenção do provedor.`
+  return `${capitalized} serão enviados diretamente a ${input.providerName} ao clicar em Pedir perguntas. A chamada usa sua chave, não passa pelo app Proper, e nada é escrito no manuscrito. Aplicam-se as regras de retenção do provedor.`
 }
 
 /** "12 KB", "1,2 MB". */

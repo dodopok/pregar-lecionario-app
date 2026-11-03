@@ -17,7 +17,7 @@ export class ApiError extends Error {
 export const errors = {
   unauthorized: () => new ApiError(401, 'unauthorized', 'Entre na sua conta para continuar.'),
   forbiddenPlan: () =>
-    new ApiError(402, 'subscription_required', 'Este recurso faz parte da assinatura do Pregar.'),
+    new ApiError(402, 'subscription_required', 'Este recurso faz parte da assinatura do Proper.'),
   notFound: (what = 'Recurso') => new ApiError(404, 'not_found', `${what} não encontrado.`),
   rateLimited: (message = 'Muitas tentativas em pouco tempo. Aguarde um pouco e tente de novo.') =>
     new ApiError(429, 'rate_limited', message),

@@ -67,7 +67,7 @@ async function deleteAccount(): Promise<void> {
     <ConfirmSheet
       v-if="confirming"
       title="Apagar a conta?"
-      message="A assinatura é cancelada e o email, as sessões e o histórico de pagamentos são apagados do servidor do Pregar. Seus sermões, a biblioteca e as preferências continuam neste computador."
+      message="A assinatura é cancelada e o email, as sessões e o histórico de pagamentos são apagados do servidor do Proper. Seus sermões, a biblioteca e as preferências continuam neste computador."
       confirm-label="Apagar conta"
       require-text="APAGAR"
       :icon="UserX"

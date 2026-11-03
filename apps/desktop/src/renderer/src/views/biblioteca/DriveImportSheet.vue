@@ -70,7 +70,7 @@ async function importFolder(): Promise<void> {
         <Toggle v-model="includeSubfolders" label="Incluir subpastas" :disabled="importing" />
       </div>
       <p class="drive__note">
-        Os PDFs são copiados para a pasta de suporte local do Pregar e indexados na Biblioteca; os originais compartilhados não são
+        Os PDFs são copiados para a pasta de suporte local do Proper e indexados na Biblioteca; os originais compartilhados não são
         alterados. Importar de novo atualiza os mesmos arquivos, sem cópias duplicadas.
       </p>
 

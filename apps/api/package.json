@@ -2,7 +2,7 @@
   "name": "@pregar/api",
   "version": "0.1.0",
   "private": true,
-  "description": "API do Pregar: contas, assinatura com Pix (Asaas), proxy de IA com cotas e proxy da Estêvão API.",
+  "description": "API do Proper: contas, assinatura com Pix (Asaas), proxy de IA com cotas e proxy da Estêvão API.",
   "type": "module",
   "engines": {
     "node": ">=22.13"

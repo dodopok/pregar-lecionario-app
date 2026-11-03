@@ -23,7 +23,7 @@ const schema = z.object({
   LOGIN_CODE_TTL_MINUTES: int(10),
 
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default('Pregar <nao-responda@pregar.app>'),
+  EMAIL_FROM: z.string().default('Proper <nao-responda@pregar.app>'),
 
   ESTEVAO_API_URL: z.url().default('https://api.caminhoanglicano.com.br'),
   /** Identificador interno enviado no header X-App-Internal-Id, como no Ordo. */
@@ -70,7 +70,7 @@ const schema = z.object({
   TRUST_PROXY: bool.default(true),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
-  LEGAL_OPERATOR_NAME: z.string().default('Pregar'),
+  LEGAL_OPERATOR_NAME: z.string().default('Proper'),
   LEGAL_OPERATOR_DOCUMENT: z.string().default(''),
   LEGAL_CONTACT_EMAIL: z.string().default('contato@pregar.app'),
 })

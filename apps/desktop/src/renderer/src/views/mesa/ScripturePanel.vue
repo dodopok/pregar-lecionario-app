@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
         <KeyRound :size="22" aria-hidden="true" />
         <p class="scripture__error-title">As leituras ainda não estão conectadas</p>
         <p class="muted">
-          Assine o Pregar ou salve a sua chave da Estêvão API para carregar o calendário e as leituras.
+          Assine o Proper ou salve a sua chave da Estêvão API para carregar o calendário e as leituras.
         </p>
         <PButton variant="primary" @click="mesa.openSheet('connect')">Conectar</PButton>
       </template>

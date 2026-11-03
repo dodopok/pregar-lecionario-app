@@ -1,5 +1,5 @@
 /**
- * Contrato entre o app e a API do Pregar. Os mesmos esquemas validam a entrada no servidor e
+ * Contrato entre o app e a API do Proper. Os mesmos esquemas validam a entrada no servidor e
  * tipam as respostas no app. Mensagens de erro para o usuário ficam em português.
  */
 import { z } from 'zod'

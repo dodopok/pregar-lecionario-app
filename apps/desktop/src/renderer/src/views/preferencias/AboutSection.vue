@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** Sobre: versão, atualizações, privacidade e, em Avançado, o endereço da API do Pregar. */
+/** Sobre: versão, atualizações, privacidade e, em Avançado, o endereço da API do Proper. */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Download, ExternalLink, FolderOpen, RefreshCw } from 'lucide-vue-next'
 import { PREGAR_API_DEFAULT_URL } from '@pregar/core/plans/contract'
@@ -49,7 +49,7 @@ const updateText = computed(() => {
       return status.message ?? 'Não foi possível procurar atualizações.'
     default:
       return app.settings.updates.automatic
-        ? 'O Pregar procura atualizações sozinho ao abrir.'
+        ? 'O Proper procura atualizações sozinho ao abrir.'
         : 'A busca automática está desligada. Clique para procurar uma versão nova.'
   }
 })
@@ -96,7 +96,7 @@ onBeforeUnmount(() => unsubscribe?.())
     <div class="identity">
       <div class="identity__mark" aria-hidden="true">P</div>
       <div>
-        <h3 class="identity__name">Pregar</h3>
+        <h3 class="identity__name">Proper</h3>
         <p class="identity__version selectable">
           Versão {{ info?.version ?? '—' }}
           <template v-if="info">· {{ PLATFORM_NAMES[info.platform] }} {{ info.arch }} · Electron {{ info.electron }}</template>
@@ -136,7 +136,7 @@ onBeforeUnmount(() => unsubscribe?.())
           class="wide"
           :model-value="app.settings.updates.automatic"
           label="Procurar e baixar atualizações sozinho"
-          description="A nova versão é instalada quando você fechar o Pregar."
+          description="A nova versão é instalada quando você fechar o Proper."
           @update:model-value="app.updateSettings({ updates: { automatic: $event } })"
         />
       </PrefRow>
@@ -146,13 +146,13 @@ onBeforeUnmount(() => unsubscribe?.())
       <div class="links">
         <p class="links__text">
           Seus sermões, a Biblioteca e as preferências ficam neste computador. Com as suas chaves, o texto vai direto ao provedor de IA; com a
-          assinatura, passa pelo servidor do Pregar só para a revisão e não fica guardado.
+          assinatura, passa pelo servidor do Proper só para a revisão e não fica guardado.
         </p>
         <div class="links__row">
           <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/privacidade`)">Política de privacidade <ExternalLink :size="11" aria-hidden="true" /></PButton>
           <PButton variant="link" compact @click="openExternal(`${legalBase}/legal/termos`)">Termos de uso <ExternalLink :size="11" aria-hidden="true" /></PButton>
           <PButton v-if="info" variant="link" compact @click="invoke('app:showItemInFolder', { path: info.userDataPath })">
-            Pasta de dados do Pregar <FolderOpen :size="11" aria-hidden="true" />
+            Pasta de dados do Proper <FolderOpen :size="11" aria-hidden="true" />
           </PButton>
         </div>
       </div>
@@ -168,9 +168,9 @@ onBeforeUnmount(() => unsubscribe?.())
     <details class="advanced">
       <summary>Avançado</summary>
       <div class="advanced__body">
-        <Notice tone="warning" compact>Só mude o endereço se o suporte do Pregar pedir. A conta e a assinatura usam este servidor.</Notice>
+        <Notice tone="warning" compact>Só mude o endereço se o suporte do Proper pedir. A conta e a assinatura usam este servidor.</Notice>
         <form class="advanced__form" novalidate @submit.prevent="saveApi">
-          <label for="api-base">Endereço da API do Pregar</label>
+          <label for="api-base">Endereço da API do Proper</label>
           <div class="advanced__inline">
             <input
               id="api-base"

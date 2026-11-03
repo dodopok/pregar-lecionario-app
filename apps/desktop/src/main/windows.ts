@@ -15,12 +15,12 @@ interface WindowSpec {
 }
 
 const SPECS: Record<WindowKind, WindowSpec> = {
-  mesa: { title: 'Pregar', width: 1600, height: 980, minWidth: 1024, minHeight: 680 },
-  leitor: { title: 'Leitor · Pregar', width: 1320, height: 920, minWidth: 820, minHeight: 560 },
-  biblioteca: { title: 'Biblioteca · Pregar', width: 1240, height: 840, minWidth: 860, minHeight: 560 },
-  arquivo: { title: 'Arquivo · Pregar', width: 1120, height: 780, minWidth: 760, minHeight: 520 },
-  biblia: { title: 'Bíblia · Pregar', width: 1080, height: 860, minWidth: 720, minHeight: 520 },
-  preferencias: { title: 'Preferências · Pregar', width: 1120, height: 860, minWidth: 820, minHeight: 600 },
+  mesa: { title: 'Proper', width: 1600, height: 980, minWidth: 1024, minHeight: 680 },
+  leitor: { title: 'Leitor · Proper', width: 1320, height: 920, minWidth: 820, minHeight: 560 },
+  biblioteca: { title: 'Biblioteca · Proper', width: 1240, height: 840, minWidth: 860, minHeight: 560 },
+  arquivo: { title: 'Arquivo · Proper', width: 1120, height: 780, minWidth: 760, minHeight: 520 },
+  biblia: { title: 'Bíblia · Proper', width: 1080, height: 860, minWidth: 720, minHeight: 520 },
+  preferencias: { title: 'Preferências · Proper', width: 1120, height: 860, minWidth: 820, minHeight: 600 },
 }
 
 const BACKGROUND = { light: '#f5f3ee', dark: '#1e1d1b' }

@@ -1,6 +1,6 @@
 # Assinatura por Pix (Asaas)
 
-O Pregar cobra a assinatura pelo [Asaas](https://www.asaas.com). A API suporta duas modalidades, escolhidas por `BILLING_PIX_MODE`.
+O Proper cobra a assinatura pelo [Asaas](https://www.asaas.com). A API suporta duas modalidades, escolhidas por `BILLING_PIX_MODE`.
 
 | Modalidade | Como a pessoa paga | Requisito da conta Asaas |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ No Pix Automático, a autorização é criada com `paymentCreationMode: SUBSCRIP
 
 ## Como a API trata a cobrança
 
-- **Checkout.** O app envia nome e CPF/CNPJ (validados pelos dígitos). A API cria o cliente no Asaas e devolve o QR Code Pix. O CPF não fica no banco do Pregar.
+- **Checkout.** O app envia nome e CPF/CNPJ (validados pelos dígitos). A API cria o cliente no Asaas e devolve o QR Code Pix. O CPF não fica no banco do Proper.
 - **Ativação.** O primeiro `PAYMENT_RECEIVED` libera o plano por um ciclo. Cada pagamento estende o período uma única vez, mesmo que o webhook chegue repetido.
 - **Idempotência.** Cada evento é gravado pelo `id` antes de ser processado. Repetições são ignoradas; falhas ficam registradas e a reconciliação tenta de novo, sem travar a fila sequencial do Asaas.
 - **Atraso.** `PAYMENT_OVERDUE` marca a assinatura como pendente; o acesso continua por `BILLING_GRACE_DAYS`.

@@ -248,9 +248,9 @@ onMounted(() => {
     <div v-if="!hasAccess" class="bible__locked">
       <KeyRound :size="26" aria-hidden="true" />
       <h2 class="bible__locked-title">Conecte a Estêvão API</h2>
-      <p>Configure sua chave da Estêvão API nas Preferências, ou assine o Pregar para ler a Bíblia sem chave.</p>
+      <p>Configure sua chave da Estêvão API nas Preferências, ou assine o Proper para ler a Bíblia sem chave.</p>
       <div class="bible__locked-actions">
-        <PButton variant="primary" @click="invoke('app:openWindow', { window: 'preferencias', route: '/preferencias/conta' })">Assinar o Pregar</PButton>
+        <PButton variant="primary" @click="invoke('app:openWindow', { window: 'preferencias', route: '/preferencias/conta' })">Assinar o Proper</PButton>
         <PButton @click="invoke('app:openWindow', { window: 'preferencias', route: '/preferencias/estevao' })">Usar minha chave</PButton>
       </div>
     </div>

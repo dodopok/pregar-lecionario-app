@@ -84,7 +84,7 @@ describe('transporte do cliente litúrgico', () => {
     expect(calls[0]?.headers.has('authorization')).toBe(false)
   })
 
-  it('erros da API do Pregar chegam com código e mensagem', async () => {
+  it('erros da API do Proper chegam com código e mensagem', async () => {
     const { client } = clientFor(
       { kind: 'preview', baseURL: 'https://api.pregar.app' },
       { error: { code: 'preview_disabled', message: 'A degustação está desativada.' } },
@@ -121,7 +121,7 @@ describe('janela da degustação', () => {
 })
 
 describe('fetchPreviewStatus', () => {
-  it('lê a janela informada pela API do Pregar', async () => {
+  it('lê a janela informada pela API do Proper', async () => {
     const { http, calls } = fakeHttp({ enabled: true, days: 35, from: '2026-10-25', to: '2026-12-06' })
     const status = await fetchPreviewStatus(http, 'https://api.pregar.app/')
     expect(status).toEqual({ enabled: true, days: 35, from: '2026-10-25', to: '2026-12-06' })

@@ -4,7 +4,7 @@ Atualizado em 3 de novembro de 2026. O que já existe está em [progresso.md](pr
 
 ## 1. Passo a passo para lançar o app de computador
 
-1. **Nome e marca.** Escolher o nome (sugestões abaixo), registrar o domínio e trocar `productName`, `appId`, títulos, textos e ícone. Vale fazer antes do primeiro instalador público, porque o `appId` e o nome do executável são difíceis de mudar depois.
+1. **Nome e marca.** O nome é **Proper** (seção 3). `productName`, `appId`, títulos e textos já foram trocados no código; faltam o domínio, a marca e o ícone. Vale fechar antes do primeiro instalador público, porque o `appId` e o nome do executável são difíceis de mudar depois.
 2. **Revisar e mesclar** a branch `feat/ux-primeiro-uso` (PR com as capturas da conversa).
 3. **Ligar a degustação na API** (`ESTEVAO_PUBLIC_PREVIEW=true` na Railway) e fazer o deploy. Conferir `apps/api/dist/admin.js doctor`.
 4. **Curar as fontes em português**: 4 a 6 sites e os autores que você recomenda (Preferências › Fontes); eu troco os padrões em `packages/core/src/sources` para que um usuário novo já veja materiais em português.
@@ -33,25 +33,19 @@ Ideias, na ordem em que eu as faria, com o tamanho aproximado:
 | **Mesa em dois computadores** | Mac na paróquia e notebook em casa com os mesmos sermões, pela conta (hoje só por backup) | grande |
 | **Teleprompter no iPad e cronômetro no relógio** | A folha do púlpito rolando no iPad, o tempo no pulso | depois do companheiro |
 
-## 3. Nomes
+## 3. Nome: Proper
 
-"Pregar" descreve, mas é um verbo comum e difícil de achar e de registrar. O nome bom aqui é curto, português, com cheiro de liturgia e fácil de dizer: "abre o ___".
+Decidido em 3 de novembro de 2026: o app chama-se **Proper**. É o "próprio" do dia no lecionário, as partes que mudam com a celebração (coleta e leituras; "Próprio 27" já aparece na Mesa). É curto, fácil de dizer ("abre o Proper") e não tem o problema do verbo comum que "Pregar" tinha. Em inglês também lê como "adequado, como deve ser".
 
-| Nome | Por quê | Atenção |
-| --- | --- | --- |
-| **Ambão** | O lugar de onde se leem as leituras e se prega. É a palavra que só quem vive o lecionário usa, soa bem e é curta. O companheiro seria "Ambão no bolso" ou só "Ambão" com ícone diferente. | Pouco conhecido fora das igrejas litúrgicas; é exatamente o público. Conferir domínio `ambao.app` e a App Store. |
-| **Perícope** | A passagem do lecionário, o objeto central do app. Erudito, memorável. | Pronúncia nem sempre certa; soa técnico. |
-| **Ordo** | O calendário litúrgico impresso. Curto, internacional, já aparece no código da API. | Genérico demais, muitos usos. |
-| **Púlpito** | Direto; "Levar ao púlpito" já vive na interface. | Comum, provavelmente tomado em lojas e domínios. |
-| **Lâmpada** | "Lâmpada para os meus pés" (Salmo 119): quente, português, sem jargão. | Não diz "sermão"; depende do ícone e do subtítulo. |
-| **Rubrica** | As instruções em vermelho dos livros litúrgicos; quem é de liturgia sorri. | Em português do dia a dia significa assinatura. |
-| **Homília** | O sermão dentro da liturgia. | Mais católico que anglicano; alguns pregadores evitam. |
+O que já foi trocado no código: nome do produto e do executável, identificador do app (`br.caminhoanglicano.proper`), títulos de janela, menu, textos da interface, e-mails e páginas legais da API e o nome das pastas de backup novas ("Proper Backup …"). A pasta de dados muda de `Pregar` para `Proper`; o app move a antiga sozinho na primeira abertura, sem sobrescrever nada. Ficaram como estavam, por serem internos e invisíveis: os pacotes `@pregar/*`, o canal IPC, os esquemas `pregar-pdf:` e `pregar-asset:`, o arquivo `pregar.sqlite`, as variáveis `PREGAR_*` e o nome do repositório. O app antigo para Mac continua "Pregar para Mac": é outro produto, do qual só importamos o backup.
 
-Minha ordem: Ambão, depois Perícope, depois Lâmpada. Antes de decidir: domínio, busca na App Store e no INPI, e dizer em voz alta "abre o Ambão aí".
+Ainda com você: domínio (`proper.app`, `proper.com.br`…), busca na App Store e no INPI, ícone, e a conta Apple Developer com o nome final.
+
+As alternativas que estavam na mesa, caso queira voltar: Ambão, Perícope, Lâmpada, Ordo, Púlpito, Rubrica e Homília.
 
 ## 4. O que só você pode fazer
 
-- Escolher o nome, registrar domínio e marca, aprovar ícone.
+- Registrar domínio e marca do Proper, aprovar o ícone.
 - Conta Apple Developer (macOS assinado e notarizado; o app de celular depende dela), Azure Trusted Signing ou certificado para o Windows.
 - Flags e chaves na Railway, Asaas em produção, Resend com domínio, cliente OAuth do Google.
 - Curadoria das fontes e autores em português; o preço e os textos da assinatura.

@@ -24,8 +24,8 @@ export class LiturgicalAPIError extends Error {
 
 /**
  * Como a requisição chega à Estêvão API: direto com a chave do usuário (plano gratuito),
- * pelo proxy da API do Pregar, que acrescenta a chave do servidor (assinantes), ou pela
- * degustação pública da API do Pregar, sem conta e limitada às próximas semanas.
+ * pelo proxy da API do Proper, que acrescenta a chave do servidor (assinantes), ou pela
+ * degustação pública da API do Proper, sem conta e limitada às próximas semanas.
  */
 export type LiturgicalTransport =
   | { kind: 'direct'; apiKey: string; baseURL?: string }
@@ -89,7 +89,7 @@ export interface PreviewWindow {
   to: string
 }
 
-/** Resposta de GET /v1/public/preview da API do Pregar: se a degustação está ligada e quais datas alcança. */
+/** Resposta de GET /v1/public/preview da API do Proper: se a degustação está ligada e quais datas alcança. */
 export interface PreviewStatus {
   enabled: boolean
   days: number
@@ -116,7 +116,7 @@ export class LiturgicalClient {
     if (transport.kind === 'direct') {
       url = new URL(path, transport.baseURL ?? ESTEVAO_API_BASE_URL)
     } else {
-      // A API do Pregar espelha os caminhos v2: /v1/estevao (assinantes) e /v1/public/estevao (degustação).
+      // A API do Proper espelha os caminhos v2: /v1/estevao (assinantes) e /v1/public/estevao (degustação).
       const base = transport.baseURL.replace(/\/+$/, '')
       const prefix = transport.kind === 'proxy' ? '/v1/estevao' : '/v1/public/estevao'
       url = new URL(`${base}${prefix}${path.replace(/^\/api\/v2/, '')}`)
@@ -147,7 +147,7 @@ export class LiturgicalClient {
       url,
       { method: 'GET', headers },
       {
-        integration: transport.kind === 'direct' ? 'Estêvão API' : 'Pregar API',
+        integration: transport.kind === 'direct' ? 'Estêvão API' : 'Proper API',
         operation: 'consulta',
         timeoutMs: 30_000,
       },
@@ -233,24 +233,24 @@ export class LiturgicalClient {
   }
 }
 
-/** Consulta se a API do Pregar oferece a degustação (leituras sem conta) e quais datas ela alcança. */
+/** Consulta se a API do Proper oferece a degustação (leituras sem conta) e quais datas ela alcança. */
 export async function fetchPreviewStatus(http: HttpContext, baseURL: string): Promise<PreviewStatus> {
   const url = new URL(`${baseURL.replace(/\/+$/, '')}/v1/public/preview`)
   const response = await loggedRequest(
     http,
     url,
     { method: 'GET', headers: { Accept: 'application/json' } },
-    { integration: 'Pregar API', operation: 'degustação', timeoutMs: 15_000 },
+    { integration: 'Proper API', operation: 'degustação', timeoutMs: 15_000 },
   )
   if (!response.ok) {
     throw new LiturgicalAPIError(
-      `A API do Pregar não informou a degustação (HTTP ${response.status}).`,
+      `A API do Proper não informou a degustação (HTTP ${response.status}).`,
       response.status,
     )
   }
   const json = tryParseJSON<Partial<PreviewStatus>>(response.text())
   if (!json || typeof json.enabled !== 'boolean') {
-    throw new LiturgicalAPIError('A resposta da API do Pregar não corresponde ao formato esperado.')
+    throw new LiturgicalAPIError('A resposta da API do Proper não corresponde ao formato esperado.')
   }
   return {
     enabled: json.enabled,

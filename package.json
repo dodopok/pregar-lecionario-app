@@ -2,7 +2,7 @@
   "name": "pregar-monorepo",
   "private": true,
   "version": "0.1.0",
-  "description": "Pregar: preparação de sermões multiplataforma (desktop Electron), API própria e domínio compartilhado.",
+  "description": "Proper: preparação de sermões multiplataforma (desktop Electron), API própria e domínio compartilhado.",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {

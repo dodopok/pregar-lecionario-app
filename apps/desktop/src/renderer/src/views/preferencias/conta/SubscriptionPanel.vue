@@ -75,7 +75,7 @@ async function cancel(): Promise<void> {
   <div class="subscription">
     <div class="subscription__head">
       <div>
-        <h3 class="subscription__title">Assinatura do Pregar</h3>
+        <h3 class="subscription__title">Assinatura do Proper</h3>
         <p class="subscription__message">{{ sub.statusMessage }}</p>
       </div>
       <span class="status-badge" :class="`status-badge--${tone}`">{{ statusText }}</span>
@@ -114,8 +114,8 @@ async function cancel(): Promise<void> {
       title="Cancelar a assinatura?"
       :message="
         sub.currentPeriodEnd
-          ? `Você continua com acesso até ${endDate}. Depois disso, o Pregar volta ao modo gratuito: as leituras e a revisão por IA passam a usar as suas próprias chaves, se você as salvar. Nenhuma nova cobrança será feita.`
-          : 'Nenhuma nova cobrança será feita. O Pregar volta ao modo gratuito, com as suas próprias chaves.'
+          ? `Você continua com acesso até ${endDate}. Depois disso, o Proper volta ao modo gratuito: as leituras e a revisão por IA passam a usar as suas próprias chaves, se você as salvar. Nenhuma nova cobrança será feita.`
+          : 'Nenhuma nova cobrança será feita. O Proper volta ao modo gratuito, com as suas próprias chaves.'
       "
       confirm-label="Cancelar assinatura"
       cancel-label="Manter assinatura"

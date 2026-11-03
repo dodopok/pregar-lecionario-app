@@ -56,17 +56,17 @@ function escapeHtml(value: string): string {
 
 export function loginCodeEmail(code: string, minutes: number): Omit<EmailMessage, 'to'> {
   const text = [
-    `Seu código para entrar no Pregar: ${code}`,
+    `Seu código para entrar no Proper: ${code}`,
     '',
     `Ele vale por ${minutes} minutos. Digite-o no aplicativo para concluir a entrada.`,
     'Se você não pediu este código, ignore este email; ninguém entra na sua conta sem ele.',
   ].join('\n')
   const html = `<!doctype html><html lang="pt-BR"><body style="font-family:Arial,Helvetica,sans-serif;color:#1f2a24;background:#f6f4ef;padding:24px">
 <div style="max-width:440px;margin:0 auto;background:#ffffff;border-radius:12px;padding:28px">
-<p style="margin:0 0 8px;font-size:15px">Seu código para entrar no Pregar:</p>
+<p style="margin:0 0 8px;font-size:15px">Seu código para entrar no Proper:</p>
 <p style="margin:0 0 20px;font-size:32px;font-weight:700;letter-spacing:6px">${escapeHtml(code)}</p>
 <p style="margin:0 0 8px;font-size:14px;color:#4a5550">Ele vale por ${minutes} minutos. Digite-o no aplicativo para concluir a entrada.</p>
 <p style="margin:0;font-size:13px;color:#6b746f">Se você não pediu este código, ignore este email; ninguém entra na sua conta sem ele.</p>
 </div></body></html>`
-  return { subject: `${code} é seu código do Pregar`, text, html }
+  return { subject: `${code} é seu código do Proper`, text, html }
 }

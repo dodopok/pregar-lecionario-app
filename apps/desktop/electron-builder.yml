@@ -1,7 +1,7 @@
-# Empacotamento do Pregar para macOS, Windows e Linux.
+# Empacotamento do Proper para macOS, Windows e Linux.
 # Todo o código (inclusive dependências) é empacotado pelo electron-vite em out/; o instalador não leva node_modules.
-appId: br.caminhoanglicano.pregar
-productName: Pregar
+appId: br.caminhoanglicano.proper
+productName: Proper
 copyright: Copyright © 2026 Caminho Anglicano
 directories:
   buildResources: resources
@@ -42,8 +42,8 @@ mac:
   extendInfo:
     NSHumanReadableCopyright: Copyright © 2026 Caminho Anglicano
 dmg:
-  artifactName: Pregar-${version}-mac.${ext}
-  title: Pregar ${version}
+  artifactName: Proper-${version}-mac.${ext}
+  title: Proper ${version}
 
 win:
   icon: resources/icon.ico
@@ -51,20 +51,20 @@ win:
     - target: nsis
       arch: [x64, arm64]
   # Assinatura: CSC_LINK/CSC_KEY_PASSWORD (certificado) ou azureSignOptions via variáveis do Azure Trusted Signing.
-  artifactName: Pregar-Setup-${version}-${arch}.${ext}
+  artifactName: Proper-Setup-${version}-${arch}.${ext}
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Pregar
-  uninstallDisplayName: Pregar
+  shortcutName: Proper
+  uninstallDisplayName: Proper
   installerLanguages: [pt_BR, en_US]
   language: '1046'
 
 linux:
-  executableName: pregar
+  executableName: proper
   syncDesktopName: true
   icon: resources/icons
   category: Office
@@ -76,4 +76,4 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
-  artifactName: Pregar-${version}-${arch}.${ext}
+  artifactName: Proper-${version}-${arch}.${ext}

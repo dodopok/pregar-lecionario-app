@@ -93,7 +93,7 @@ export interface AppSettings {
     /** O aviso de degustação (sem conta) foi fechado nesta instalação. */
     previewNoticeDismissed: boolean
   }
-  /** Endereço da API do Pregar (assinatura). Alterável só em Preferências avançadas. */
+  /** Endereço da API do Proper (assinatura). Alterável só em Preferências avançadas. */
   apiBaseURL: string
   updates: { automatic: boolean }
 }

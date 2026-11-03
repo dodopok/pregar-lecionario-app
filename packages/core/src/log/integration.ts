@@ -5,7 +5,7 @@
  * truncado e com segredos removidos. O destino das linhas é injetado por quem usa o core.
  */
 
-export type IntegrationName = 'Estêvão API' | 'IA' | 'Fontes favoritas' | 'Google Drive' | 'Pregar API' | 'Asaas'
+export type IntegrationName = 'Estêvão API' | 'IA' | 'Fontes favoritas' | 'Google Drive' | 'Proper API' | 'Asaas'
 
 export type IntegrationLevel = 'OK' | 'AVISO' | 'ERRO'
 

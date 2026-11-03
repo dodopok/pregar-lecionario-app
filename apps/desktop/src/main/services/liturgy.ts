@@ -15,7 +15,7 @@ const PREVIEW_STATUS_TTL = 6 * HOUR
 
 /**
  * Leituras e calendário. Assinantes usam o proxy do servidor (sem chave); no plano gratuito, a chave
- * própria da Estêvão API; sem nenhum dos dois, a degustação pública da API do Pregar (janela de
+ * própria da Estêvão API; sem nenhum dos dois, a degustação pública da API do Proper (janela de
  * datas limitada). Respostas ficam em cache local e servem de reserva quando não há rede.
  */
 export class LiturgyService {
@@ -34,7 +34,7 @@ export class LiturgyService {
     const { account, secrets, settings } = this.deps
     const state = account.current()
     if (state.loggedIn && state.account?.features.estevaoProxy && !settings().ai.preferOwnKeys) {
-      return { mode: 'proxy', message: 'Leituras pela sua assinatura do Pregar.' }
+      return { mode: 'proxy', message: 'Leituras pela sua assinatura do Proper.' }
     }
     if (secrets.get('estevao')) return { mode: 'direct', message: 'Leituras com a sua chave da Estêvão API.' }
     const preview = this.previewStatus()
@@ -47,7 +47,7 @@ export class LiturgyService {
     }
     return {
       mode: 'none',
-      message: 'Para carregar o calendário e as leituras, assine o Pregar ou salve a sua chave da Estêvão API nas Preferências.',
+      message: 'Para carregar o calendário e as leituras, assine o Proper ou salve a sua chave da Estêvão API nas Preferências.',
     }
   }
 
@@ -58,7 +58,7 @@ export class LiturgyService {
   }
 
   /**
-   * Consulta a API do Pregar sobre a degustação (no início e a cada 6 h). Devolve verdadeiro quando
+   * Consulta a API do Proper sobre a degustação (no início e a cada 6 h). Devolve verdadeiro quando
    * o modo de acesso mudou, para as janelas atualizarem o estado.
    */
   async refreshPreviewStatus(force = false): Promise<boolean> {

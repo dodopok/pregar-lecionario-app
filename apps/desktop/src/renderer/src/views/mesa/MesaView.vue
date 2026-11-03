@@ -134,7 +134,7 @@ const driveLabel = computed(() => {
 const windowTitle = computed(
   () => mesa.record?.mainReadingReference || mesa.occasion || 'Preparação do sermão',
 )
-watch(windowTitle, (title) => void invoke('app:setTitle', { title: `${title} · Pregar` }), {
+watch(windowTitle, (title) => void invoke('app:setTitle', { title: `${title} · Proper` }), {
   immediate: true,
 })
 

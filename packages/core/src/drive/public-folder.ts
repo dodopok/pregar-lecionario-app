@@ -300,7 +300,7 @@ function publicAPIError(response: LoggedResponse): GoogleDriveError {
 
 // MARK: - Importador
 
-/** Pasta das cópias locais, relativa à pasta de dados do app (Application Support/Pregar no macOS). */
+/** Pasta das cópias locais, relativa à pasta de dados do app (Application Support/Proper no macOS). */
 export const PUBLIC_DRIVE_IMPORT_DIRECTORY = ['Library', 'Google Drive'] as const
 
 /** Grava arquivos para o importador; o core não acessa o sistema de arquivos. */

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Quem recebe o pedido de IA: assinatura do Pregar (com a cota restante), chave própria
+ * Quem recebe o pedido de IA: assinatura do Proper (com a cota restante), chave própria
  * (provedor · modelo) ou nenhum acesso, com o caminho para as Preferências.
  */
 import { computed } from 'vue'

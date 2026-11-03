@@ -35,7 +35,7 @@ O que não muda: a Estêvão API em Rails, o contrato da revisão, os critérios
 
 Electron com Vue 3 e TypeScript, porque o Leitor exige um Chromium embutido e igual nos três sistemas, e porque Vue e Rails já são a stack do lecionário e da API. O custo é um binário de 150 a 250 MB e disciplina de segurança; o primeiro não importa para leigos, o segundo está resolvido na seção 4.
 
-| Opção | O que resolve | Onde falha para o Pregar | Veredito |
+| Opção | O que resolve | Onde falha para o Proper | Veredito |
 | --- | --- | --- | --- |
 | Electron + Vue 3 | Chromium igual nos três sistemas; WebContentsView para abas de sites; PDF.js; assinatura de código e auto-update maduros; tudo em TypeScript | Binário grande; exige contextIsolation, sandbox e sessão separada para páginas de terceiros | Recomendado |
 | Tauri 2 + Vue 3 | Binário pequeno; seguro por padrão | Webview do sistema: WebKitGTK antigo no Linux e renderização diferente por sistema; múltiplos webviews ainda instáveis; parte nativa em Rust | Só se tamanho for prioridade |
@@ -94,7 +94,7 @@ Estimativas grosseiras, assumindo uma pessoa em dedicação integral. Em meio pe
 | --- | --- | --- | --- |
 | 0 · Provas de conceito | 1 a 2 semanas | TipTap com nota de rodapé, citação em bloco e ids de bloco estáveis, exportando HTML; PDF.js abrindo Wright na física 102 e Feasting A/4 na 96, com texto e sumário; WebContentsView com abas, voltar/avançar e posição restaurada | As três provas passam os critérios já descritos em `docs/analises` |
 | 1 · Backend | 3 a 5 semanas | Rails: contas, planos, direitos de uso, chave da Estêvão API por conta, webhook de pagamento. Proxy: revisão, perguntas e pesquisa com o contrato atual, cotas, log só de metadados. Cliente OAuth único submetido à verificação do Google | Revisão pelo proxy desconta a cota; BYOK intocado |
-| 2 · Mac atual ligado ao backend | 1 a 2 semanas | No app Swift: login, provedor Pregar ao lado dos quatro, Drive pelo cliente único, exportador HTML de manuscritos e histórico. Depois disso, só correções no Swift | Um mês pagando e usando a própria assinatura |
+| 2 · Mac atual ligado ao backend | 1 a 2 semanas | No app Swift: login, provedor Proper ao lado dos quatro, Drive pelo cliente único, exportador HTML de manuscritos e histórico. Depois disso, só correções no Swift | Um mês pagando e usando a própria assinatura |
 | 3 · Cliente novo em Electron | 3 a 4 meses | 3a core em TypeScript com os testes portados; 3b Mesa, calendário, leituras, editor, histórico e painel de revisão; 3c biblioteca, indexação e Leitor; 3d Drive, tablet, backup e importador; 3e assinatura de código, instaladores e auto-update nos três sistemas. Beta com dois ou três pastores no Windows a partir de 3b | Uma preparação real completa no Windows, sem voltar ao Mac |
 | 4 · Lançamento | 2 a 4 semanas | Migração guiada pelo backup, lançamento, app Swift só em manutenção. Versão leve no navegador apenas se decidido | App Swift aposentado |
 
@@ -143,7 +143,7 @@ Nenhuma bloqueia a fase 0.
 - [ ] Preço e cota do plano, depois de medir o custo real por revisão.
 - [ ] Versão leve no navegador: sim ou não.
 - [ ] Manter o app Swift depois da paridade? Recomendação: não.
-- [ ] Nome e marca: Pregar como produto próprio ou dentro do Caminho Anglicano.
+- [ ] Nome e marca: Proper como produto próprio ou dentro do Caminho Anglicano.
 - [ ] Linux no lançamento ou depois?
 
 ## 10. Decisões de execução

@@ -1,4 +1,4 @@
-// API do Pregar falsa para testes ponta a ponta: login, conta assinante, proxy da Estêvão e IA.
+// API do Proper falsa para testes ponta a ponta: login, conta assinante, proxy da Estêvão e IA.
 import { createServer } from 'node:http'
 
 const key = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`

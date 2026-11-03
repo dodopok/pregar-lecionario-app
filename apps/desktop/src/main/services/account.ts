@@ -9,7 +9,7 @@ import { PregarAPIError } from './pregar-api'
 const ACCOUNT_CACHE_KEY = 'account'
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000
 
-/** Conta do Pregar: login por código, estado da assinatura e uso. Guarda a última resposta para uso offline. */
+/** Conta do Proper: login por código, estado da assinatura e uso. Guarda a última resposta para uso offline. */
 export class AccountService {
   private state: AccountState
   private lastRefresh = 0
@@ -88,7 +88,7 @@ export class AccountService {
   async verifyLogin(email: string, code: string): Promise<AccountState> {
     const platform = process.platform === 'darwin' || process.platform === 'win32' ? process.platform : 'linux'
     const result = await this.api.request<{ token: string }>('POST', '/v1/auth/verify', {
-      body: { email, code, deviceName: `Pregar · ${hostname().slice(0, 60)}`, platform },
+      body: { email, code, deviceName: `Proper · ${hostname().slice(0, 60)}`, platform },
       auth: false,
       operation: 'login · confirmação',
     })

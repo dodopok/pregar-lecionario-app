@@ -225,7 +225,7 @@ export class BillingService {
         })
         .returningAll()
         .executeTakeFirstOrThrow()
-      const description = input.cycle === 'yearly' ? 'Pregar · plano anual' : 'Pregar · plano mensal'
+      const description = input.cycle === 'yearly' ? 'Proper · plano anual' : 'Proper · plano mensal'
       if (config.BILLING_PIX_MODE === 'pix_automatico') {
         const authorization = await asaas.createPixAutomaticAuthorization({
           customerId,

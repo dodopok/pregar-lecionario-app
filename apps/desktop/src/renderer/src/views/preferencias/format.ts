@@ -215,7 +215,7 @@ export function isHttpsURL(value: string): boolean {
   }
 }
 
-/** Valida o endereço da API do Pregar. Vazio usa o padrão; http só em 127.0.0.1/localhost. */
+/** Valida o endereço da API do Proper. Vazio usa o padrão; http só em 127.0.0.1/localhost. */
 export function validateApiBaseURL(value: string): string | null {
   const trimmed = value.trim()
   if (!trimmed) return null

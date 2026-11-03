@@ -1,6 +1,6 @@
 # Autoria e validação da revisão com IA
 
-O Pregar usa a IA para analisar o sermão existente e fazer perguntas que ajudem o autor a esclarecer o que escreveu. A IA não deve escrever, completar ou propor conteúdo para o sermão. O aplicativo nunca aplica suas respostas ao manuscrito.
+O Proper usa a IA para analisar o sermão existente e fazer perguntas que ajudem o autor a esclarecer o que escreveu. A IA não deve escrever, completar ou propor conteúdo para o sermão. O aplicativo nunca aplica suas respostas ao manuscrito.
 
 Essa regra de comportamento é explicada nas instruções compartilhadas pela revisão e pelas perguntas, com exemplos de crítica pertinente e de coautoria, inclusive sugestões disfarçadas de perguntas. Não há lista de palavras proibidas, comparação de vocabulário, classificação gramatical nem três moldes fixos de pergunta.
 

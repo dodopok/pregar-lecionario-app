@@ -32,7 +32,7 @@ Sem os certificados, o script ainda gera os instaladores, mas sem assinatura. No
 
 ## Google Drive
 
-Crie no Google Cloud um cliente OAuth do tipo "App para computador", com o escopo `drive.file`, e preencha a tela de consentimento (nome Pregar, links de privacidade e termos da API: `/legal/privacidade` e `/legal/termos`). Como o escopo é restrito aos arquivos criados pelo app, a verificação do Google é a simples. O login usa PKCE com retorno em `127.0.0.1`, sem servidor do Pregar no meio.
+Crie no Google Cloud um cliente OAuth do tipo "App para computador", com o escopo `drive.file`, e preencha a tela de consentimento (nome Proper, links de privacidade e termos da API: `/legal/privacidade` e `/legal/termos`). Como o escopo é restrito aos arquivos criados pelo app, a verificação do Google é a simples. O login usa PKCE com retorno em `127.0.0.1`, sem servidor do Proper no meio.
 
 ## Verificação
 

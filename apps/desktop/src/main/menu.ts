@@ -24,17 +24,17 @@ export function buildMenu(actions: MenuActions): void {
           {
             label: app.name,
             submenu: [
-              { role: 'about', label: 'Sobre o Pregar' },
+              { role: 'about', label: 'Sobre o Proper' },
               { type: 'separator' },
               { label: 'Preferências…', accelerator: 'Cmd+,', click: () => actions.openWindow('preferencias') },
               { type: 'separator' },
               { role: 'services', label: 'Serviços' },
               { type: 'separator' },
-              { role: 'hide', label: 'Ocultar Pregar' },
+              { role: 'hide', label: 'Ocultar Proper' },
               { role: 'hideOthers', label: 'Ocultar outros' },
               { role: 'unhide', label: 'Mostrar tudo' },
               { type: 'separator' },
-              { role: 'quit', label: 'Sair do Pregar' },
+              { role: 'quit', label: 'Sair do Proper' },
             ],
           } satisfies MenuItemConstructorOptions,
         ]

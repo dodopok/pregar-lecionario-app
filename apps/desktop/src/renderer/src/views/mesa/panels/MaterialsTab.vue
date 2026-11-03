@@ -123,7 +123,7 @@ const emptyMessage = computed(() => {
 })
 const researchHelp = computed(() =>
   researchAccess.value?.mode === 'pro'
-    ? 'Usa a sua assinatura do Pregar (conta como uma pesquisa de materiais). Envia somente passagem e ocasião; o manuscrito não é enviado.'
+    ? 'Usa a sua assinatura do Proper (conta como uma pesquisa de materiais). Envia somente passagem e ocasião; o manuscrito não é enviado.'
     : 'Usa o provedor de pesquisa escolhido. Envia somente passagem e ocasião; o manuscrito não é enviado. O provedor pode cobrar a busca.',
 )
 

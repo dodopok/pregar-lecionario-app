@@ -375,7 +375,7 @@ function openLibrary(): void {
 // Título da janela acompanha a aba.
 watch(
   () => tab.value?.title,
-  (title) => void invoke('app:setTitle', { title: title ? `${title} · Leitor` : 'Leitor · Pregar' }).catch(() => undefined),
+  (title) => void invoke('app:setTitle', { title: title ? `${title} · Leitor` : 'Leitor · Proper' }).catch(() => undefined),
   { immediate: true },
 )
 

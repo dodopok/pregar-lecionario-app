@@ -117,17 +117,17 @@ onMounted(() => void ensureDriveStatus())
 
       <template v-else>
         <p class="drive__muted">
-          A autorização abre no navegador padrão e retorna para o Pregar. O token de renovação fica no cofre
+          A autorização abre no navegador padrão e retorna para o Proper. O token de renovação fica no cofre
           de senhas do sistema.
         </p>
       </template>
 
-      <section v-if="driveStatus && available" class="card drive__scope" aria-label="O que o Pregar acessa">
-        <SectionLabel title="O que o Pregar acessa" />
+      <section v-if="driveStatus && available" class="card drive__scope" aria-label="O que o Proper acessa">
+        <SectionLabel title="O que o Proper acessa" />
         <p class="drive__scope-text">
           <ShieldCheck :size="14" aria-hidden="true" />
           <span>
-            Só o acesso <strong>drive.file</strong>: o Pregar enxerga apenas os documentos que ele mesmo cria
+            Só o acesso <strong>drive.file</strong>: o Proper enxerga apenas os documentos que ele mesmo cria
             — a cópia de cada sermão e o documento de ideias. Seus outros arquivos do Drive ficam fora do
             alcance do app.
           </span>

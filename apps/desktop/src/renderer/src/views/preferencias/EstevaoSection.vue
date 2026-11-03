@@ -122,7 +122,7 @@ onMounted(loadCatalogues)
 <template>
   <div class="section-stack">
     <Notice v-if="viaSubscription" tone="success" title="As leituras vêm da sua assinatura">
-      Calendário, leituras e textos bíblicos chegam pelo servidor do Pregar. Você não precisa de chave. O livro de oração, a tradução e o
+      Calendário, leituras e textos bíblicos chegam pelo servidor do Proper. Você não precisa de chave. O livro de oração, a tradução e o
       idioma abaixo continuam valendo.
     </Notice>
     <Notice v-else-if="subscriptionAvailable" tone="info">
@@ -159,7 +159,7 @@ onMounted(loadCatalogues)
       </PrefGroup>
 
       <Notice v-if="vaultMissing" tone="warning" title="Cofre de senhas indisponível">
-        O Pregar guarda chaves no cofre de senhas do sistema. Instale o gnome-keyring (ou o KWallet) e abra o Pregar de novo.
+        O Proper guarda chaves no cofre de senhas do sistema. Instale o gnome-keyring (ou o KWallet) e abra o Proper de novo.
       </Notice>
       <Notice v-if="result" :tone="result.tone">{{ result.text }}</Notice>
 
@@ -169,7 +169,7 @@ onMounted(loadCatalogues)
           Não tem chave?
           <a href="#" @click.prevent="openExternal(ESTEVAO_SITE)">Peça a sua no site da Estêvão API<ExternalLink :size="11" aria-hidden="true" class="help__icon" /></a>.
           <template v-if="!subscriptionAvailable">
-            Prefere não lidar com chaves? <RouterLink to="/preferencias/conta" replace>Assine o Pregar</RouterLink>.
+            Prefere não lidar com chaves? <RouterLink to="/preferencias/conta" replace>Assine o Proper</RouterLink>.
           </template>
         </p>
       </div>

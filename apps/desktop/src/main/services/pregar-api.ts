@@ -3,7 +3,7 @@ import type { HttpContext } from '@pregar/core/util/http'
 import { PREGAR_API_DEFAULT_URL } from '@pregar/core/plans/contract'
 import type { APIErrorBody } from '@pregar/core/plans/contract'
 
-/** Erro vindo da API do Pregar, com mensagem pronta para a interface. */
+/** Erro vindo da API do Proper, com mensagem pronta para a interface. */
 export class PregarAPIError extends Error {
   constructor(
     message: string,
@@ -21,7 +21,7 @@ export function resolveAPIBaseURL(configured: string): string {
   const url = new URL(candidate)
   // Só https, exceto servidor local de desenvolvimento.
   if (url.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(url.hostname)) {
-    throw new Error('O endereço da API do Pregar precisa usar https.')
+    throw new Error('O endereço da API do Proper precisa usar https.')
   }
   return url.toString().replace(/\/+$/, '')
 }
@@ -38,7 +38,7 @@ export class PregarAPIClient {
     path: string,
     options: { body?: unknown; auth?: boolean; timeoutMs?: number; signal?: AbortSignal; operation?: string } = {},
   ): Promise<T> {
-    const headers: Record<string, string> = { Accept: 'application/json', 'User-Agent': 'Pregar-Desktop' }
+    const headers: Record<string, string> = { Accept: 'application/json', 'User-Agent': 'Proper-Desktop' }
     const token = this.token()
     if (options.auth !== false) {
       if (!token) throw new PregarAPIError('Entre na sua conta para continuar.', 401, 'unauthorized')
@@ -52,18 +52,18 @@ export class PregarAPIClient {
         { ...context, signal: options.signal ?? context.signal },
         `${this.baseURL()}${path}`,
         { method, headers, body: options.body === undefined ? undefined : JSON.stringify(options.body) },
-        { integration: 'Pregar API', operation: options.operation ?? `${method} ${path.split('?')[0]}`, timeoutMs: options.timeoutMs ?? 30_000 },
+        { integration: 'Proper API', operation: options.operation ?? `${method} ${path.split('?')[0]}`, timeoutMs: options.timeoutMs ?? 30_000 },
       )
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') throw error
-      throw new PregarAPIError('Sem conexão com o servidor do Pregar. Confira a internet e tente de novo.', 0, 'offline')
+      throw new PregarAPIError('Sem conexão com o servidor do Proper. Confira a internet e tente de novo.', 0, 'offline')
     }
     if (response.status === 204) return undefined as T
     const body = tryParseJSON<unknown>(response.text())
     if (!response.ok) {
       const error = (body as APIErrorBody | undefined)?.error
       throw new PregarAPIError(
-        error?.message ?? `O servidor do Pregar respondeu com erro (HTTP ${response.status}).`,
+        error?.message ?? `O servidor do Proper respondeu com erro (HTTP ${response.status}).`,
         response.status,
         error?.code ?? 'http_error',
         error?.details,

@@ -82,8 +82,8 @@ onBeforeUnmount(() => unsubscribe?.())
             <template v-else>Não conectado</template>
           </span>
           <span class="drive__message">
-            <template v-if="unavailable">A conexão com o Google Drive chega numa próxima atualização do Pregar.</template>
-            <template v-else>{{ status?.message || (status?.available ? '' : 'O Google Drive não está configurado nesta instalação do Pregar.') }}</template>
+            <template v-if="unavailable">A conexão com o Google Drive chega numa próxima atualização do Proper.</template>
+            <template v-else>{{ status?.message || (status?.available ? '' : 'O Google Drive não está configurado nesta instalação do Proper.') }}</template>
           </span>
           <PButton v-if="status?.ideasDocumentURL" variant="link" compact class="drive__link" @click="openExternal(status.ideasDocumentURL)">
             Abrir o documento de ideias <ExternalLink :size="11" aria-hidden="true" />
@@ -100,13 +100,13 @@ onBeforeUnmount(() => unsubscribe?.())
     </PrefGroup>
 
     <p v-if="busy && !status?.connected" class="help" role="status">
-      O navegador vai abrir a página do Google. Escolha a sua conta, autorize o Pregar e volte para cá.
+      O navegador vai abrir a página do Google. Escolha a sua conta, autorize o Proper e volte para cá.
     </p>
     <Notice v-if="error" tone="error">{{ error }}</Notice>
 
-    <PrefGroup label="O que o Pregar pode ver">
+    <PrefGroup label="O que o Proper pode ver">
       <ul class="facts">
-        <li><ShieldCheck :size="15" aria-hidden="true" />O Pregar só vê os arquivos que ele mesmo criou no seu Drive (permissão “drive.file” do Google).</li>
+        <li><ShieldCheck :size="15" aria-hidden="true" />O Proper só vê os arquivos que ele mesmo criou no seu Drive (permissão “drive.file” do Google).</li>
         <li><ShieldCheck :size="15" aria-hidden="true" />Ele não lê, não lista e não apaga os outros arquivos do seu Drive.</li>
         <li><CircleCheck :size="15" aria-hidden="true" />Você pode desconectar quando quiser, aqui ou na sua Conta Google.</li>
       </ul>

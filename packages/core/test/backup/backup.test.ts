@@ -157,7 +157,7 @@ describe('backup: criação e restauração', () => {
   it('restaura sermão, histórico, Biblioteca, Leitor e preferências seguras', async () => {
     const { disk, created, pkg } = await makeBackup()
 
-    expect(created.folderName).toBe('Pregar Backup 2026-11-01 14.05.09')
+    expect(created.folderName).toBe('Proper Backup 2026-11-01 14.05.09')
     expect(disk.files().some((path) => path.includes('.pregar-backup-'))).toBe(false)
 
     const contents = await validateBackup(pkg)

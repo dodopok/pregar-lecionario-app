@@ -54,7 +54,7 @@ const filtered = computed(() => filterPrayerBooks(props.books, query.value))
           :message="
             hasAccess
               ? (error ?? 'Não foi possível carregar os livros agora.')
-              : 'Salve sua chave da API nas Preferências (ou assine o Pregar) para carregar os livros disponíveis.'
+              : 'Salve sua chave da API nas Preferências (ou assine o Proper) para carregar os livros disponíveis.'
           "
         >
           <PButton v-if="hasAccess" compact :disabled="loading" @click="emit('retry')">Tentar novamente</PButton>

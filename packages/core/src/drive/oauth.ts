@@ -156,8 +156,8 @@ export function isRejectedRefreshToken(error: unknown): boolean {
 // MARK: - Retorno por loopback
 
 export const GOOGLE_LOOPBACK_SUCCESS_TEXT =
-  'Authorization received. You may close this page and return to Pregar.'
-export const GOOGLE_LOOPBACK_NOT_FOUND_TEXT = 'Return to Pregar.'
+  'Authorization received. You may close this page and return to Proper.'
+export const GOOGLE_LOOPBACK_NOT_FOUND_TEXT = 'Return to Proper.'
 
 export interface LoopbackResponse {
   status: 200 | 404
@@ -170,7 +170,7 @@ export interface LoopbackResponse {
 }
 
 export function loopbackPage(body: string): string {
-  return `<!doctype html><html><meta charset="utf-8"><title>Pregar</title><body style="font:16px -apple-system,sans-serif;padding:3rem">${body}</body></html>`
+  return `<!doctype html><html><meta charset="utf-8"><title>Proper</title><body style="font:16px -apple-system,sans-serif;padding:3rem">${body}</body></html>`
 }
 
 function decodeQueryComponent(value: string): string {

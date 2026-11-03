@@ -2,7 +2,7 @@
   "name": "@pregar/core",
   "version": "0.1.0",
   "private": true,
-  "description": "Domínio compartilhado do Pregar: referências bíblicas, Estêvão API, revisão por IA, fontes, Drive, histórico, backup e índice de PDFs.",
+  "description": "Domínio compartilhado do Proper: referências bíblicas, Estêvão API, revisão por IA, fontes, Drive, histórico, backup e índice de PDFs.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

@@ -55,11 +55,11 @@ const researchModels = computed(() =>
 
 /** Resumo local, usado quando o canal ai:access ainda não existe. */
 function localAccess(purpose: 'review' | 'research'): { label: string; message: string; mode: AIAccess['mode'] } {
-  if (usingSubscription.value) return { mode: 'pro', label: 'Assinatura do Pregar', message: 'Sem chave: a assinatura cuida de tudo.' }
+  if (usingSubscription.value) return { mode: 'pro', label: 'Assinatura do Proper', message: 'Sem chave: a assinatura cuida de tudo.' }
   const provider = purpose === 'review' ? ai.value.reviewProvider : ai.value.researchProvider
   const model = purpose === 'review' ? ai.value.reviewModel : ai.value.researchModel
   if (hasKey(provider)) return { mode: 'byok', label: `${providerName(provider)} · ${model}`, message: 'Com a sua chave, direto no provedor.' }
-  return { mode: 'none', label: 'Indisponível', message: `Salve a chave do ${providerName(provider)} ou assine o Pregar.` }
+  return { mode: 'none', label: 'Indisponível', message: `Salve a chave do ${providerName(provider)} ou assine o Proper.` }
 }
 
 const summary = computed(() =>
@@ -165,16 +165,16 @@ onMounted(() => {
       <section class="mode" :class="{ 'mode--active': usingSubscription }" aria-labelledby="mode-pro">
         <div class="mode__icon" aria-hidden="true"><Sparkles :size="16" /></div>
         <h3 id="mode-pro" class="mode__title">Com a assinatura</h3>
-        <p class="mode__text">O Pregar cuida das chaves. O texto passa pelo servidor do Pregar só para a revisão e não fica guardado lá.</p>
+        <p class="mode__text">O Proper cuida das chaves. O texto passa pelo servidor do Proper só para a revisão e não fica guardado lá.</p>
         <span v-if="usingSubscription" class="mode__state">Em uso</span>
-        <RouterLink v-else-if="!proAvailable" class="mode__link" to="/preferencias/conta" replace>Assinar o Pregar</RouterLink>
+        <RouterLink v-else-if="!proAvailable" class="mode__link" to="/preferencias/conta" replace>Assinar o Proper</RouterLink>
         <span v-else class="mode__state mode__state--off">Disponível na sua conta</span>
       </section>
       <section class="mode" :class="{ 'mode--active': !usingSubscription && anyKey }" aria-labelledby="mode-byok">
         <div class="mode__icon" aria-hidden="true"><UserRound :size="16" /></div>
         <h3 id="mode-byok" class="mode__title">Com suas chaves (grátis)</h3>
         <p class="mode__text">
-          Você cria uma chave num provedor e paga a ele direto pelo uso. O texto vai do seu computador ao provedor, sem passar pelo Pregar.
+          Você cria uma chave num provedor e paga a ele direto pelo uso. O texto vai do seu computador ao provedor, sem passar pelo Proper.
         </p>
         <template v-if="!usingSubscription">
           <span v-if="anyKey" class="mode__state">Em uso</span>
@@ -242,7 +242,7 @@ onMounted(() => {
       </div>
     </PrefGroup>
     <Notice v-if="vaultMissing" tone="warning" title="Cofre de senhas indisponível">
-      O Pregar guarda chaves no cofre de senhas do sistema. Instale o gnome-keyring (ou o KWallet) e abra o Pregar de novo.
+      O Proper guarda chaves no cofre de senhas do sistema. Instale o gnome-keyring (ou o KWallet) e abra o Proper de novo.
     </Notice>
 
     <PrefGroup label="Revisão e pesquisa">

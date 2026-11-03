@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Conectar o Pregar: dois caminhos claros (assinar ou usar as próprias chaves) e "Decidir depois".
+ * Conectar o Proper: dois caminhos claros (assinar ou usar as próprias chaves) e "Decidir depois".
  * Abre pelo trilho, pelo fim do tour ou quando uma ação precisa de conta; a escolha fica salva em
  * `settings.onboarding` e o evento `close` avisa quem a mostrou.
  */
@@ -160,7 +160,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Sheet label="Conectar o Pregar" :width="680" @close="emit('close', 'later')">
+  <Sheet label="Conectar o Proper" :width="680" @close="emit('close', 'later')">
     <div ref="body" class="onboarding">
       <button type="button" class="onboarding__close" aria-label="Fechar" @click="emit('close', 'later')">
         <X :size="15" />
@@ -170,7 +170,7 @@ onMounted(async () => {
         <header class="onboarding__welcome">
           <div class="onboarding__mark" aria-hidden="true">P</div>
           <div>
-            <h2 class="onboarding__title" tabindex="-1">Conectar o Pregar</h2>
+            <h2 class="onboarding__title" tabindex="-1">Conectar o Proper</h2>
             <p class="onboarding__lead">
               Calendário litúrgico, leituras do domingo, a sua biblioteca e uma revisão cuidadosa por IA, num
               só lugar.
@@ -182,7 +182,7 @@ onMounted(async () => {
           {{ statusLine }}
         </p>
         <p class="onboarding__question">
-          Para buscar as leituras de qualquer data e revisar o texto, o Pregar precisa se conectar. Como você
+          Para buscar as leituras de qualquer data e revisar o texto, o Proper precisa se conectar. Como você
           prefere?
         </p>
 
@@ -190,7 +190,7 @@ onMounted(async () => {
           <section class="path path--recommended" aria-labelledby="path-pro">
             <span class="path__badge">Recomendado</span>
             <div class="path__icon" aria-hidden="true"><Sparkles :size="18" /></div>
-            <h3 id="path-pro" class="path__title">Assinar o Pregar</h3>
+            <h3 id="path-pro" class="path__title">Assinar o Proper</h3>
             <p class="path__text">
               O mais simples: não precisa configurar nada. Leituras, Bíblia e revisão por IA funcionam só com
               o seu email.
@@ -203,7 +203,7 @@ onMounted(async () => {
               </li>
             </ul>
             <PButton variant="primary" class="path__action" :busy="finishing === 'pro'" @click="finish('pro')"
-              >Assinar o Pregar</PButton
+              >Assinar o Proper</PButton
             >
             <span class="path__hint">Já assina? O mesmo botão leva ao login.</span>
           </section>
@@ -212,12 +212,12 @@ onMounted(async () => {
             <div class="path__icon" aria-hidden="true"><KeyRound :size="18" /></div>
             <h3 id="path-byok" class="path__title">Usar minhas próprias chaves (grátis)</h3>
             <p class="path__text">
-              Para quem já tem ou quer criar chaves de API. O Pregar é gratuito; você paga direto ao provedor
+              Para quem já tem ou quer criar chaves de API. O Proper é gratuito; você paga direto ao provedor
               de IA pelo que usar.
             </p>
             <ul class="path__list">
               <li><Check :size="13" aria-hidden="true" />Dois passos curtos, com links</li>
-              <li><Check :size="13" aria-hidden="true" />O texto não passa pelo Pregar</li>
+              <li><Check :size="13" aria-hidden="true" />O texto não passa pelo Proper</li>
             </ul>
             <PButton class="path__action" @click="go('estevao')">Configurar minhas chaves</PButton>
           </section>
@@ -347,7 +347,7 @@ onMounted(async () => {
           <CircleCheck v-if="aiResult.ok" :size="14" aria-hidden="true" />{{ aiResult.text }}
         </p>
         <p class="onboarding__note">
-          Sem chave de IA, o Pregar funciona normalmente; só a revisão fica desligada.
+          Sem chave de IA, o Proper funciona normalmente; só a revisão fica desligada.
         </p>
         <footer class="onboarding__footer">
           <PButton variant="ghost" @click="go('estevao')"
@@ -387,7 +387,7 @@ onMounted(async () => {
           </li>
         </ul>
         <p class="onboarding__lead">
-          Você pode completar ou trocar as chaves quando quiser em Preferências, ou assinar o Pregar e não
+          Você pode completar ou trocar as chaves quando quiser em Preferências, ou assinar o Proper e não
           usar chaves.
         </p>
         <footer class="onboarding__footer">

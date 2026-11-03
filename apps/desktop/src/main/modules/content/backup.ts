@@ -223,7 +223,7 @@ export function registerBackup(context: MainContext): void {
   })
 
   handle('backup:restore', async (_request, event) => {
-    const folder = await chooseFolder('Escolha a pasta do backup do Pregar', event.sender)
+    const folder = await chooseFolder('Escolha a pasta do backup do Proper', event.sender)
     if (!folder) return { restored: false, message: 'Nenhum backup escolhido.' }
     return restoreFrom(folder, false)
   })

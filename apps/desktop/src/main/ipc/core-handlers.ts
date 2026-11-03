@@ -70,7 +70,7 @@ export function registerCoreHandlers(context: MainContext): void {
     if (!context.secrets.encryptionAvailable && process.platform === 'linux') {
       // Sem libsecret/kwallet, o Electron não cifra; avisamos em vez de gravar em texto puro silenciosamente.
       throw new UserFacingError(
-        'O cofre de senhas do sistema não está disponível. Instale o gnome-keyring (ou KWallet) e abra o Pregar de novo para salvar chaves.',
+        'O cofre de senhas do sistema não está disponível. Instale o gnome-keyring (ou KWallet) e abra o Proper de novo para salvar chaves.',
       )
     }
     context.secrets.set(parsed, text)

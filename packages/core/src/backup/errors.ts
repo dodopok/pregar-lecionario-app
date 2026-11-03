@@ -19,13 +19,13 @@ export class BackupError extends Error {
   }
 
   static invalidPackage(cause?: unknown): BackupError {
-    return new BackupError('invalidPackage', 'Esta pasta não contém um backup válido do Pregar.', { cause })
+    return new BackupError('invalidPackage', 'Esta pasta não contém um backup válido do Proper.', { cause })
   }
 
   static unsupportedVersion(): BackupError {
     return new BackupError(
       'unsupportedVersion',
-      'A versão deste backup não é compatível com esta versão do Pregar.',
+      'A versão deste backup não é compatível com esta versão do Proper.',
     )
   }
 

@@ -119,7 +119,7 @@ onMounted(load)
 
 <template>
   <div class="section-stack">
-    <Notice v-if="readOnly" tone="info">Mostrando as fontes iniciais. A edição chega numa próxima atualização do Pregar.</Notice>
+    <Notice v-if="readOnly" tone="info">Mostrando as fontes iniciais. A edição chega numa próxima atualização do Proper.</Notice>
     <Notice v-if="loadError" tone="error">
       {{ loadError }}
       <template #actions><PButton compact @click="load">Tentar de novo</PButton></template>
@@ -208,7 +208,7 @@ onMounted(load)
     <ConfirmSheet
       v-if="resetting"
       title="Voltar às fontes iniciais?"
-      message="Os sites e autores que você adicionou ou alterou serão substituídos pelos perfis iniciais do Pregar: Working Preacher, Anglican Compass, My Pastoral Ponderings, Ponderings on a Faith Journey e seis autores."
+      message="Os sites e autores que você adicionou ou alterou serão substituídos pelos perfis iniciais do Proper: Working Preacher, Anglican Compass, My Pastoral Ponderings, Ponderings on a Faith Journey e seis autores."
       confirm-label="Voltar às iniciais"
       :busy="saving"
       @confirm="resetDefaults"

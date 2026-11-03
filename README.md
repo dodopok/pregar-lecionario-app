@@ -1,4 +1,4 @@
-# Pregar
+# Proper
 
 App para preparar sermões no Windows, macOS e Linux: calendário do LOC 2027 com as leituras do dia, Bíblia comparativa, editor de manuscrito em texto rico, biblioteca de comentários em PDF, leitor de PDFs e sites, revisão por IA, modo ensaio e cópia para o tablet via PDF ou Google Docs.
 
@@ -7,8 +7,8 @@ Há dois jeitos de usar:
 | | Gratuito | Pro (assinatura Pix) |
 | --- | --- | --- |
 | Conta | Não precisa | Login por código no email |
-| Leituras e Bíblia | Com a sua chave da Estêvão API | Pela API do Pregar, sem chave |
-| Revisão, perguntas e pesquisa por IA | Com as suas chaves (OpenAI, Anthropic, Google, Perplexity) | Pela API do Pregar, sem chave, com limites mensais |
+| Leituras e Bíblia | Com a sua chave da Estêvão API | Pela API do Proper, sem chave |
+| Revisão, perguntas e pesquisa por IA | Com as suas chaves (OpenAI, Anthropic, Google, Perplexity) | Pela API do Proper, sem chave, com limites mensais |
 | Manuscritos | Só no computador | Só no computador (a API não guarda manuscritos) |
 
 O assinante pode continuar usando as próprias chaves se preferir (Preferências › Inteligência artificial). Limites, preço e cobrança estão em [docs/assinatura-pix.md](docs/assinatura-pix.md).
@@ -28,7 +28,7 @@ apps/desktop/       app Electron + Vue 3
   src/preload/        ponte mínima e tipada entre a interface e o processo principal
   src/renderer/       interface: Mesa, Bíblia, Leitor, Biblioteca, Arquivo, Preferências, boas-vindas
   test/e2e/           testes ponta a ponta com Playwright sobre o app compilado
-apps/api/           API do Pregar (Fastify + PostgreSQL), publicada na Railway
+apps/api/           API do Proper (Fastify + PostgreSQL), publicada na Railway
   src/modules/        auth (código por email), conta (LGPD), cobrança (Asaas Pix), IA, Estêvão, admin
 docs/               produto, plano, operação da API, cobrança, release, análises
 Pregar/, PregarTests/   app legado para macOS em Swift (veja o fim deste arquivo)
@@ -121,9 +121,11 @@ Tudo fica na pasta de dados do app:
 
 | Sistema | Pasta |
 | --- | --- |
-| macOS | `~/Library/Application Support/Pregar` |
-| Windows | `%APPDATA%\Pregar` |
-| Linux | `~/.config/Pregar` |
+| macOS | `~/Library/Application Support/Proper` |
+| Windows | `%APPDATA%\Proper` |
+| Linux | `~/.config/Proper` |
+
+Até novembro de 2026 o app chamava-se Pregar e a pasta era `Pregar`; na primeira abertura com o nome novo ela é movida para `Proper` (nada é sobrescrito).
 
 - **Manuscritos, histórico de versões, relatórios de revisão, preferências e índice da Biblioteca** em `pregar.sqlite` (SQLite com busca de texto completo).
 - **Chaves e sessão** (Estêvão API, provedores de IA, sessão da conta, token do Google) em `secrets.bin`, cifrado pelo cofre do sistema: Keychain no macOS, DPAPI no Windows, libsecret no Linux. As chaves nunca chegam à interface; ela só sabe se cada uma está cadastrada.
@@ -135,7 +137,7 @@ Preferências › Biblioteca cria e restaura um backup local de tudo isso, excet
 
 ## Primeiro uso
 
-A Mesa abre no próximo dia de pregar (domingo, por padrão; Preferências › Ritmo e duração) com um tour de cinco passos sobre as regiões reais da tela: o botão de data, as leituras inteiras, o manuscrito, os materiais e a conexão. Sem conta e sem chave, a API do Pregar pode servir uma **degustação** das leituras das próximas semanas (ver `ESTEVAO_PUBLIC_PREVIEW` em [docs/api-railway.md](docs/api-railway.md)); a folha **Conectar** (trilho › Conectar, ou o fim do tour) leva à assinatura ou às chaves próprias.
+A Mesa abre no próximo dia de pregar (domingo, por padrão; Preferências › Ritmo e duração) com um tour de cinco passos sobre as regiões reais da tela: o botão de data, as leituras inteiras, o manuscrito, os materiais e a conexão. Sem conta e sem chave, a API do Proper pode servir uma **degustação** das leituras das próximas semanas (ver `ESTEVAO_PUBLIC_PREVIEW` em [docs/api-railway.md](docs/api-railway.md)); a folha **Conectar** (trilho › Conectar, ou o fim do tour) leva à assinatura ou às chaves próprias.
 
 Na Mesa, todas as leituras do dia ficam abertas com o texto inteiro (ou só a principal, à escolha), com chips para pular entre elas, o botão **Usar como texto principal** em cada uma e a leitura em tela cheia. O editor tem uma barra curta (o resto fica em **Mais**), citações em bloco ou em versos e **anotações só para você**, que ficam fora da contagem de palavras, da folha do púlpito e do ensaio. A barra de estado compara a duração estimada com a sua meta; o **Ensaio** em tela cheia tem rolagem automática, marcas por título e mede o seu ritmo de fala. **Levar para o púlpito** imprime direto, salva PDF, cria o Google Doc ou copia o texto simples.
 

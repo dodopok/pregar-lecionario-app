@@ -102,7 +102,7 @@ export class IndexerClient {
     if (this.child) return this.child
     const cMaps = pdfjsCMapDirectory()
     const child = utilityProcess.fork(this.entry, [], {
-      serviceName: 'Pregar · Indexador de PDFs',
+      serviceName: 'Proper · Indexador de PDFs',
       stdio: 'pipe',
       env: { ...process.env, ...(cMaps ? { PREGAR_PDFJS_CMAPS: cMaps } : {}) },
     })

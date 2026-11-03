@@ -1,6 +1,6 @@
 // Preferências, assinatura, Bíblia e boas-vindas de ponta a ponta, com capturas no claro e no escuro.
 // Uso: xvfb-run -a node test/e2e/prefs.mjs [pasta-do-build] [pasta-das-capturas]
-// Sobe uma API do Pregar falsa em 127.0.0.1 (conta gratuita → Pix pendente → assinatura ativa).
+// Sobe uma API do Proper falsa em 127.0.0.1 (conta gratuita → Pix pendente → assinatura ativa).
 import { _electron as electron } from '@playwright/test'
 import { createServer } from 'node:http'
 import { mkdirSync, mkdtempSync } from 'node:fs'
@@ -84,8 +84,8 @@ function startPrefsAPI() {
     subscription: null,
     payments: [],
     sessions: [
-      { id: '6f9a1c52-6a3e-4c1f-9a51-111111111111', deviceName: 'Pregar · notebook-da-paroquia', platform: 'linux', createdAt: plusDays(-1).toISOString(), lastUsedAt: now().toISOString(), current: true },
-      { id: '6f9a1c52-6a3e-4c1f-9a51-222222222222', deviceName: 'Pregar · MacBook do escritório', platform: 'darwin', createdAt: plusDays(-40).toISOString(), lastUsedAt: plusDays(-3).toISOString(), current: false },
+      { id: '6f9a1c52-6a3e-4c1f-9a51-111111111111', deviceName: 'Proper · notebook-da-paroquia', platform: 'linux', createdAt: plusDays(-1).toISOString(), lastUsedAt: now().toISOString(), current: true },
+      { id: '6f9a1c52-6a3e-4c1f-9a51-222222222222', deviceName: 'Proper · MacBook do escritório', platform: 'darwin', createdAt: plusDays(-40).toISOString(), lastUsedAt: plusDays(-3).toISOString(), current: false },
     ],
   }
   const calls = []
@@ -181,7 +181,7 @@ function startPrefsAPI() {
       const fail = (status, code, message) => send(status, { error: { code, message } })
       if (path.startsWith('/legal/')) {
         response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-        return response.end('<h1>Política de privacidade do Pregar</h1>')
+        return response.end('<h1>Política de privacidade do Proper</h1>')
       }
       if (path === '/v1/billing/plans') {
         return send(200, {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Trilho à esquerda da Mesa: as áreas do Pregar (Mesa, Bíblia, Leitor, Biblioteca, Arquivo),
+ * Trilho à esquerda da Mesa: as áreas do Proper (Mesa, Bíblia, Leitor, Biblioteca, Arquivo),
  * o estado da conexão (leituras e IA), ajuda e Preferências. Largo com rótulos a partir de
  * 1100 px; só ícones abaixo disso.
  */
@@ -51,7 +51,7 @@ const AREAS: { kind: WindowKind; label: string; icon: typeof BookOpen; keys: str
 const connection = computed(() => {
   switch (app.liturgyAccess.mode) {
     case 'proxy':
-      return { tone: 'ok', label: 'Conectado', title: 'Leituras e revisão pela sua assinatura do Pregar' }
+      return { tone: 'ok', label: 'Conectado', title: 'Leituras e revisão pela sua assinatura do Proper' }
     case 'direct':
       return { tone: 'ok', label: 'Com chave', title: 'Leituras com a sua chave da Estêvão API' }
     case 'preview':
@@ -76,7 +76,7 @@ function open(kind: WindowKind): void {
 </script>
 
 <template>
-  <nav class="rail" :class="{ 'rail--compact': compact }" aria-label="Áreas do Pregar" data-tour="rail">
+  <nav class="rail" :class="{ 'rail--compact': compact }" aria-label="Áreas do Proper" data-tour="rail">
     <div class="rail__mark drag-region" aria-hidden="true"><span class="serif">P</span></div>
     <button
       v-for="area in AREAS"
@@ -139,7 +139,7 @@ function open(kind: WindowKind): void {
           class="menu__item"
           @click="invoke('app:openWindow', { window: 'preferencias', route: '/preferencias/sobre' })"
         >
-          Sobre o Pregar e registros
+          Sobre o Proper e registros
         </button>
       </template>
     </PopMenu>

@@ -17,7 +17,7 @@ const confirmingRestore = ref(false)
 
 function failure(caught: unknown): void {
   message.value = isNotImplemented(caught)
-    ? { tone: 'info', text: 'Esta função chega numa próxima atualização do Pregar.' }
+    ? { tone: 'info', text: 'Esta função chega numa próxima atualização do Proper.' }
     : { tone: 'error', text: errorMessage(caught) }
 }
 

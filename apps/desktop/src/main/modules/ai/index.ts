@@ -65,7 +65,7 @@ export function registerAI(context: MainContext): void {
         mode: 'pro',
         provider,
         model,
-        label: 'Assinatura do Pregar',
+        label: 'Assinatura do Proper',
         message: 'As análises usam a sua assinatura; nenhuma chave é necessária.',
         usage,
       }
@@ -85,7 +85,7 @@ export function registerAI(context: MainContext): void {
       provider,
       model,
       label: providerName(provider),
-      message: `Assine o Pregar ou salve a chave do ${providerName(provider)} em Preferências › Inteligência artificial.`,
+      message: `Assine o Proper ou salve a chave do ${providerName(provider)} em Preferências › Inteligência artificial.`,
       usage: null,
     }
   }

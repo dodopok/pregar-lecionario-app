@@ -123,7 +123,7 @@ export async function buildApp(deps: AppDeps, runner: AIRunner, options: { logge
   })
   app.get('/', async (_request, reply) =>
     reply.type('text/html; charset=utf-8').send(
-      '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Pregar API</title><body style="font-family:system-ui;max-width:640px;margin:40px auto;padding:0 16px"><h1>Pregar API</h1><p>Serviço do aplicativo Pregar.</p><p><a href="/legal/privacidade">Privacidade</a> · <a href="/legal/termos">Termos</a></p></body></html>',
+      '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Proper API</title><body style="font-family:system-ui;max-width:640px;margin:40px auto;padding:0 16px"><h1>Proper API</h1><p>Serviço do aplicativo Proper.</p><p><a href="/legal/privacidade">Privacidade</a> · <a href="/legal/termos">Termos</a></p></body></html>',
     ),
   )
 

@@ -1,4 +1,4 @@
-# API do Pregar na Railway
+# API do Proper na Railway
 
 A API (`apps/api`) é um serviço Node com PostgreSQL. Ela cuida das contas, da assinatura por Pix no Asaas, do proxy de IA com cotas, do proxy da Estêvão API para assinantes e da degustação (leituras das próximas semanas sem conta, se ligada). Quem usa o plano gratuito com a própria chave não passa por ela.
 

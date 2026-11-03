@@ -60,7 +60,7 @@ onMounted(refresh)
     <PrefGroup>
       <div class="intro">
         <p class="intro__lead">
-          Cada chamada à Estêvão API, aos provedores de IA, às fontes favoritas, ao Google Drive e ao servidor do Pregar vira uma linha: OK ou
+          Cada chamada à Estêvão API, aos provedores de IA, às fontes favoritas, ao Google Drive e ao servidor do Proper vira uma linha: OK ou
           ERRO, com código HTTP, duração e, nas falhas, a resposta do serviço.
         </p>
         <p class="intro__note">

@@ -346,7 +346,7 @@ onMounted(async () => {
             <Cloud :size="14" aria-hidden="true" /> Google Drive não conectado.
           </p>
           <p class="status__hint">
-            O Pregar só enxerga os documentos que ele mesmo cria no seu Drive (acesso drive.file).
+            O Proper só enxerga os documentos que ele mesmo cria no seu Drive (acesso drive.file).
           </p>
         </template>
         <p v-else-if="documentId && record?.drive.syncedAt" class="status__text status__row status__row--ok">

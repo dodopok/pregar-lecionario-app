@@ -1,4 +1,4 @@
-# Lançamento do Pregar: passo a passo
+# Lançamento do Proper: passo a passo
 
 O código está pronto na branch `feat/multiplataforma`. Estes passos dependem de contas, chaves e máquinas suas. Siga na ordem: cada etapa usa a anterior. Os detalhes de cada item estão nos guias citados.
 
@@ -37,7 +37,7 @@ Guia: [api-railway.md](api-railway.md).
 
 1. [ ] Crie a conta em resend.com e adicione o domínio do remetente (por exemplo `pregar.app`).
 2. [ ] Cadastre no DNS do domínio os registros que a Resend mostrar e espere aparecer "Verified".
-3. [ ] Crie uma chave de API e cadastre na Railway: `RESEND_API_KEY` e `EMAIL_FROM` (por exemplo `Pregar <nao-responda@pregar.app>`).
+3. [ ] Crie uma chave de API e cadastre na Railway: `RESEND_API_KEY` e `EMAIL_FROM` (por exemplo `Proper <nao-responda@pregar.app>`).
 
 ## 4. Leituras e IA dos assinantes
 
@@ -99,7 +99,7 @@ Guia: [assinatura-pix.md](assinatura-pix.md).
 Guia: [release-desktop.md](release-desktop.md#google-drive).
 
 1. [ ] No Google Cloud, ative a Google Drive API e a Google Docs API.
-2. [ ] Configure a tela de consentimento com o nome Pregar e os links `https://<seu-domínio>/legal/privacidade` e `https://<seu-domínio>/legal/termos`.
+2. [ ] Configure a tela de consentimento com o nome Proper e os links `https://<seu-domínio>/legal/privacidade` e `https://<seu-domínio>/legal/termos`.
 3. [ ] Crie um cliente OAuth do tipo **App para computador** e anote o Client ID e o segredo.
 
 Sem isso o app funciona normalmente; só o envio para o Google Docs fica desligado.
@@ -143,7 +143,7 @@ Se a conta do GitHub também não deixar criar releases, rode sem `--publish`, d
 
 ## 10. Conferir em máquinas reais
 
-Em um Mac e um PC com Windows que nunca tiveram o Pregar:
+Em um Mac e um PC com Windows que nunca tiveram o Proper:
 
 - [ ] O instalador abre sem aviso de app não identificado (macOS) ou de editor desconhecido (Windows).
 - [ ] Plano gratuito: cole uma chave da Estêvão e uma de IA nas Preferências, carregue um domingo e faça uma revisão.
