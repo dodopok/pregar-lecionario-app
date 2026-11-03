@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import { SERMON_KEY_PATTERN } from '@pregar/core/util/dates'
 import type { MainContext } from '../context'
 import { IDEA_MAX_LENGTH } from '../storage/ideas'
 import { handle } from './router'
 
-const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const dateKey = z.string().regex(SERMON_KEY_PATTERN)
 const source = z.enum(['local', 'drive', 'reading', 'material', 'bible', 'reader'])
 const text = z.string().trim().min(1, 'Escreva a ideia antes de guardar.').max(IDEA_MAX_LENGTH)
 

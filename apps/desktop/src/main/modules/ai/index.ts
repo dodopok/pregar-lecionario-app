@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SERMON_KEY_PATTERN } from '@pregar/core/util/dates'
 import {
   AI_PROVIDERS,
   fetchClaudeModels,
@@ -11,7 +12,14 @@ import {
   SermonReviewReportStore,
   isSermonReviewCriterion,
 } from '@pregar/core/ai'
-import type { AIProvider, AIResearchSource, SermonAIQuestion, SermonReviewSource, SermonStructureAssessment, SermonReviewFinding } from '@pregar/core/ai'
+import type {
+  AIProvider,
+  AIResearchSource,
+  SermonAIQuestion,
+  SermonReviewSource,
+  SermonStructureAssessment,
+  SermonReviewFinding,
+} from '@pregar/core/ai'
 import { favoriteAuthorsFromData } from '@pregar/core/sources'
 import type { UsageSummary } from '@pregar/core/plans/contract'
 import type { AIAccess, ReviewSourceSummary } from '@shared/ipc-ai'
@@ -25,7 +33,7 @@ const MAX_TOTAL_BYTES = 120_000
 const SOURCE_CACHE_MS = 15 * 60 * 1000
 const AI_TIMEOUT_MS = 6 * 60 * 1000
 
-const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const dateKey = z.string().regex(SERMON_KEY_PATTERN)
 const providerSchema = z.enum(AI_PROVIDERS as unknown as [AIProvider, ...AIProvider[]])
 
 interface CachedSources {
@@ -53,7 +61,14 @@ export function registerAI(context: MainContext): void {
     const model = purpose === 'review' ? settings.reviewModel : settings.researchModel
     const usage = context.account.current().account?.usage ?? null
     if (useServer()) {
-      return { mode: 'pro', provider, model, label: 'Assinatura do Pregar', message: 'As análises usam a sua assinatura; nenhuma chave é necessária.', usage }
+      return {
+        mode: 'pro',
+        provider,
+        model,
+        label: 'Assinatura do Pregar',
+        message: 'As análises usam a sua assinatura; nenhuma chave é necessária.',
+        usage,
+      }
     }
     if (context.secrets.get(provider)) {
       return {
@@ -85,7 +100,12 @@ export function registerAI(context: MainContext): void {
     return controller
   }
 
-  function progress(sender: WebContents, requestId: string, stage: 'preparing' | 'sending' | 'waiting' | 'validating', message: string): void {
+  function progress(
+    sender: WebContents,
+    requestId: string,
+    stage: 'preparing' | 'sending' | 'waiting' | 'validating',
+    message: string,
+  ): void {
     if (!sender.isDestroyed()) sender.send('pregar:event', 'ai:progress', { requestId, stage, message })
   }
 
@@ -112,12 +132,18 @@ export function registerAI(context: MainContext): void {
     if (ids.length === 0) return []
     const cached = sourceCache.get(key)
     if (!cached || Date.now() - cached.at > SOURCE_CACHE_MS) {
-      throw new UserFacingError('Os materiais selecionados precisam ser conferidos de novo. Reabra a folha de revisão.')
+      throw new UserFacingError(
+        'Os materiais selecionados precisam ser conferidos de novo. Reabra a folha de revisão.',
+      )
     }
-    const chosen = ids.map((id) => cached.sources.get(id)).filter((item): item is NonNullable<typeof item> => Boolean(item))
+    const chosen = ids
+      .map((id) => cached.sources.get(id))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
     const total = chosen.reduce((sum, item) => sum + bytes(item.text), 0)
     if (chosen.some((item) => bytes(item.text) > MAX_SOURCE_BYTES) || total > MAX_TOTAL_BYTES) {
-      throw new UserFacingError('O conjunto selecionado excede o limite desta revisão. Desmarque alguns materiais e tente novamente.')
+      throw new UserFacingError(
+        'O conjunto selecionado excede o limite desta revisão. Desmarque alguns materiais e tente novamente.',
+      )
     }
     return chosen.map(({ id, title, citation, text }) => ({ id, title, citation, text }))
   }
@@ -135,7 +161,9 @@ export function registerAI(context: MainContext): void {
         try {
           const passage = await context.liturgy.passage(reference, code)
           const text = passage.verses?.length
-            ? passage.verses.map((verse) => `${verse.chapter ? `${verse.chapter}:` : ''}${verse.number} ${verse.text}`).join('\n')
+            ? passage.verses
+                .map((verse) => `${verse.chapter ? `${verse.chapter}:` : ''}${verse.number} ${verse.text}`)
+                .join('\n')
             : (passage.content ?? '')
           if (text.trim()) {
             sources.set(`bible:${code}`, {
@@ -147,7 +175,8 @@ export function registerAI(context: MainContext): void {
             })
           }
         } catch (error) {
-          blockedReason = error instanceof Error ? error.message : 'Não foi possível carregar o texto bíblico.'
+          blockedReason =
+            error instanceof Error ? error.message : 'Não foi possível carregar o texto bíblico.'
         }
       }
     }
@@ -157,7 +186,8 @@ export function registerAI(context: MainContext): void {
           sources.set(material.id, { ...material, kind: material.id.startsWith('web') ? 'web' : 'pdf' })
         }
       } catch (error) {
-        blockedReason = error instanceof Error ? error.message : 'Não foi possível extrair os materiais marcados.'
+        blockedReason =
+          error instanceof Error ? error.message : 'Não foi possível extrair os materiais marcados.'
       }
     }
     sourceCache.set(day, { at: Date.now(), sources })
@@ -169,8 +199,12 @@ export function registerAI(context: MainContext): void {
       bytes: bytes(source.text),
     }))
     const totalBytes = summaries.reduce((sum, item) => sum + item.bytes, 0)
-    if (!blockedReason && (summaries.some((item) => item.bytes > MAX_SOURCE_BYTES) || totalBytes > MAX_TOTAL_BYTES)) {
-      blockedReason = 'O conjunto selecionado excede o limite desta revisão. Desmarque alguns materiais e tente novamente.'
+    if (
+      !blockedReason &&
+      (summaries.some((item) => item.bytes > MAX_SOURCE_BYTES) || totalBytes > MAX_TOTAL_BYTES)
+    ) {
+      blockedReason =
+        'O conjunto selecionado excede o limite desta revisão. Desmarque alguns materiais e tente novamente.'
     }
     return { sources: summaries, totalBytes, blockedReason }
   })
@@ -183,28 +217,41 @@ export function registerAI(context: MainContext): void {
       dateKey: day,
       title: z.string().max(500).parse(request.title),
       mainReference: z.string().max(200).parse(request.mainReference),
-      manuscript: z.string().max(200_000, 'O manuscrito é longo demais para uma revisão.').parse(request.manuscript),
+      manuscript: z
+        .string()
+        .max(200_000, 'O manuscrito é longo demais para uma revisão.')
+        .parse(request.manuscript),
       criteria,
     }
     const sources = selectedSources(day, z.array(z.string()).max(30).parse(request.sourceIds))
     const controller = begin(request.requestId, event.sender)
     try {
       progress(event.sender, request.requestId, 'sending', 'Enviando o manuscrito para análise…')
-      let result: { findings: SermonReviewFinding[]; structure?: SermonStructureAssessment; validationNotice?: string }
+      let result: {
+        findings: SermonReviewFinding[]
+        structure?: SermonStructureAssessment
+        validationNotice?: string
+      }
       let provider: AIProvider
       let model: string
       let usage: UsageSummary | null = null
       if (useServer()) {
-        const response = await context.api.request<{ result: typeof result; model: string; provider: AIProvider; usage: UsageSummary }>(
-          'POST',
-          '/v1/ai/review',
-          {
-            body: { mainReference: reviewContext.mainReference, manuscript: reviewContext.manuscript, criteria, sources },
-            timeoutMs: AI_TIMEOUT_MS,
-            signal: controller.signal,
-            operation: 'revisão · assinatura',
+        const response = await context.api.request<{
+          result: typeof result
+          model: string
+          provider: AIProvider
+          usage: UsageSummary
+        }>('POST', '/v1/ai/review', {
+          body: {
+            mainReference: reviewContext.mainReference,
+            manuscript: reviewContext.manuscript,
+            criteria,
+            sources,
           },
-        )
+          timeoutMs: AI_TIMEOUT_MS,
+          signal: controller.signal,
+          operation: 'revisão · assinatura',
+        })
         result = response.result
         provider = response.provider
         model = response.model
@@ -240,19 +287,30 @@ export function registerAI(context: MainContext): void {
     try {
       progress(event.sender, request.requestId, 'sending', 'Preparando perguntas sobre o texto…')
       if (useServer()) {
-        const response = await context.api.request<{ result: { questions: SermonAIQuestion[]; validationNotice?: string }; usage: UsageSummary }>(
-          'POST',
-          '/v1/ai/questions',
-          {
-            body: { mainReference: questionContext.mainReference, manuscript: questionContext.manuscript, sources },
-            timeoutMs: AI_TIMEOUT_MS,
-            signal: controller.signal,
-            operation: 'perguntas · assinatura',
+        const response = await context.api.request<{
+          result: { questions: SermonAIQuestion[]; validationNotice?: string }
+          usage: UsageSummary
+        }>('POST', '/v1/ai/questions', {
+          body: {
+            mainReference: questionContext.mainReference,
+            manuscript: questionContext.manuscript,
+            sources,
           },
-        )
-        return { questions: response.result.questions, validationNotice: response.result.validationNotice ?? null, usage: response.usage }
+          timeoutMs: AI_TIMEOUT_MS,
+          signal: controller.signal,
+          operation: 'perguntas · assinatura',
+        })
+        return {
+          questions: response.result.questions,
+          validationNotice: response.result.validationNotice ?? null,
+          usage: response.usage,
+        }
       }
-      const outcome = await generateSermonQuestions(questionContext, sources, byokConfig('review', controller.signal))
+      const outcome = await generateSermonQuestions(
+        questionContext,
+        sources,
+        byokConfig('review', controller.signal),
+      )
       return { questions: outcome.questions, validationNotice: outcome.validationNotice ?? null, usage: null }
     } finally {
       controllers.delete(request.requestId)
@@ -263,22 +321,36 @@ export function registerAI(context: MainContext): void {
     return `${reference.trim()}|${occasion?.trim() ?? ''}|${day}`
   }
 
-  handle('ai:researchCached', ({ reference, occasion, dateKey: day }) =>
-    research.get<{ sources: AIResearchSource[]; searchedAt: string }>(researchKey(reference, occasion, dateKey.parse(day))) ?? null,
+  handle(
+    'ai:researchCached',
+    ({ reference, occasion, dateKey: day }) =>
+      research.get<{ sources: AIResearchSource[]; searchedAt: string }>(
+        researchKey(reference, occasion, dateKey.parse(day)),
+      ) ?? null,
   )
 
   handle('ai:research', async (request, event) => {
     const day = dateKey.parse(request.dateKey)
     const reference = z.string().trim().min(1).max(200).parse(request.reference)
     const occasion = request.occasion ? z.string().max(200).parse(request.occasion) : null
-    const authors = favoriteAuthorsFromData(context.kv('sources').get<string>('profiles.authors') ?? null).map((author) => author.name)
+    const authors = favoriteAuthorsFromData(
+      context.kv('sources').get<string>('profiles.authors') ?? null,
+    ).map((author) => author.name)
     const controller = begin(request.requestId, event.sender)
     try {
       let sources: AIResearchSource[]
       let usage: UsageSummary | null = null
       if (useServer()) {
-        const response = await context.api.request<{ result: { sources: AIResearchSource[] }; usage: UsageSummary }>('POST', '/v1/ai/research', {
-          body: { reference, occasion: occasion ?? undefined, dateKey: day, preferredAuthors: authors.slice(0, 30) },
+        const response = await context.api.request<{
+          result: { sources: AIResearchSource[] }
+          usage: UsageSummary
+        }>('POST', '/v1/ai/research', {
+          body: {
+            reference,
+            occasion: occasion ?? undefined,
+            dateKey: day,
+            preferredAuthors: authors.slice(0, 30),
+          },
           timeoutMs: AI_TIMEOUT_MS,
           signal: controller.signal,
           operation: 'pesquisa · assinatura',
@@ -286,7 +358,10 @@ export function registerAI(context: MainContext): void {
         sources = response.result.sources
         usage = response.usage
       } else {
-        const outcome = await searchResearchSources(reference, occasion, { ...byokConfig('research', controller.signal), priorityAuthors: authors })
+        const outcome = await searchResearchSources(reference, occasion, {
+          ...byokConfig('research', controller.signal),
+          priorityAuthors: authors,
+        })
         sources = outcome.sources
       }
       const searchedAt = new Date().toISOString()
@@ -312,7 +387,9 @@ export function registerAI(context: MainContext): void {
     const list = await reports.reports(dateKey.parse(day))
     const report = list.find((item) => item.id === reportId)
     if (!report) throw new UserFacingError('Este relatório de revisão não existe mais.')
-    return reports.update(setFindingStatus(report, findingId, z.enum(['open', 'resolved', 'dismissed']).parse(status)))
+    return reports.update(
+      setFindingStatus(report, findingId, z.enum(['open', 'resolved', 'dismissed']).parse(status)),
+    )
   })
   handle('reviews:delete', async ({ dateKey: day, reportId }) => {
     const key = dateKey.parse(day)

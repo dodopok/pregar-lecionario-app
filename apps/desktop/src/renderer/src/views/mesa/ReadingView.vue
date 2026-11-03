@@ -7,7 +7,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { AArrowDown, AArrowUp, Check, Printer, X } from 'lucide-vue-next'
 import type { BiblePassageText, BibleVersion, LiturgicalReading } from '@pregar/core/liturgy/types'
 import { readingId, readingLabel } from '@pregar/core/liturgy/types'
-import { longDatePt, parseDateKey } from '@pregar/core/util/dates'
+import { longDatePt, parseDateKey, sermonDateOf } from '@pregar/core/util/dates'
 import PButton from '@/components/PButton.vue'
 import { errorMessage, invoke } from '@/lib/api'
 import { useAppStore } from '@/stores/app'
@@ -34,7 +34,7 @@ const current = ref<string | null>(null)
 const versions = ref<BibleVersion[]>([])
 const body = ref<HTMLElement | null>(null)
 
-const date = computed(() => parseDateKey(mesa.selectedDateKey))
+const date = computed(() => parseDateKey(sermonDateOf(mesa.selectedDateKey)))
 const title = computed(() => mesa.occasion ?? (date.value ? longDatePt(date.value) : mesa.selectedDateKey))
 const subtitle = computed(() => (date.value && mesa.occasion ? longDatePt(date.value) : ''))
 const index = computed(() => readingIndex(mesa.day, false))

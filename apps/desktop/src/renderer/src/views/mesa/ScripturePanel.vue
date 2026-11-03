@@ -5,10 +5,19 @@
  * escolhido, salmos com recuo pendente e leitura em tela cheia.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { BookOpen, CalendarX, Check, KeyRound, Maximize2, PanelLeftClose, Quote, RefreshCw } from 'lucide-vue-next'
+import {
+  BookOpen,
+  CalendarX,
+  Check,
+  KeyRound,
+  Maximize2,
+  PanelLeftClose,
+  Quote,
+  RefreshCw,
+} from 'lucide-vue-next'
 import { readingId, readingLabel } from '@pregar/core/liturgy/types'
 import type { BiblePassageText, BibleVersion, LiturgicalReading } from '@pregar/core/liturgy/types'
-import { longDatePt, parseDateKey, shortDatePt } from '@pregar/core/util/dates'
+import { longDatePt, parseDateKey, sermonDateOf, shortDatePt } from '@pregar/core/util/dates'
 import type { ReadingsView } from '@shared/settings'
 import PButton from '@/components/PButton.vue'
 import Segmented from '@/components/Segmented.vue'
@@ -30,23 +39,39 @@ const current = ref<string | null>(null)
 
 const VIEW_OPTIONS: { value: ReadingsView; label: string; title: string }[] = [
   { value: 'all', label: 'Todas', title: 'Todas as leituras abertas, com o texto inteiro' },
-  { value: 'main', label: 'Só a principal', title: 'Só o texto principal aberto; as outras ficam em uma linha' },
+  {
+    value: 'main',
+    label: 'Só a principal',
+    title: 'Só o texto principal aberto; as outras ficam em uma linha',
+  },
 ]
 
 const view = computed(() => app.settings.panels.readingsView)
 const compact = computed(() => width.value < 330)
 const primaryBible = computed(() => app.settings.liturgy.bible)
 const translations = computed(() => {
-  const codes = [primaryBible.value, ...app.settings.liturgy.comparisonBibles.filter((code) => code !== primaryBible.value)]
-  return codes.map((code) => ({ code, label: versions.value.find((version) => version.code === code)?.name ?? code.toUpperCase() }))
+  const codes = [
+    primaryBible.value,
+    ...app.settings.liturgy.comparisonBibles.filter((code) => code !== primaryBible.value),
+  ]
+  return codes.map((code) => ({
+    code,
+    label: versions.value.find((version) => version.code === code)?.name ?? code.toUpperCase(),
+  }))
 })
 const readings = computed(() => mesa.day?.readings ?? [])
 const collects = computed(() => (mesa.day?.collect ?? []).filter((collect) => collect.text?.trim()))
-const celebrations = computed(() => (mesa.day?.celebrations ?? []).filter((item) => item.name !== mesa.day?.celebration?.name))
+const celebrations = computed(() =>
+  (mesa.day?.celebrations ?? []).filter((item) => item.name !== mesa.day?.celebration?.name),
+)
 const index = computed(() => readingIndex(mesa.day, compact.value))
-const showingPreviousDay = computed(() => Boolean(mesa.day && mesa.day.date !== mesa.selectedDateKey && mesa.dayLoading))
+const showingPreviousDay = computed(() =>
+  Boolean(mesa.day && mesa.day.date !== mesa.selectedDateKey && mesa.dayLoading),
+)
 const hasPrimary = computed(() => Boolean(mesa.record?.mainReadingReference))
-const preview = computed(() => app.liturgyAccess.mode === 'preview' && !app.settings.onboarding.previewNoticeDismissed)
+const preview = computed(
+  () => app.liturgyAccess.mode === 'preview' && !app.settings.onboarding.previewNoticeDismissed,
+)
 const previewUntil = computed(() => {
   const to = app.liturgyAccess.preview?.to
   const date = to ? parseDateKey(to) : null
@@ -59,7 +84,9 @@ void invoke('liturgy:bibleVersions')
   .catch(() => undefined)
 
 function isPrimary(reading: LiturgicalReading): boolean {
-  return mesa.record?.mainReadingReference === reading.reference && mesa.record?.mainReadingSlot === reading.slot
+  return (
+    mesa.record?.mainReadingReference === reading.reference && mesa.record?.mainReadingSlot === reading.slot
+  )
 }
 
 /** Em "Só a principal", as outras leituras ficam em uma linha; sem principal, todas abrem. */
@@ -99,7 +126,7 @@ function go(id: string): void {
 }
 
 function selectedDayLabel(): string {
-  const date = parseDateKey(mesa.selectedDateKey)
+  const date = parseDateKey(sermonDateOf(mesa.selectedDateKey))
   return date ? longDatePt(date) : mesa.selectedDateKey
 }
 
@@ -115,7 +142,9 @@ function observeSections(): void {
   if (!body.value) return
   observer = new IntersectionObserver(
     (entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
       if (visible[0]) current.value = (visible[0].target as HTMLElement).id
     },
     { root: body.value, rootMargin: '-8% 0px -75% 0px', threshold: 0 },
@@ -157,7 +186,14 @@ onBeforeUnmount(() => {
           v-if="readings.length > 1"
           :model-value="view"
           label="Quais leituras mostrar"
-          :options="compact ? VIEW_OPTIONS.map((option) => ({ ...option, label: option.value === 'main' ? 'Principal' : option.label })) : VIEW_OPTIONS"
+          :options="
+            compact
+              ? VIEW_OPTIONS.map((option) => ({
+                  ...option,
+                  label: option.value === 'main' ? 'Principal' : option.label,
+                }))
+              : VIEW_OPTIONS
+          "
           compact
           @update:model-value="setView"
         />
@@ -169,12 +205,26 @@ onBeforeUnmount(() => {
           aria-label="Tradução exibida nas leituras"
           @change="mesa.loadTranslation(($event.target as HTMLSelectElement).value)"
         >
-          <option v-for="translation in translations" :key="translation.code" :value="translation.code">{{ translation.code.toUpperCase() }}</option>
+          <option v-for="translation in translations" :key="translation.code" :value="translation.code">
+            {{ translation.code.toUpperCase() }}
+          </option>
         </select>
-        <PButton v-if="mesa.day" variant="icon" compact label="Ler em tela cheia" :title="`Ler as leituras do dia em tela cheia (${shortcut('⇧⌥⌘L')})`" @click="mesa.openFullscreen('readings')">
+        <PButton
+          v-if="mesa.day"
+          variant="icon"
+          compact
+          label="Ler em tela cheia"
+          :title="`Ler as leituras do dia em tela cheia (${shortcut('⇧⌥⌘L')})`"
+          @click="mesa.openFullscreen('readings')"
+        >
           <Maximize2 :size="14" />
         </PButton>
-        <PButton variant="icon" compact :label="`Ocultar leituras (${shortcut('⇧⌥⌘2')})`" @click="emit('collapse')">
+        <PButton
+          variant="icon"
+          compact
+          :label="`Ocultar leituras (${shortcut('⇧⌥⌘2')})`"
+          @click="emit('collapse')"
+        >
           <PanelLeftClose :size="15" />
         </PButton>
       </div>
@@ -184,12 +234,17 @@ onBeforeUnmount(() => {
           :key="entry.id"
           type="button"
           class="chip"
-          :class="{ 'chip--active': current === entry.id && !(entry.reading && isPrimary(entry.reading)), 'chip--accent': entry.reading && isPrimary(entry.reading) }"
+          :class="{
+            'chip--active': current === entry.id && !(entry.reading && isPrimary(entry.reading)),
+            'chip--accent': entry.reading && isPrimary(entry.reading),
+          }"
           :aria-current="current === entry.id ? 'location' : undefined"
           :title="entry.title"
           @click="go(entry.id)"
         >
-          <Check v-if="entry.reading && isPrimary(entry.reading)" :size="11" aria-hidden="true" />{{ entry.label }}
+          <Check v-if="entry.reading && isPrimary(entry.reading)" :size="11" aria-hidden="true" />{{
+            entry.label
+          }}
         </button>
         <span v-if="compact && translations.length > 1" class="spacer" />
         <select
@@ -199,7 +254,9 @@ onBeforeUnmount(() => {
           aria-label="Tradução exibida nas leituras"
           @change="mesa.loadTranslation(($event.target as HTMLSelectElement).value)"
         >
-          <option v-for="translation in translations" :key="translation.code" :value="translation.code">{{ translation.code.toUpperCase() }}</option>
+          <option v-for="translation in translations" :key="translation.code" :value="translation.code">
+            {{ translation.code.toUpperCase() }}
+          </option>
         </select>
       </nav>
     </header>
@@ -210,10 +267,19 @@ onBeforeUnmount(() => {
         <span>Atualizando leituras para {{ selectedDayLabel() }}…</span>
       </div>
 
+      <aside v-if="mesa.isFree" class="notice notice--free" role="note">
+        <p class="notice__text">
+          <strong>Preparação avulsa.</strong> Estas são as leituras de {{ selectedDayLabel() }} no lecionário.
+          O texto principal pode ser qualquer passagem: use o chip do cabeçalho e escolha “Outra passagem”.
+        </p>
+      </aside>
       <aside v-if="preview" class="notice" role="status">
         <p class="notice__text">
           <strong>Degustação.</strong>
-          {{ previewUntil ? `As leituras aparecem até ${previewUntil}.` : 'Só as próximas semanas aparecem.' }} Conecte para ver qualquer data e revisar.
+          {{
+            previewUntil ? `As leituras aparecem até ${previewUntil}.` : 'Só as próximas semanas aparecem.'
+          }}
+          Conecte para ver qualquer data e revisar.
         </p>
         <div class="notice__actions">
           <PButton variant="link" compact @click="mesa.openSheet('connect')">Conectar</PButton>
@@ -224,9 +290,21 @@ onBeforeUnmount(() => {
       <section v-if="collects.length > 0" id="reading-collect" class="collect" aria-label="Coleta do dia">
         <p class="eyebrow collect__label">{{ collects.length === 1 ? 'Coleta do dia' : 'Coletas do dia' }}</p>
         <article v-for="(collect, position) in collects" :key="position" class="collect__item">
-          <p v-if="collect.title || collect.subtitle" class="collect__title">{{ [collect.title, collect.subtitle].filter(Boolean).join(' · ') }}</p>
+          <p v-if="collect.title || collect.subtitle" class="collect__title">
+            {{ [collect.title, collect.subtitle].filter(Boolean).join(' · ') }}
+          </p>
           <p class="serif collect__text selectable">{{ collect.text }}</p>
-          <PButton variant="link" compact title="Insere a coleta no início do manuscrito, como citação em bloco" @click="insertEpigraph(collect.text ?? '', collect.title ? `Coleta · ${collect.title}` : 'Coleta do dia')">
+          <PButton
+            variant="link"
+            compact
+            title="Insere a coleta no início do manuscrito, como citação em bloco"
+            @click="
+              insertEpigraph(
+                collect.text ?? '',
+                collect.title ? `Coleta · ${collect.title}` : 'Coleta do dia',
+              )
+            "
+          >
             <Quote :size="13" /> Inserir como epígrafe
           </PButton>
         </article>
@@ -238,11 +316,16 @@ onBeforeUnmount(() => {
         :key="readingId(reading)"
         class="reading"
         :class="{ 'reading--primary': isPrimary(reading), 'reading--collapsed': !expanded(reading) }"
-        :aria-label="isPrimary(reading) ? `${readingLabel(reading)}, texto principal do sermão` : readingLabel(reading)"
+        :aria-label="
+          isPrimary(reading) ? `${readingLabel(reading)}, texto principal do sermão` : readingLabel(reading)
+        "
       >
         <div class="reading__head">
           <span class="eyebrow reading__label">
-            {{ readingLabel(reading) }}<span v-if="reading.slot === 'gospel' && readingLabel(reading) !== 'Evangelho'"> · Evangelho</span>
+            {{ readingLabel(reading)
+            }}<span v-if="reading.slot === 'gospel' && readingLabel(reading) !== 'Evangelho'">
+              · Evangelho</span
+            >
           </span>
           <span v-if="isPrimary(reading)" class="reading__badge">Texto principal</span>
           <span class="spacer" />
@@ -267,37 +350,73 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <h3 class="serif reading__reference">{{ reading.reference }}</h3>
-        <p v-if="reading.alternatives?.length && expanded(reading)" class="reading__alternatives">ou {{ reading.alternatives.join(' · ') }}</p>
+        <p v-if="reading.alternatives?.length && expanded(reading)" class="reading__alternatives">
+          ou {{ reading.alternatives.join(' · ') }}
+        </p>
 
         <div v-if="expanded(reading)" class="reading__text selectable">
           <div v-if="isPoetry(textFor(reading))" class="poem">
-            <p v-for="(line, position) in poetryLines(textFor(reading))" :key="position" class="serif poem__line" :class="{ 'poem__line--in': line.indent === 1 }">
-              <sup v-if="line.number !== null" class="verse-number">{{ line.number }}</sup>{{ line.text }}
+            <p
+              v-for="(line, position) in poetryLines(textFor(reading))"
+              :key="position"
+              class="serif poem__line"
+              :class="{ 'poem__line--in': line.indent === 1 }"
+            >
+              <sup v-if="line.number !== null" class="verse-number">{{ line.number }}</sup
+              >{{ line.text }}
             </p>
           </div>
           <p v-else-if="textFor(reading)?.verses?.length" class="serif prose">
-            <template v-for="run in proseRuns(textFor(reading))" :key="run.number"><sup class="verse-number">{{ run.number }}</sup>{{ run.text }}{{ ' ' }}</template>
+            <template v-for="run in proseRuns(textFor(reading))" :key="run.number"
+              ><sup class="verse-number">{{ run.number }}</sup
+              >{{ run.text }}{{ ' ' }}</template
+            >
           </p>
           <template v-else-if="textFor(reading)?.content">
-            <p v-for="(paragraph, position) in contentParagraphs(textFor(reading)!.content)" :key="position" class="serif prose">{{ paragraph }}</p>
+            <p
+              v-for="(paragraph, position) in contentParagraphs(textFor(reading)!.content)"
+              :key="position"
+              class="serif prose"
+            >
+              {{ paragraph }}
+            </p>
           </template>
-          <p v-else-if="mesa.selectedBible !== primaryBible && mesa.loadingBibles.has(mesa.selectedBible)" class="reading__status">
+          <p
+            v-else-if="mesa.selectedBible !== primaryBible && mesa.loadingBibles.has(mesa.selectedBible)"
+            class="reading__status"
+          >
             <Spinner :size="12" /> Buscando em {{ mesa.selectedBible.toUpperCase() }}…
           </p>
           <p v-else class="reading__status">O texto desta leitura não está disponível nesta tradução.</p>
           <div v-if="isPrimary(reading)" class="reading__actions">
-            <PButton variant="link" compact title="Abrir na Bíblia para comparar traduções" @click="openBible(reading.reference)"><BookOpen :size="13" /> Comparar traduções</PButton>
-            <PButton variant="link" compact title="Ler o capítulo inteiro na Bíblia" @click="openBible(wholeChapter(reading.reference))">Capítulo inteiro</PButton>
+            <PButton
+              variant="link"
+              compact
+              title="Abrir na Bíblia para comparar traduções"
+              @click="openBible(reading.reference)"
+              ><BookOpen :size="13" /> Comparar traduções</PButton
+            >
+            <PButton
+              variant="link"
+              compact
+              title="Ler o capítulo inteiro na Bíblia"
+              @click="openBible(wholeChapter(reading.reference))"
+              >Capítulo inteiro</PButton
+            >
           </div>
         </div>
       </article>
 
       <section v-if="celebrations.length > 0" class="celebrations">
         <p class="eyebrow">Comemorações</p>
-        <p v-for="celebration in celebrations" :key="celebration.name" class="celebration">{{ celebration.name }}</p>
+        <p v-for="celebration in celebrations" :key="celebration.name" class="celebration">
+          {{ celebration.name }}
+        </p>
       </section>
 
-      <p v-if="readings.length === 0" class="reading__status">Não há leituras cadastradas para este dia no livro de oração escolhido.</p>
+      <p v-if="readings.length === 0" class="reading__status">
+        Não há leituras cadastradas para este dia no livro de oração escolhido.
+      </p>
     </div>
 
     <div v-else class="scripture__empty">
@@ -308,20 +427,26 @@ onBeforeUnmount(() => {
       <template v-else-if="app.liturgyAccess.mode === 'none'">
         <KeyRound :size="22" aria-hidden="true" />
         <p class="scripture__error-title">As leituras ainda não estão conectadas</p>
-        <p class="muted">Assine o Pregar ou salve a sua chave da Estêvão API para carregar o calendário e as leituras.</p>
+        <p class="muted">
+          Assine o Pregar ou salve a sua chave da Estêvão API para carregar o calendário e as leituras.
+        </p>
         <PButton variant="primary" @click="mesa.openSheet('connect')">Conectar</PButton>
       </template>
       <template v-else-if="outsidePreview">
         <CalendarX :size="22" aria-hidden="true" />
         <p class="scripture__error-title">Fora da degustação</p>
         <p class="muted">{{ mesa.dayError }}</p>
-        <PButton variant="primary" @click="mesa.openSheet('connect')">Conectar para ver qualquer data</PButton>
+        <PButton variant="primary" @click="mesa.openSheet('connect')"
+          >Conectar para ver qualquer data</PButton
+        >
       </template>
       <template v-else-if="mesa.dayError">
         <CalendarX :size="22" aria-hidden="true" />
         <p class="scripture__error-title">Não foi possível carregar este dia</p>
         <p class="muted">{{ mesa.dayError }}</p>
-        <PButton variant="secondary" @click="mesa.loadDay()"><RefreshCw :size="13" /> Tentar novamente</PButton>
+        <PButton variant="secondary" @click="mesa.loadDay()"
+          ><RefreshCw :size="13" /> Tentar novamente</PButton
+        >
       </template>
     </div>
   </section>
@@ -390,6 +515,10 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-card);
   background: var(--warning-soft);
   border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+}
+.notice--free {
+  background: var(--accent-softer);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .notice__text {
   margin: 0;

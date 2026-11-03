@@ -2,7 +2,7 @@
  * Folha do púlpito: o mesmo HTML alimenta a impressão direta, o PDF e a prévia. As anotações do
  * pregador ficam de fora porque `toRichDocument` já as descarta.
  */
-import { parseDateKey, shortDatePt } from '@pregar/core/util/dates'
+import { parseDateKey, sermonDateOf, shortDatePt } from '@pregar/core/util/dates'
 import { htmlForPrint } from '@pregar/editor'
 import type { AppSettings } from '@shared/settings'
 import { invoke } from '@/lib/api'
@@ -16,7 +16,7 @@ type App = Pick<ReturnType<typeof useAppStore>, 'settings'>
 
 /** "08/11/2026 · 24º Domingo depois de Pentecostes" */
 export function pulpitSubtitle(mesa: Mesa): string {
-  const date = parseDateKey(mesa.selectedDateKey)
+  const date = parseDateKey(sermonDateOf(mesa.selectedDateKey))
   return [date ? shortDatePt(date) : mesa.selectedDateKey, mesa.occasion].filter(Boolean).join(' · ')
 }
 

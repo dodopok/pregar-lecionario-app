@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { SERMON_KEY_PATTERN } from '@pregar/core/util/dates'
 import { createRevisionSnapshot, SermonHistoryStore } from '@pregar/core/history'
 import type { HistoryStorage, SermonRevision } from '@pregar/core/history'
 import type { SermonSnapshotInput } from '@shared/ipc-content'
 import type { MainContext } from '../../context'
 import { handle, UserFacingError } from '../../ipc/router'
 
-const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const dateKey = z.string().regex(SERMON_KEY_PATTERN)
 const snapshotSchema = z.object({
   title: z.string().max(500),
   mainReadingReference: z.string().max(200).nullable(),
@@ -20,7 +21,10 @@ class SqliteHistoryStorage implements HistoryStorage {
 
   async list(key: string): Promise<SermonRevision[]> {
     return this.context.database
-      .all<{ payload: string }>('select payload from sermon_revisions where date_key = ? order by version', key)
+      .all<{ payload: string }>(
+        'select payload from sermon_revisions where date_key = ? order by version',
+        key,
+      )
       .map((row) => JSON.parse(row.payload) as SermonRevision)
   }
 
@@ -65,19 +69,26 @@ export function registerHistory(context: MainContext): void {
     const revision = revisions.find((item) => item.id === revisionId)
     if (!revision) throw new UserFacingError('Esta versão não existe mais no histórico.')
     if (revision.content?.format === 'rtf') {
-      throw new UserFacingError('Esta versão veio do app antigo e precisa ser convertida pela importação do backup.')
+      throw new UserFacingError(
+        'Esta versão veio do app antigo e precisa ser convertida pela importação do backup.',
+      )
     }
     let record = context.sermons.get(day)
-    const updated = await store.restore(day, revision, snapshot(snapshotSchema.parse(current)), (restored) => {
-      record = context.sermons.save(day, {
-        title: restored.title,
-        mainReadingReference: restored.mainReadingReference,
-        mainReadingSlot: restored.mainReadingSlot,
-        doc: restored.content?.data ?? null,
-        plainText: restored.plainText,
-        wordCount: restored.wordCount,
-      })
-    })
+    const updated = await store.restore(
+      day,
+      revision,
+      snapshot(snapshotSchema.parse(current)),
+      (restored) => {
+        record = context.sermons.save(day, {
+          title: restored.title,
+          mainReadingReference: restored.mainReadingReference,
+          mainReadingSlot: restored.mainReadingSlot,
+          doc: restored.content?.data ?? null,
+          plainText: restored.plainText,
+          wordCount: restored.wordCount,
+        })
+      },
+    )
     context.windows.broadcast('sermon:changed', { dateKey: day, origin: event.sender.id })
     return { record: record!, revisions: updated }
   })

@@ -2,12 +2,9 @@ import { createServer } from 'node:http'
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { SERMON_KEY_PATTERN } from '@pregar/core/util/dates'
 import { shell } from 'electron'
-import {
-  GoogleDrivePublicPDFImporter,
-  GoogleDriveStore,
-  googleDocURL,
-} from '@pregar/core/drive'
+import { GoogleDrivePublicPDFImporter, GoogleDriveStore, googleDocURL } from '@pregar/core/drive'
 import type { GoogleDriveSermonLink, GoogleDriveSettingKey, LoopbackReceiver } from '@pregar/core/drive'
 import type { RichDocument } from '@pregar/core/document/model'
 import type { DriveStatus, IdeaNote } from '@shared/ipc-content'
@@ -15,7 +12,7 @@ import type { SermonRecord } from '@shared/types'
 import type { MainContext } from '../../context'
 import { handle, UserFacingError } from '../../ipc/router'
 
-const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const dateKey = z.string().regex(SERMON_KEY_PATTERN)
 
 /** Servidor de retorno do OAuth: só 127.0.0.1, porta aleatória, uma resposta por pedido. */
 function loopbackReceiver(): LoopbackReceiver {
@@ -107,7 +104,7 @@ export function registerDrive(context: MainContext): void {
       ideasDocumentURL: state.ideasDocumentId ? googleDocURL(state.ideasDocumentId) : null,
       message: !available
         ? 'A conexão com o Google Drive não está configurada nesta versão do app.'
-        : state.errorMessage ?? (state.isConnected ? 'Conectado ao Google Drive.' : 'Não conectado.'),
+        : (state.errorMessage ?? (state.isConnected ? 'Conectado ao Google Drive.' : 'Não conectado.')),
     }
   }
 
@@ -149,7 +146,8 @@ export function registerDrive(context: MainContext): void {
     await loaded
     if (!clientId) throw new UserFacingError(status().message)
     await store.connect()
-    if (store.state.errorMessage && !store.state.isConnected) throw new UserFacingError(store.state.errorMessage)
+    if (store.state.errorMessage && !store.state.isConnected)
+      throw new UserFacingError(store.state.errorMessage)
     return status()
   })
   handle('drive:disconnect', async () => {
@@ -161,7 +159,10 @@ export function registerDrive(context: MainContext): void {
     const day = dateKey.parse(key)
     const { draft } = draftFor(day, documentSchema.parse(document))
     const link = await store.saveSermon(draft, writeLink(day), { overwriteRemote: Boolean(overwriteRemote) })
-    return { record: context.sermons.get(day)!, documentURL: link.documentId ? googleDocURL(link.documentId) : null }
+    return {
+      record: context.sermons.get(day)!,
+      documentURL: link.documentId ? googleDocURL(link.documentId) : null,
+    }
   })
   handle('drive:sync', async ({ dateKey: key, document }) => {
     await loaded
@@ -201,7 +202,8 @@ export function registerDrive(context: MainContext): void {
       },
     },
     keyStore: {
-      read: async () => context.secrets.get('driveApiKey') ?? (import.meta.env.MAIN_VITE_DRIVE_API_KEY || null),
+      read: async () =>
+        context.secrets.get('driveApiKey') ?? (import.meta.env.MAIN_VITE_DRIVE_API_KEY || null),
       save: async (key) => context.secrets.set('driveApiKey', key),
     },
     onChange: (state) =>

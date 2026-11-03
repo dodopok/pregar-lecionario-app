@@ -139,9 +139,11 @@ A Mesa abre no próximo dia de pregar (domingo, por padrão; Preferências › R
 
 Na Mesa, todas as leituras do dia ficam abertas com o texto inteiro (ou só a principal, à escolha), com chips para pular entre elas, o botão **Usar como texto principal** em cada uma e a leitura em tela cheia. O editor tem uma barra curta (o resto fica em **Mais**), citações em bloco ou em versos e **anotações só para você**, que ficam fora da contagem de palavras, da folha do púlpito e do ensaio. A barra de estado compara a duração estimada com a sua meta; o **Ensaio** em tela cheia tem rolagem automática, marcas por título e mede o seu ritmo de fala. **Levar para o púlpito** imprime direto, salva PDF, cria o Google Doc ou copia o texto simples.
 
+Uma **preparação avulsa** (casamento, funeral, celebração fora do lecionário ou segunda pregação no mesmo dia) nasce no menu Mais ou no botão do calendário, com data, ocasião e, se quiser, uma passagem livre como texto principal; fica no calendário e no Arquivo junto da data, marcada como avulsa.
+
 ## Importar sermões antigos
 
-No Arquivo, **Importar sermões antigos…** aceita `.docx`, `.rtf`, `.txt` e `.md`, um arquivo ou uma pasta inteira (no macOS; nos outros sistemas, vários arquivos de uma vez). A data e a passagem são lidas do nome do arquivo e das primeiras linhas, e você confere cada linha antes de guardar. As preparações importadas aparecem no Arquivo e voltam em **Já preguei sobre isto**, na aba Materiais, quando a mesma passagem (ou a mesma ocasião) chegar de novo. Nada sai do computador.
+No Arquivo, **Importar sermões antigos…** aceita `.docx`, `.rtf`, `.txt` e `.md`, um arquivo ou uma pasta inteira (no macOS; nos outros sistemas, vários arquivos de uma vez). A data e a passagem são lidas do nome do arquivo e das primeiras linhas, e você confere cada linha antes de guardar. As preparações importadas aparecem no Arquivo e voltam em **Já preguei sobre isto**, na aba Materiais, quando a mesma passagem (ou a mesma ocasião) chegar de novo. Se a data já tiver uma preparação com texto, o sermão entra como avulsa na mesma data. Nada sai do computador.
 
 ## Migrar do Pregar para Mac (Swift)
 

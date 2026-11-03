@@ -22,6 +22,21 @@ export function isDateKey(value: string): boolean {
   return parseDateKey(value) !== null
 }
 
+/**
+ * Chave de uma preparação: a data do lecionário (`2026-11-08`) ou uma avulsa com sufixo curto
+ * (`2026-11-08-k3x9`: casamento, funeral ou segunda pregação no mesmo dia).
+ */
+export const SERMON_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}(?:-[a-z0-9]{4})?$/
+
+export function isSermonKey(value: string): boolean {
+  return SERMON_KEY_PATTERN.test(value) && isDateKey(value.slice(0, 10))
+}
+
+/** A data (yyyy-MM-dd) de qualquer chave de preparação. */
+export function sermonDateOf(key: string): string {
+  return key.slice(0, 10)
+}
+
 export function addDays(date: Date, days: number): Date {
   const result = new Date(date)
   result.setDate(result.getDate() + days)
@@ -75,7 +90,15 @@ const MONTHS_PT = [
   'dezembro',
 ]
 
-const WEEKDAYS_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
+const WEEKDAYS_PT = [
+  'domingo',
+  'segunda-feira',
+  'terça-feira',
+  'quarta-feira',
+  'quinta-feira',
+  'sexta-feira',
+  'sábado',
+]
 
 export function monthNamePt(monthIndex: number): string {
   return MONTHS_PT[((monthIndex % 12) + 12) % 12] ?? ''

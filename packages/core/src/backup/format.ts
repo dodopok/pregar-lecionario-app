@@ -10,7 +10,7 @@
  * Credenciais nunca entram. O formato 1 (app Swift) é lido por `readLegacyBackup`.
  */
 import { z } from 'zod'
-import { isDateKey } from '../util/dates'
+import { isDateKey, isSermonKey } from '../util/dates'
 import { manuscriptContentSchema, sermonRevisionListSchema } from '../history/model'
 import type { ManuscriptContent, SermonRevision } from '../history/model'
 import type { JsonValue } from './json'
@@ -40,7 +40,7 @@ export const BACKUP_ROOT_FILES: readonly string[] = [
   BACKUP_FILES.reviewReports,
 ]
 
-const HISTORY_PATH = /^History\/(\d{4}-\d{2}-\d{2})\.json$/
+const HISTORY_PATH = /^History\/(\d{4}-\d{2}-\d{2}(?:-[a-z0-9]{4})?)\.json$/
 
 export function historyPathFor(dateKey: string): string {
   return `History/${dateKey}.json`
@@ -148,7 +148,9 @@ export interface BackupManifest {
 // MARK: - Esquemas
 
 const isoDate = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Data ISO 8601 inválida.')
-const dateKey = z.string().refine(isDateKey, 'Data yyyy-MM-dd inválida.')
+const dateKey = z
+  .string()
+  .refine(isSermonKey, 'Chave de preparação inválida (yyyy-MM-dd ou yyyy-MM-dd-xxxx).')
 const optionalText = z.string().nullable().optional()
 const count = z.number().int().nonnegative()
 
@@ -218,7 +220,7 @@ export const favoriteSourcesSchema = z.object({
 })
 export const reviewReportsSchema = z
   .record(z.string(), z.array(jsonValueSchema))
-  .refine((reports) => Object.keys(reports).every(isDateKey), 'Data yyyy-MM-dd inválida.')
+  .refine((reports) => Object.keys(reports).every(isSermonKey), 'Chave de preparação inválida.')
 
 export const backupSchemas = {
   sermons: z.array(backupSermonSchema),

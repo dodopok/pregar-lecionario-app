@@ -15,6 +15,7 @@ import ShortcutsSheet from './ShortcutsSheet.vue'
 const HistorySheet = defineAsyncComponent(() => import('./HistorySheet.vue'))
 const PulpitSheet = defineAsyncComponent(() => import('./PulpitSheet.vue'))
 const ConnectSheet = defineAsyncComponent(() => import('./ConnectSheet.vue'))
+const FreePreparationSheet = defineAsyncComponent(() => import('./FreePreparationSheet.vue'))
 
 const mesa = useMesaStore()
 
@@ -32,4 +33,5 @@ function close(): void {
   <ShortcutsSheet v-else-if="mesa.activeSheet === 'shortcuts'" @close="close" />
   <CommandSearchSheet v-else-if="mesa.activeSheet === 'commands'" @close="close" />
   <ConnectSheet v-else-if="mesa.activeSheet === 'connect'" @close="close" />
+  <FreePreparationSheet v-else-if="mesa.activeSheet === 'free'" @close="close" />
 </template>

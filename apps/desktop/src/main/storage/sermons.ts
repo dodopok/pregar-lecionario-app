@@ -1,5 +1,5 @@
 import { normalizeForSearch, countWords } from '@pregar/core/util/text'
-import { parseBrazilianDate } from '@pregar/core/util/dates'
+import { isSermonKey, parseBrazilianDate } from '@pregar/core/util/dates'
 import { parseReference, passageRelation } from '@pregar/core/bible/reference'
 import type { PassageRelationKind, ScriptureReference } from '@pregar/core/bible/reference'
 import type {
@@ -88,7 +88,9 @@ function toRecord(row: SermonRow): SermonRecord {
   }
 }
 
-export function preparationState(row: Pick<SermonRow, 'word_count' | 'tablet_pdf_updated_at' | 'drive_synced_at'>): SermonPreparationState {
+export function preparationState(
+  row: Pick<SermonRow, 'word_count' | 'tablet_pdf_updated_at' | 'drive_synced_at'>,
+): SermonPreparationState {
   if (row.tablet_pdf_updated_at || row.drive_synced_at) return 'exported'
   return row.word_count > 0 ? 'inProgress' : 'empty'
 }
@@ -122,12 +124,17 @@ export class SermonRepository {
   }
 
   save(dateKey: string, patch: SermonPatch, now = new Date()): SermonRecord {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new Error('Data de preparação inválida.')
+    if (!isSermonKey(dateKey)) throw new Error('Data de preparação inválida.')
     const timestamp = now.toISOString()
     return this.database.transaction(() => {
       const existing = this.database.get<SermonRow>('select * from sermons where date_key = ?', dateKey)
       if (!existing) {
-        this.database.run('insert into sermons (date_key, created_at, modified_at) values (?, ?, ?)', dateKey, timestamp, timestamp)
+        this.database.run(
+          'insert into sermons (date_key, created_at, modified_at) values (?, ?, ?)',
+          dateKey,
+          timestamp,
+          timestamp,
+        )
       }
       const assignments: string[] = []
       const values: (string | number | null)[] = []
@@ -147,18 +154,29 @@ export class SermonRepository {
         assignments.push(`${column} = ?`)
         values.push(value as string | null)
       }
-      const contentChanged = ['doc', 'plainText', 'title'].some((key) => (normalized as Record<string, unknown>)[key] !== undefined)
+      const contentChanged = ['doc', 'plainText', 'title'].some(
+        (key) => (normalized as Record<string, unknown>)[key] !== undefined,
+      )
       if (contentChanged) {
         assignments.push('modified_at = ?')
         values.push(timestamp)
       }
       if (assignments.length > 0) {
-        this.database.run(`update sermons set ${assignments.join(', ')} where date_key = ?`, ...values, dateKey)
+        this.database.run(
+          `update sermons set ${assignments.join(', ')} where date_key = ?`,
+          ...values,
+          dateKey,
+        )
       }
       const row = this.database.get<SermonRow>('select * from sermons where date_key = ?', dateKey)!
       if (contentChanged || !existing) {
         this.database.run('delete from sermons_fts where date_key = ?', dateKey)
-        this.database.run('insert into sermons_fts (date_key, title, body) values (?, ?, ?)', dateKey, row.title, row.plain_text)
+        this.database.run(
+          'insert into sermons_fts (date_key, title, body) values (?, ?, ?)',
+          dateKey,
+          row.title,
+          row.plain_text,
+        )
       }
       return toRecord(row)
     })
@@ -203,22 +221,30 @@ export class SermonRepository {
           record.createdAt,
           record.modifiedAt,
         )
-        this.database.run('insert into sermons_fts (date_key, title, body) values (?, ?, ?)', record.dateKey, record.title, record.plainText)
+        this.database.run(
+          'insert into sermons_fts (date_key, title, body) values (?, ?, ?)',
+          record.dateKey,
+          record.title,
+          record.plainText,
+        )
       }
     })
   }
 
   list(): SermonSummary[] {
     return this.database
-      .all<SermonRow>(`select ${SUMMARY_COLUMNS} from sermons where word_count > 0 or title <> '' order by date_key desc`)
+      .all<SermonRow>(
+        `select ${SUMMARY_COLUMNS} from sermons where word_count > 0 or title <> '' order by date_key desc`,
+      )
       .map((row) => toSummary(row))
   }
 
   states(from: string, to: string): Record<string, SermonPreparationState> {
+    // As avulsas (`2026-11-08-k3x9`) ordenam depois da data; o limite superior inclui as do último dia.
     const rows = this.database.all<SermonRow>(
-      'select date_key, word_count, tablet_pdf_updated_at, drive_synced_at from sermons where date_key between ? and ?',
+      'select date_key, word_count, tablet_pdf_updated_at, drive_synced_at from sermons where date_key >= ? and date_key <= ?',
       from,
-      to,
+      `${to}-~`,
     )
     return Object.fromEntries(rows.map((row) => [row.date_key, preparationState(row)]))
   }
@@ -227,7 +253,12 @@ export class SermonRepository {
    * Preparações anteriores (com texto) ligadas ao dia aberto: a passagem principal delas casa com alguma
    * leitura do dia, ou a ocasião litúrgica é a mesma. Passagens iguais vêm antes; depois, as mais recentes.
    */
-  related(input: { dateKey: string; references: string[]; occasion: string | null; limit?: number }): RelatedSermon[] {
+  related(input: {
+    dateKey: string
+    references: string[]
+    occasion: string | null
+    limit?: number
+  }): RelatedSermon[] {
     const targets = input.references
       .map((reference) => parseReference(reference))
       .filter((reference): reference is ScriptureReference => reference !== null)
@@ -252,11 +283,19 @@ export class SermonRepository {
       }
       if (matched) {
         found.push({
-          item: { ...toSummary(row), relation: 'passage', relationKind: matched.kind, matchedReference: matched.reference },
+          item: {
+            ...toSummary(row),
+            relation: 'passage',
+            relationKind: matched.kind,
+            matchedReference: matched.reference,
+          },
           order: rank[matched.kind],
         })
       } else if (occasion && normalizeForSearch(row.liturgical_occasion ?? '') === occasion) {
-        found.push({ item: { ...toSummary(row), relation: 'occasion', relationKind: null, matchedReference: null }, order: 4 })
+        found.push({
+          item: { ...toSummary(row), relation: 'occasion', relationKind: null, matchedReference: null },
+          order: 4,
+        })
       }
     }
     return found
@@ -268,7 +307,9 @@ export class SermonRepository {
   search(mode: ArchiveSearchMode, query: string): SermonSummary[] {
     const trimmed = query.trim()
     if (!trimmed) return this.list()
-    const all = this.database.all<SermonRow>(`select ${SUMMARY_COLUMNS} from sermons where word_count > 0 or title <> '' order by date_key desc`)
+    const all = this.database.all<SermonRow>(
+      `select ${SUMMARY_COLUMNS} from sermons where word_count > 0 or title <> '' order by date_key desc`,
+    )
     const needle = normalizeForSearch(trimmed)
     switch (mode) {
       case 'passage': {
@@ -287,8 +328,8 @@ export class SermonRepository {
       case 'occasion':
         return all
           .filter((row) =>
-            [row.liturgical_occasion, row.liturgical_celebration, row.liturgical_season, row.title].some((value) =>
-              normalizeForSearch(value ?? '').includes(needle),
+            [row.liturgical_occasion, row.liturgical_celebration, row.liturgical_season, row.title].some(
+              (value) => normalizeForSearch(value ?? '').includes(needle),
             ),
           )
           .map((row) => toSummary(row))

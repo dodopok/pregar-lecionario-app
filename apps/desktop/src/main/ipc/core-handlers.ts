@@ -4,9 +4,12 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import type { MainContext } from '../context'
 import { openExternalSafely } from '../security'
+import { SERMON_KEY_PATTERN } from '@pregar/core/util/dates'
 import { handle, UserFacingError } from './router'
 
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+/** Chave de preparação: data do lecionário ou avulsa com sufixo (`2026-11-08-k3x9`). */
+const sermonKey = z.string().regex(SERMON_KEY_PATTERN)
 const secretName = z.enum(['estevao', 'openai', 'anthropic', 'google', 'perplexity', 'driveApiKey'])
 
 export function registerCoreHandlers(context: MainContext): void {
@@ -19,13 +22,19 @@ export function registerCoreHandlers(context: MainContext): void {
     electron: process.versions.electron ?? '',
   }))
   handle('app:openWindow', ({ window, route }) => {
-    context.windows.open(z.enum(['mesa', 'leitor', 'biblioteca', 'arquivo', 'biblia', 'preferencias']).parse(window), route)
+    context.windows.open(
+      z.enum(['mesa', 'leitor', 'biblioteca', 'arquivo', 'biblia', 'preferencias']).parse(window),
+      route,
+    )
   })
   handle('app:openExternal', ({ url }) => openExternalSafely(z.string().url().parse(url)))
   handle('app:showItemInFolder', ({ path }) => shell.showItemInFolder(z.string().min(1).parse(path)))
   handle('app:chooseFolder', async ({ title }, event) => {
     const window = BrowserWindow.fromWebContents(event.sender) ?? undefined
-    const result = await dialog.showOpenDialog(window!, { title, properties: ['openDirectory', 'createDirectory'] })
+    const result = await dialog.showOpenDialog(window!, {
+      title,
+      properties: ['openDirectory', 'createDirectory'],
+    })
     return result.canceled ? null : (result.filePaths[0] ?? null)
   })
   handle('app:chooseFiles', async ({ title, extensions, multiple }, event) => {
@@ -83,12 +92,23 @@ export function registerCoreHandlers(context: MainContext): void {
     void context.account.refresh(false).catch(() => undefined)
     return context.account.current()
   })
-  handle('account:startLogin', ({ email }) => context.account.startLogin(z.string().trim().toLowerCase().email().parse(email)))
+  handle('account:startLogin', ({ email }) =>
+    context.account.startLogin(z.string().trim().toLowerCase().email().parse(email)),
+  )
   handle('account:verifyLogin', ({ email, code }) =>
-    context.account.verifyLogin(z.string().trim().toLowerCase().email().parse(email), z.string().trim().regex(/^\d{6}$/).parse(code)),
+    context.account.verifyLogin(
+      z.string().trim().toLowerCase().email().parse(email),
+      z
+        .string()
+        .trim()
+        .regex(/^\d{6}$/)
+        .parse(code),
+    ),
   )
   handle('account:logout', () => context.account.logout())
-  handle('account:rename', ({ name }) => context.account.rename(z.string().trim().min(1).max(120).parse(name)))
+  handle('account:rename', ({ name }) =>
+    context.account.rename(z.string().trim().min(1).max(120).parse(name)),
+  )
   handle('account:sessions', () => context.account.sessions())
   handle('account:revokeSession', ({ id }) => context.account.revokeSession(z.string().uuid().parse(id)))
   handle('account:export', async (_request, event) => {
@@ -119,33 +139,47 @@ export function registerCoreHandlers(context: MainContext): void {
 
   handle('liturgy:status', () => context.liturgy.access())
   handle('liturgy:day', ({ dateKey: key }) => context.liturgy.day(dateKey.parse(key)))
-  handle('liturgy:calendar', ({ from, to }) => context.liturgy.calendar(dateKey.parse(from), dateKey.parse(to)))
+  handle('liturgy:calendar', ({ from, to }) =>
+    context.liturgy.calendar(dateKey.parse(from), dateKey.parse(to)),
+  )
   handle('liturgy:passage', ({ reference, bible }) =>
-    context.liturgy.passage(z.string().trim().min(1).max(200).parse(reference), z.string().trim().min(1).max(20).parse(bible)),
+    context.liturgy.passage(
+      z.string().trim().min(1).max(200).parse(reference),
+      z.string().trim().min(1).max(20).parse(bible),
+    ),
   )
   handle('liturgy:bibleVersions', () => context.liturgy.bibleVersions())
   handle('liturgy:prayerBooks', () => context.liturgy.prayerBooks())
 
-  handle('sermons:get', ({ dateKey: key }) => context.sermons.get(dateKey.parse(key)))
+  handle('sermons:get', ({ dateKey: key }) => context.sermons.get(sermonKey.parse(key)))
   handle('sermons:save', ({ dateKey: key, patch }, event) => {
-    const record = context.sermons.save(dateKey.parse(key), patch ?? {})
+    const record = context.sermons.save(sermonKey.parse(key), patch ?? {})
     context.windows.broadcast('sermon:changed', { dateKey: record.dateKey, origin: event.sender.id })
     return record
   })
   handle('sermons:list', () => context.sermons.list())
   handle('sermons:search', ({ mode, query }) =>
-    context.sermons.search(z.enum(['passage', 'occasion', 'date', 'text']).parse(mode), z.string().max(200).parse(query)),
+    context.sermons.search(
+      z.enum(['passage', 'occasion', 'date', 'text']).parse(mode),
+      z.string().max(200).parse(query),
+    ),
   )
   handle('sermons:states', ({ from, to }) => context.sermons.states(dateKey.parse(from), dateKey.parse(to)))
   handle('sermons:related', ({ dateKey: key, references, occasion }) =>
     context.sermons.related({
-      dateKey: dateKey.parse(key),
-      references: z.array(z.string().trim().max(200)).max(12).parse(references ?? []),
+      dateKey: sermonKey.parse(key),
+      references: z
+        .array(z.string().trim().max(200))
+        .max(12)
+        .parse(references ?? []),
       occasion: occasion ? z.string().trim().max(200).parse(occasion) : null,
     }),
   )
 
-  handle('logs:tail', ({ lines }) => ({ path: context.integrationLog.file, text: context.integrationLog.tail(lines ?? 400) }))
+  handle('logs:tail', ({ lines }) => ({
+    path: context.integrationLog.file,
+    text: context.integrationLog.tail(lines ?? 400),
+  }))
   handle('logs:clear', () => context.integrationLog.clear())
   handle('logs:reveal', () => shell.showItemInFolder(context.integrationLog.ensureFile()))
 

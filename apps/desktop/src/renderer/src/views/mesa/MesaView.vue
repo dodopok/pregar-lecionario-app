@@ -7,6 +7,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Clock, PanelLeftOpen, PanelRightOpen } from 'lucide-vue-next'
 import { estimatedPreachingMinutes, estimatedPulpitPages, formatMinutes } from '@pregar/core/util/text'
+import { isSermonKey } from '@pregar/core/util/dates'
 import ResizeHandle from '@/components/ResizeHandle.vue'
 import { errorMessage, invoke, on, shortcut } from '@/lib/api'
 import { useAppStore } from '@/stores/app'
@@ -30,7 +31,11 @@ const mesa = useMesaStore()
 const app = useAppStore()
 const toasts = useToasts()
 const panels = computed(() => app.settings.panels)
-const widths = ref({ calendar: panels.value.calendarWidth, readings: panels.value.readingsWidth, materials: panels.value.materialsWidth })
+const widths = ref({
+  calendar: panels.value.calendarWidth,
+  readings: panels.value.readingsWidth,
+  materials: panels.value.materialsWidth,
+})
 const windowWidth = ref(window.innerWidth)
 const mainRegion = ref<HTMLElement | null>(null)
 
@@ -58,7 +63,10 @@ function togglePanel(panel: 'calendarOpen' | 'readingsOpen' | 'materialsOpen'): 
 /** O botão de data atraca o calendário quando cabe; senão abre o popover. */
 function toggleCalendar(): void {
   if (mesa.focusMode) mesa.focusMode = false
-  if (layout.value.calendar === 'docked' || (layout.value.calendar === 'hidden' && windowWidth.value >= 1280)) {
+  if (
+    layout.value.calendar === 'docked' ||
+    (layout.value.calendar === 'hidden' && windowWidth.value >= 1280)
+  ) {
     togglePanel('calendarOpen')
     return
   }
@@ -79,7 +87,8 @@ const pages = computed(() => estimatedPulpitPages(mesa.wordCount))
 const durationLabel = computed(() => {
   if (mesa.wordCount === 0) return 'Sem texto ainda'
   const parts = [`${mesa.wordCount.toLocaleString('pt-BR')} palavras`, `≈ ${formatMinutes(minutes.value)}`]
-  if (rhythm.value.showPages) parts.push(`${pages.value} ${pages.value === 1 ? 'página' : 'páginas'} no púlpito`)
+  if (rhythm.value.showPages)
+    parts.push(`${pages.value} ${pages.value === 1 ? 'página' : 'páginas'} no púlpito`)
   return parts.join(' · ')
 })
 const targetLabel = computed(() => {
@@ -87,7 +96,9 @@ const targetLabel = computed(() => {
   if (mesa.wordCount === 0) return `meta: ${target} min`
   const delta = Math.round(minutes.value - target)
   if (Math.abs(delta) <= 2) return `na meta de ${target} min`
-  return delta > 0 ? `${delta} min acima da meta de ${target}` : `${Math.abs(delta)} min abaixo da meta de ${target}`
+  return delta > 0
+    ? `${delta} min acima da meta de ${target}`
+    : `${Math.abs(delta)} min abaixo da meta de ${target}`
 })
 const targetTone = computed(() => {
   if (mesa.wordCount === 0) return 'muted'
@@ -114,12 +125,18 @@ const saveLabel = computed(() => {
 const driveLabel = computed(() => {
   const drive = mesa.record?.drive
   if (!drive?.documentId) return null
-  if (drive.syncError) return drive.syncError.toLowerCase().includes('mudou fora') ? 'Drive · conflito' : 'Drive · erro'
-  if (drive.syncedAt) return `Drive · atualizado ${new Date(drive.syncedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+  if (drive.syncError)
+    return drive.syncError.toLowerCase().includes('mudou fora') ? 'Drive · conflito' : 'Drive · erro'
+  if (drive.syncedAt)
+    return `Drive · atualizado ${new Date(drive.syncedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
   return 'Drive · aguardando sincronização'
 })
-const windowTitle = computed(() => mesa.record?.mainReadingReference || mesa.occasion || 'Preparação do sermão')
-watch(windowTitle, (title) => void invoke('app:setTitle', { title: `${title} · Pregar` }), { immediate: true })
+const windowTitle = computed(
+  () => mesa.record?.mainReadingReference || mesa.occasion || 'Preparação do sermão',
+)
+watch(windowTitle, (title) => void invoke('app:setTitle', { title: `${title} · Pregar` }), {
+  immediate: true,
+})
 
 async function printDirect(): Promise<void> {
   try {
@@ -158,7 +175,8 @@ onMounted(() => {
         toggleReadings: () => togglePanel('readingsOpen'),
         toggleMaterials: () => togglePanel('materialsOpen'),
         focusMode: () => (mesa.focusMode = !mesa.focusMode),
-        readingsFullscreen: () => (mesa.fullscreen === 'readings' ? (mesa.fullscreen = null) : mesa.openFullscreen('readings')),
+        readingsFullscreen: () =>
+          mesa.fullscreen === 'readings' ? (mesa.fullscreen = null) : mesa.openFullscreen('readings'),
         review: () => mesa.requestReview(),
         questions: () => mesa.openSheet('questions'),
         rehearsal: () => mesa.openFullscreen('rehearsal'),
@@ -176,7 +194,7 @@ onMounted(() => {
     }),
     on('navigate', ({ route }) => {
       const requested = new URLSearchParams(route.split('?')[1] ?? '').get('date')
-      if (requested) {
+      if (requested && isSermonKey(requested)) {
         mesa.focusMode = false
         void mesa.selectDate(requested)
       }
@@ -277,7 +295,12 @@ onBeforeUnmount(() => {
         </button>
 
         <!-- Em janelas estreitas os materiais abrem como gaveta sobre o manuscrito. -->
-        <div v-if="showMaterials && materialsDrawer" class="mesa__drawer" :style="{ width: `${layout.materialsWidth}px` }" data-tour="materials">
+        <div
+          v-if="showMaterials && materialsDrawer"
+          class="mesa__drawer"
+          :style="{ width: `${layout.materialsWidth}px` }"
+          data-tour="materials"
+        >
           <ResourcePanel @collapse="togglePanel('materialsOpen')" />
         </div>
 
@@ -290,10 +313,33 @@ onBeforeUnmount(() => {
         <span class="status__counts" :title="rhythmTitle">{{ durationLabel }}</span>
         <span class="status__target" :class="`status__target--${targetTone}`">{{ targetLabel }}</span>
         <span class="spacer" />
-        <span class="status__save" :class="`status__save--${mesa.saveState}`" role="status">{{ saveLabel }}</span>
-        <button v-if="mesa.saveState === 'error'" type="button" class="status__link" :title="mesa.saveError ?? ''" @click="mesa.flush()">Tentar de novo</button>
-        <button v-if="driveLabel" type="button" class="status__link" :class="{ 'status__link--warn': mesa.record.drive.syncError }" @click="mesa.openSheet('drive')">{{ driveLabel }}</button>
-        <button type="button" class="status__link status__link--accent" :title="`Abrir histórico recuperável deste sermão (${shortcut('⇧⌥⌘H')})`" @click="mesa.openSheet('history')">
+        <span class="status__save" :class="`status__save--${mesa.saveState}`" role="status">{{
+          saveLabel
+        }}</span>
+        <button
+          v-if="mesa.saveState === 'error'"
+          type="button"
+          class="status__link"
+          :title="mesa.saveError ?? ''"
+          @click="mesa.flush()"
+        >
+          Tentar de novo
+        </button>
+        <button
+          v-if="driveLabel"
+          type="button"
+          class="status__link"
+          :class="{ 'status__link--warn': mesa.record.drive.syncError }"
+          @click="mesa.openSheet('drive')"
+        >
+          {{ driveLabel }}
+        </button>
+        <button
+          type="button"
+          class="status__link status__link--accent"
+          :title="`Abrir histórico recuperável deste sermão (${shortcut('⇧⌥⌘H')})`"
+          @click="mesa.openSheet('history')"
+        >
           <Clock :size="12" /> v{{ mesa.currentVersion }} · histórico
         </button>
       </footer>

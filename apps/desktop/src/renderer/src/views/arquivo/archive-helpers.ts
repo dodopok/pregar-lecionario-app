@@ -14,15 +14,33 @@ export function placeholderFor(mode: ArchiveSearchMode): string {
 
 /** `2026-10-04` → `04/10/2026`, sem passar por fuso horário. */
 export function formatDateKey(dateKey: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:-[a-z0-9]{4})?$/.exec(dateKey)
   return match ? `${match[3]}/${match[2]}/${match[1]}` : dateKey
 }
 
-const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+/** Preparação avulsa (casamento, funeral, segunda pregação): chave com sufixo depois da data. */
+export function isFreePreparation(dateKey: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}-[a-z0-9]{4}$/.test(dateKey)
+}
+
+const MONTHS = [
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+]
 
 /** `2026-10-04` → `4 de outubro de 2026` (rótulo para leitores de tela). */
 export function longDate(dateKey: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:-[a-z0-9]{4})?$/.exec(dateKey)
   if (!match) return dateKey
   return `${Number(match[3])} de ${MONTHS[Number(match[2]) - 1] ?? match[2]} de ${match[1]}`
 }
@@ -41,15 +59,20 @@ export function archiveSummary(total: number, shown: number): string {
 }
 
 export function sermonTitle(summary: Pick<SermonSummary, 'title' | 'mainReadingReference'>): string {
-  return summary.title.trim() !== '' ? summary.title : (summary.mainReadingReference ?? 'Preparação sem título')
+  return summary.title.trim() !== ''
+    ? summary.title
+    : (summary.mainReadingReference ?? 'Preparação sem título')
 }
 
 /** Ocasião na primeira linha e tempo/celebração (quando diferente) na segunda. */
 export function occasionLines(
-  summary: Pick<SermonSummary, 'liturgicalOccasion' | 'liturgicalCelebration' | 'liturgicalSeason'>,
+  summary: Pick<SermonSummary, 'liturgicalOccasion' | 'liturgicalCelebration' | 'liturgicalSeason'> & {
+    dateKey?: string
+  },
 ): { primary: string; context: string } {
   const primary = summary.liturgicalOccasion ?? summary.liturgicalCelebration ?? '—'
   const context = [
+    summary.dateKey && isFreePreparation(summary.dateKey) ? 'Avulsa' : null,
     summary.liturgicalSeason,
     summary.liturgicalCelebration === summary.liturgicalOccasion ? null : summary.liturgicalCelebration,
   ]
@@ -60,13 +83,21 @@ export function occasionLines(
 
 /** Rótulo da linha para leitores de tela: título, ocasião e data por extenso. */
 export function archiveRowLabel(summary: SermonSummary): string {
-  return [sermonTitle(summary), summary.liturgicalOccasion ?? summary.liturgicalCelebration, longDate(summary.dateKey)]
+  return [
+    sermonTitle(summary),
+    summary.liturgicalOccasion ?? summary.liturgicalCelebration,
+    longDate(summary.dateKey),
+  ]
     .filter((value): value is string => Boolean(value))
     .join(', ')
 }
 
 function sameDay(left: Date, right: Date): boolean {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate()
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  )
 }
 
 /** Horário curto: "hoje, 14:32" ou "12/10, 14:32". */
@@ -84,8 +115,10 @@ export function driveStatus(
   summary: Pick<SermonSummary, 'tabletPdfUpdatedAt' | 'driveSyncedAt'>,
   now = new Date(),
 ): { label: string; time: string | null; saved: boolean } {
-  if (summary.tabletPdfUpdatedAt) return { label: 'PDF salvo', time: shortTimestamp(summary.tabletPdfUpdatedAt, now), saved: true }
-  if (summary.driveSyncedAt) return { label: 'Google Doc', time: shortTimestamp(summary.driveSyncedAt, now), saved: true }
+  if (summary.tabletPdfUpdatedAt)
+    return { label: 'PDF salvo', time: shortTimestamp(summary.tabletPdfUpdatedAt, now), saved: true }
+  if (summary.driveSyncedAt)
+    return { label: 'Google Doc', time: shortTimestamp(summary.driveSyncedAt, now), saved: true }
   return { label: 'sem cópia', time: null, saved: false }
 }
 

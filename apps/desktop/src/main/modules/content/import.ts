@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { LiturgicalAPIError } from '@pregar/core/liturgy/client'
 import type { LiturgicalDay } from '@pregar/core/liturgy/types'
 import { isDateKey } from '@pregar/core/util/dates'
+import { newFreeSermonKey } from '@shared/sermon-key'
 import type { ImportConfirmItem, ImportResult } from '@shared/ipc-import'
 import type { MainContext } from '../../context'
 import { handle } from '../../ipc/router'
@@ -125,17 +126,14 @@ export function registerImport(context: MainContext): void {
         results.push(failed(item, 'Data inválida.'))
         continue
       }
+      // Data já ocupada por uma preparação com texto: o sermão entra como avulsa na mesma data.
       const existing = context.sermons.get(item.dateKey)
-      if (existing && existing.plainText.trim() !== '') {
-        results.push({
-          id: item.id,
-          status: 'skipped',
-          dateKey: item.dateKey,
-          message: 'Já existe uma preparação com texto nessa data.',
-          record: null,
-        })
-        continue
-      }
+      const targetKey =
+        existing && existing.plainText.trim() !== '' ? newFreeSermonKey(item.dateKey) : item.dateKey
+      const note =
+        targetKey === item.dateKey
+          ? null
+          : 'Guardada como preparação avulsa: já havia uma preparação com texto nessa data.'
       let day: LiturgicalDay | null = null
       if (liturgyAvailable) {
         const loaded = await loadDay(item.dateKey)
@@ -146,10 +144,10 @@ export function registerImport(context: MainContext): void {
       const reference = item.mainReadingReference?.trim() || null
       const fields = liturgicalFieldsFor(day, reference, prayerBook)
       try {
-        const record = context.sermons.save(item.dateKey, sermonPatchFor(prepared, item.title.trim(), fields))
+        const record = context.sermons.save(targetKey, sermonPatchFor(prepared, item.title.trim(), fields))
         context.windows.broadcast('sermon:changed', { dateKey: record.dateKey, origin: event.sender.id })
         pending.delete(item.id)
-        results.push({ id: item.id, status: 'imported', dateKey: record.dateKey, message: null, record })
+        results.push({ id: item.id, status: 'imported', dateKey: record.dateKey, message: note, record })
       } catch (error) {
         console.warn(`[importação] falha ao gravar ${item.dateKey}:`, error)
         results.push(failed(item, 'Não foi possível gravar esta preparação. Tente de novo.'))

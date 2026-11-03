@@ -5,8 +5,22 @@ import { readingId } from '@pregar/core/liturgy/types'
 import type { SermonRevision } from '@pregar/core/history'
 import type { SermonReviewReport } from '@pregar/core/ai'
 import { countWords } from '@pregar/core/util/text'
-import { addDays, dateKey, nextPreachingDay, parseDateKey } from '@pregar/core/util/dates'
-import type { RelatedSermon, SermonPatch, SermonPreparationState, SermonRecord } from '@shared/types'
+import {
+  addDays,
+  dateKey,
+  isSermonKey,
+  nextPreachingDay,
+  parseDateKey,
+  sermonDateOf,
+} from '@pregar/core/util/dates'
+import type {
+  RelatedSermon,
+  SermonPatch,
+  SermonPreparationState,
+  SermonRecord,
+  SermonSummary,
+} from '@shared/types'
+import { isFreeSermonKey, newFreeSermonKey } from '@shared/sermon-key'
 import type { SermonSnapshotInput } from '@shared/ipc-content'
 import type { Idea, IdeaInput, IdeaPatch } from '@shared/ipc-ideas'
 import { preachingDays } from '@shared/settings'
@@ -17,7 +31,8 @@ import { useAppStore } from './app'
 export type SaveState = 'saved' | 'pending' | 'saving' | 'error'
 
 /** Folhas modais da Mesa. */
-export type MesaSheet = 'review' | 'questions' | 'pulpit' | 'history' | 'drive' | 'shortcuts' | 'commands' | 'connect'
+export type MesaSheet =
+  'review' | 'questions' | 'pulpit' | 'history' | 'drive' | 'shortcuts' | 'commands' | 'connect' | 'free'
 /** Modos de tela cheia dentro da janela da Mesa. */
 export type MesaFullscreen = 'readings' | 'rehearsal'
 
@@ -63,6 +78,8 @@ export const useMesaStore = defineStore('mesa', () => {
   const calendarPopover = ref(false)
   const reviewCriteriaPreset = ref<string[]>(['spelling', 'fidelity', 'structure', 'clarity', 'tone'])
   const related = shallowRef<RelatedSermon[]>([])
+  /** Preparações avulsas (chave com sufixo), para o calendário e a lista de celebrações. */
+  const freeSermons = shallowRef<SermonSummary[]>([])
   const ideas = shallowRef<Idea[]>([])
   const ideasLoading = ref(false)
   /** Pedido de foco na caixa de captura da aba Ideias (atalho ⇧⌘I). */
@@ -78,19 +95,31 @@ export const useMesaStore = defineStore('mesa', () => {
   let relatedRequest = 0
   let ideasRequest = 0
 
-  const isSunday = computed(() => Boolean(day.value?.isSunday) || parseDateKey(selectedDateKey.value)?.getDay() === 0)
-  const occasion = computed(() => day.value?.sundayName ?? day.value?.celebration?.name ?? day.value?.season?.name ?? null)
+  const isFree = computed(() => isFreeSermonKey(selectedDateKey.value))
+  const isSunday = computed(
+    () => Boolean(day.value?.isSunday) || parseDateKey(sermonDateOf(selectedDateKey.value))?.getDay() === 0,
+  )
+  /** Ocasião do dia; na avulsa, a que a pessoa escreveu ao criar. */
+  const occasion = computed(() =>
+    isFree.value
+      ? record.value?.liturgicalOccasion || null
+      : (day.value?.sundayName ?? day.value?.celebration?.name ?? day.value?.season?.name ?? null),
+  )
   const mainReference = computed(() => record.value?.mainReadingReference ?? '')
   const mainReading = computed<LiturgicalReading | null>(() => {
     const current = record.value
     if (!current?.mainReadingReference) return null
     return (
       (day.value?.readings ?? []).find(
-        (reading) => reading.reference === current.mainReadingReference && (!current.mainReadingSlot || reading.slot === current.mainReadingSlot),
+        (reading) =>
+          reading.reference === current.mainReadingReference &&
+          (!current.mainReadingSlot || reading.slot === current.mainReadingSlot),
       ) ?? null
     )
   })
-  const currentVersion = computed(() => Math.max(1, (revisions.value.at(-1)?.version ?? 0) + (historyDirty.value ? 1 : 0)))
+  const currentVersion = computed(() =>
+    Math.max(1, (revisions.value.at(-1)?.version ?? 0) + (historyDirty.value ? 1 : 0)),
+  )
   const openIdeas = computed(() => ideas.value.filter((idea) => !idea.done))
 
   async function loadDay(): Promise<void> {
@@ -100,7 +129,7 @@ export const useMesaStore = defineStore('mesa', () => {
     dayError.value = null
     dayErrorCode.value = null
     try {
-      const loaded = await invoke('liturgy:day', { dateKey: key })
+      const loaded = await invoke('liturgy:day', { dateKey: sermonDateOf(key) })
       if (request !== dayRequest) return
       day.value = loaded
       if (loaded.color && loaded.color !== app.settings.liturgy.lastColor) {
@@ -122,7 +151,13 @@ export const useMesaStore = defineStore('mesa', () => {
 
   /** Guarda ocasião, celebração e tempo no sermão para o Arquivo, sem trocar título nem leitura principal. */
   async function persistLiturgicalMetadata(loaded: LiturgicalDay): Promise<void> {
-    if (!record.value || record.value.dateKey !== loaded.date) return
+    // A avulsa guarda a ocasião que a pessoa escreveu; só a do lecionário acompanha o dia.
+    if (
+      !record.value ||
+      isFreeSermonKey(record.value.dateKey) ||
+      sermonDateOf(record.value.dateKey) !== loaded.date
+    )
+      return
     const patch = {
       liturgicalOccasion: loaded.sundayName ?? null,
       liturgicalCelebration: loaded.celebration?.name ?? null,
@@ -149,7 +184,7 @@ export const useMesaStore = defineStore('mesa', () => {
     wordCount.value = record.value.wordCount
     documentRevision.value += 1
     saveState.value = 'saved'
-    if (day.value && day.value.date === key) void persistLiturgicalMetadata(day.value)
+    if (day.value && day.value.date === sermonDateOf(key)) void persistLiturgicalMetadata(day.value)
   }
 
   async function loadSideData(): Promise<void> {
@@ -162,7 +197,9 @@ export const useMesaStore = defineStore('mesa', () => {
     revisions.value = loadedRevisions
     reviews.value = loadedReviews
     const latest = loadedRevisions.at(-1)
-    historyDirty.value = Boolean(record.value && record.value.wordCount > 0 && (!latest || latest.plainText !== record.value.plainText))
+    historyDirty.value = Boolean(
+      record.value && record.value.wordCount > 0 && (!latest || latest.plainText !== record.value.plainText),
+    )
   }
 
   async function loadStates(): Promise<void> {
@@ -170,6 +207,9 @@ export const useMesaStore = defineStore('mesa', () => {
     const from = dateKey(addDays(new Date(year!, month! - 1, 1), -7))
     const to = dateKey(addDays(new Date(year!, month!, 0), 14))
     states.value = await invoke('sermons:states', { from, to }).catch(() => ({}))
+    freeSermons.value = (await invoke('sermons:list').catch(() => [] as SermonSummary[])).filter((item) =>
+      isFreeSermonKey(item.dateKey),
+    )
   }
 
   /** "Já preguei sobre isto": preparações com texto cuja passagem casa com alguma leitura do dia. */
@@ -210,7 +250,10 @@ export const useMesaStore = defineStore('mesa', () => {
   }
 
   async function addIdea(input: Omit<IdeaInput, 'dateKey'> & { dateKey?: string | null }): Promise<Idea> {
-    const idea = await invoke('ideas:add', { ...input, dateKey: input.dateKey === undefined ? selectedDateKey.value : input.dateKey })
+    const idea = await invoke('ideas:add', {
+      ...input,
+      dateKey: input.dateKey === undefined ? selectedDateKey.value : input.dateKey,
+    })
     ideas.value = [idea, ...ideas.value.filter((item) => item.id !== idea.id)]
     return idea
   }
@@ -233,7 +276,7 @@ export const useMesaStore = defineStore('mesa', () => {
   }
 
   async function selectDate(key: string): Promise<void> {
-    if (!parseDateKey(key)) return
+    if (!isSermonKey(key)) return
     await flush()
     cancelTimers()
     selectedDateKey.value = key
@@ -281,13 +324,17 @@ export const useMesaStore = defineStore('mesa', () => {
     wordCount.value = countWords(payload.plainText)
     saveState.value = 'saving'
     try {
-      record.value = await invoke('sermons:save', { dateKey: key, patch: { doc: payload.doc, plainText: payload.plainText } })
+      record.value = await invoke('sermons:save', {
+        dateKey: key,
+        patch: { doc: payload.doc, plainText: payload.plainText },
+      })
       saveState.value = pending ? 'pending' : 'saved'
       saveError.value = null
       historyDirty.value = true
       scheduleHistory()
       scheduleDriveSync()
-      if (record.value.wordCount > 0 && states.value[key] !== 'exported') states.value = { ...states.value, [key]: 'inProgress' }
+      if (record.value.wordCount > 0 && states.value[key] !== 'exported')
+        states.value = { ...states.value, [key]: 'inProgress' }
     } catch (error) {
       pending = pending ?? (() => payload)
       saveState.value = 'error'
@@ -334,7 +381,8 @@ export const useMesaStore = defineStore('mesa', () => {
       const document = editorRichDocument(record.value?.title)
       if (!document || key !== selectedDateKey.value) return
       const result = await invoke('drive:sync', { dateKey: key, document }).catch(() => null)
-      if (result?.record && key === selectedDateKey.value) record.value = { ...result.record, doc: record.value?.doc ?? result.record.doc }
+      if (result?.record && key === selectedDateKey.value)
+        record.value = { ...result.record, doc: record.value?.doc ?? result.record.doc }
     }, DRIVE_DELAY_MS)
   }
 
@@ -362,18 +410,60 @@ export const useMesaStore = defineStore('mesa', () => {
     void loadRelated()
   }
 
+  /** Passagem livre como texto principal (qualquer referência, fora das leituras do dia). */
+  async function setMainReference(reference: string): Promise<void> {
+    const current = record.value
+    const text = reference.trim()
+    if (!current || !text) return
+    const titleFollows = !current.title || current.title === current.mainReadingReference
+    await updateRecord({
+      mainReadingReference: text,
+      mainReadingSlot: null,
+      ...(titleFollows ? { title: text } : {}),
+    })
+    void loadRelated()
+  }
+
+  /** Cria uma preparação avulsa na data (chave com sufixo) e abre na Mesa. */
+  async function createFreePreparation(input: {
+    dateKey: string
+    occasion: string
+    reference: string | null
+  }): Promise<string> {
+    await flush()
+    const key = newFreeSermonKey(input.dateKey)
+    await invoke('sermons:save', {
+      dateKey: key,
+      patch: {
+        title: input.occasion,
+        liturgicalOccasion: input.occasion,
+        mainReadingReference: input.reference,
+        mainReadingSlot: null,
+        prayerBookId: app.settings.liturgy.prayerBook,
+      },
+    })
+    await selectDate(key)
+    return key
+  }
+
   async function clearMainReading(): Promise<void> {
     const current = record.value
     if (!current?.mainReadingReference) return
     const titleFollows = current.title === current.mainReadingReference
-    await updateRecord({ mainReadingReference: null, mainReadingSlot: null, ...(titleFollows ? { title: '' } : {}) })
+    await updateRecord({
+      mainReadingReference: null,
+      mainReadingSlot: null,
+      ...(titleFollows ? { title: '' } : {}),
+    })
     void loadRelated()
   }
 
   async function loadTranslation(bible: string): Promise<void> {
     selectedBible.value = bible
     if (bible === app.settings.liturgy.bible || !day.value) return
-    const missing = (day.value.readings ?? []).filter((reading) => !alternativeTexts.value[bible]?.[readingId(reading)])
+    const missing = (day.value.readings ?? []).filter(
+      (reading) => !alternativeTexts.value[bible]?.[readingId(reading)],
+    )
     if (missing.length === 0 || loadingBibles.value.has(bible)) return
     loadingBibles.value = new Set([...loadingBibles.value, bible])
     try {
@@ -408,7 +498,9 @@ export const useMesaStore = defineStore('mesa', () => {
     fullscreen.value = mode
   }
 
-  function requestReview(criteria: string[] = ['spelling', 'fidelity', 'structure', 'clarity', 'tone']): void {
+  function requestReview(
+    criteria: string[] = ['spelling', 'fidelity', 'structure', 'clarity', 'tone'],
+  ): void {
     reviewCriteriaPreset.value = criteria
     contextTab.value = 'review'
     if (!app.settings.panels.materialsOpen) void app.updateSettings({ panels: { materialsOpen: true } })
@@ -418,9 +510,10 @@ export const useMesaStore = defineStore('mesa', () => {
   /** Data inicial: a pedida na rota, a última aberta ou o próximo dia de pregar (Preferências › Ritmo). */
   function initialDateKey(): string {
     const requested = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('date')
-    if (requested && parseDateKey(requested)) return requested
+    if (requested && isSermonKey(requested)) return requested
     const { mesa, rhythm } = app.settings
-    if (mesa.openOn === 'last-open' && mesa.lastDateKey && parseDateKey(mesa.lastDateKey)) return mesa.lastDateKey
+    if (mesa.openOn === 'last-open' && mesa.lastDateKey && isSermonKey(mesa.lastDateKey))
+      return mesa.lastDateKey
     return dateKey(nextPreachingDay(new Date(), preachingDays(rhythm)))
   }
 
@@ -437,9 +530,19 @@ export const useMesaStore = defineStore('mesa', () => {
       if (docChanged) documentRevision.value += 1
     })
     on('ideas:changed', () => void loadIdeas())
-    let liturgyKey = JSON.stringify([app.settings.liturgy.prayerBook, app.settings.liturgy.language, app.settings.liturgy.bible, app.settings.liturgy.readingType])
+    let liturgyKey = JSON.stringify([
+      app.settings.liturgy.prayerBook,
+      app.settings.liturgy.language,
+      app.settings.liturgy.bible,
+      app.settings.liturgy.readingType,
+    ])
     on('settings:changed', (next) => {
-      const key = JSON.stringify([next.liturgy.prayerBook, next.liturgy.language, next.liturgy.bible, next.liturgy.readingType])
+      const key = JSON.stringify([
+        next.liturgy.prayerBook,
+        next.liturgy.language,
+        next.liturgy.bible,
+        next.liturgy.readingType,
+      ])
       if (key !== liturgyKey) {
         liturgyKey = key
         alternativeTexts.value = {}
@@ -487,6 +590,8 @@ export const useMesaStore = defineStore('mesa', () => {
     calendarPopover,
     reviewCriteriaPreset,
     related,
+    freeSermons,
+    isFree,
     ideas,
     ideasLoading,
     ideaCaptureRequest,
@@ -512,6 +617,8 @@ export const useMesaStore = defineStore('mesa', () => {
     updateRecord,
     chooseMainReading,
     clearMainReading,
+    setMainReference,
+    createFreePreparation,
     loadTranslation,
     openSheet,
     openFullscreen,

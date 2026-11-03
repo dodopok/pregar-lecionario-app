@@ -4,9 +4,10 @@
  * cor, chip do texto principal (troca por menu) e as ações da preparação. Os botões nunca
  * quebram linha: abaixo de 1100 px perdem o rótulo e mantêm título e aria-label.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   Calendar,
+  CalendarPlus,
   Check,
   ChevronDown,
   Church,
@@ -24,7 +25,14 @@ import {
   properShortDesignation,
 } from '@pregar/core/liturgy/calendar'
 import { normalizeLiturgicalColor, readingLabel } from '@pregar/core/liturgy/types'
-import { daysBetween, longDatePt, parseDateKey, weekdayNamePt } from '@pregar/core/util/dates'
+import {
+  daysBetween,
+  longDatePt,
+  parseDateKey,
+  sermonDateOf,
+  shortDatePt,
+  weekdayNamePt,
+} from '@pregar/core/util/dates'
 import PopMenu from '@/components/PopMenu.vue'
 import { shortcut } from '@/lib/api'
 import { useAppStore } from '@/stores/app'
@@ -47,7 +55,8 @@ const COLOR_NAMES: Record<string, string> = {
   blue: 'Azul',
 }
 
-const date = computed(() => parseDateKey(mesa.selectedDateKey))
+const date = computed(() => parseDateKey(sermonDateOf(mesa.selectedDateKey)))
+const otherReference = ref('')
 const dayTitle = computed(() => {
   if (!date.value) return ''
   const weekday = weekdayNamePt(date.value.getDay())
@@ -63,9 +72,19 @@ const colorName = computed(() => {
   const normalized = normalizeLiturgicalColor(mesa.day?.color)
   return normalized ? COLOR_NAMES[normalized] : (mesa.day?.color ?? null)
 })
-const title = computed(() => mesa.occasion ?? dayTitle.value)
+const title = computed(() =>
+  mesa.isFree
+    ? mesa.record?.title || mesa.occasion || 'Preparação avulsa'
+    : (mesa.occasion ?? dayTitle.value),
+)
 const meta = computed(() => {
   const parts: string[] = []
+  if (mesa.isFree) {
+    parts.push('Preparação avulsa')
+    if (date.value) parts.push(props.wide ? longDatePt(date.value) : shortDatePt(date.value))
+    if (mesa.day?.sundayName) parts.push(mesa.day.sundayName)
+    return parts
+  }
   if (mesa.occasion && props.wide && date.value) parts.push(longDatePt(date.value))
   if (proper.value) parts.push(properShortDesignation(proper.value))
   else if (yearLetter.value) parts.push(`Ano ${yearLetter.value}`)
@@ -84,6 +103,20 @@ const reviewLabel = computed(() => (props.labels ? 'Revisar com IA' : ''))
 
 function isMain(reference: string, slot: string): boolean {
   return mesa.record?.mainReadingReference === reference && mesa.record?.mainReadingSlot === slot
+}
+
+const customMain = computed(() => {
+  const reference = mesa.record?.mainReadingReference
+  if (!reference) return null
+  return readings.value.some((reading) => reading.reference === reference) ? null : reference
+})
+
+async function useOtherReference(close: () => void): Promise<void> {
+  const text = otherReference.value.trim()
+  if (!text) return
+  await mesa.setMainReference(text)
+  otherReference.value = ''
+  close()
 }
 </script>
 
@@ -118,7 +151,11 @@ function isMain(reference: string, slot: string): boolean {
       </span>
     </div>
 
-    <PopMenu v-if="mesa.record && readings.length > 0" label="Texto principal do sermão" :width="300">
+    <PopMenu
+      v-if="mesa.record && (readings.length > 0 || mesa.isFree)"
+      label="Texto principal do sermão"
+      :width="300"
+    >
       <template #default="{ toggle, open }">
         <button
           type="button"
@@ -140,7 +177,7 @@ function isMain(reference: string, slot: string): boolean {
           <ChevronDown :size="13" aria-hidden="true" />
         </button>
       </template>
-      <template #menu>
+      <template #menu="{ close }">
         <div class="menu__label">Texto principal do sermão</div>
         <button
           v-for="reading in readings"
@@ -166,6 +203,21 @@ function isMain(reference: string, slot: string): boolean {
           <button type="button" role="menuitem" class="menu__item" @click="mesa.clearMainReading()">
             Sem texto principal por enquanto
           </button>
+          <div v-if="customMain" class="menu__label">Passagem livre: {{ customMain }}</div>
+          <div class="menu__separator" role="separator" />
+          <form class="other" data-keep-open @submit.prevent="useOtherReference(close)">
+            <label class="menu__label" for="other-reference">Outra passagem</label>
+            <div class="other__row">
+              <input
+                id="other-reference"
+                v-model="otherReference"
+                class="field other__field"
+                placeholder="1 Coríntios 13:1-13"
+                maxlength="200"
+              />
+              <button type="submit" class="other__use" :disabled="!otherReference.trim()">Usar</button>
+            </div>
+          </form>
         </template>
       </template>
     </PopMenu>
@@ -239,6 +291,10 @@ function isMain(reference: string, slot: string): boolean {
           </button>
         </template>
         <template #menu>
+          <button type="button" role="menuitem" class="menu__item" @click="mesa.openSheet('free')">
+            <CalendarPlus :size="14" aria-hidden="true" /> Nova preparação avulsa…
+          </button>
+          <div class="menu__separator" role="separator" />
           <button type="button" role="menuitem" class="menu__item" @click="mesa.openSheet('questions')">
             Perguntas para destravar…
           </button>
@@ -430,6 +486,33 @@ function isMain(reference: string, slot: string): boolean {
   grid-column: 2;
   align-self: center;
   color: var(--accent);
+}
+.other {
+  padding: 2px 4px 6px;
+}
+.other__row {
+  display: flex;
+  gap: 6px;
+  padding: 0 6px;
+}
+.other__field {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  font-size: var(--text-sm);
+}
+.other__use {
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.other__use:disabled {
+  opacity: 0.45;
 }
 .actions {
   flex: none;
