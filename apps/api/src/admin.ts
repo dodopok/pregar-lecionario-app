@@ -1,6 +1,7 @@
 /**
- * Ferramenta de suporte: `npm run admin -- grant email@x.com 30`, `user email@x.com`, `reconcile` e
- * `doctor` (verificação de prontidão para produção; sai com código 1 se algo falhar).
+ * Ferramenta de suporte: `npm run admin -- grant email@x.com 30`, `user email@x.com`, `users` (quem
+ * entrou, quando e com que plano), `reconcile` e `doctor` (verificação de prontidão para produção;
+ * sai com código 1 se algo falhar).
  */
 import { sql } from 'kysely'
 import { loadConfig } from './config'
@@ -22,14 +23,28 @@ try {
   if (command === 'grant' && args[0] && args[1]) {
     console.warn(JSON.stringify(await grantDays(deps, args[0].toLowerCase(), Number(args[1])), null, 2))
   } else if (command === 'user' && args[0]) {
-    const user = await db.selectFrom('users').selectAll().where('email', '=', args[0].toLowerCase()).executeTakeFirst()
+    const user = await db
+      .selectFrom('users')
+      .selectAll()
+      .where('email', '=', args[0].toLowerCase())
+      .executeTakeFirst()
     if (!user) throw new Error('Usuário não encontrado')
     const billing = new BillingService(deps)
     const usage = await new QuotaService(deps).summary(user.id)
     // Custo real da IA (só para o suporte; o app do assinante não mostra valores em dólar).
     const recentCalls = await db
       .selectFrom('usage_events')
-      .select(['created_at', 'kind', 'status', 'provider', 'model', 'input_tokens', 'output_tokens', 'cost_usd', 'duration_ms'])
+      .select([
+        'created_at',
+        'kind',
+        'status',
+        'provider',
+        'model',
+        'input_tokens',
+        'output_tokens',
+        'cost_usd',
+        'duration_ms',
+      ])
       .where('user_id', '=', user.id)
       .orderBy('created_at', 'desc')
       .limit(10)
@@ -54,6 +69,59 @@ try {
         2,
       ),
     )
+  } else if (command === 'users') {
+    // Quem já entrou: conta, sessões ativas, último uso e a assinatura mais recente.
+    const users = await db
+      .selectFrom('users')
+      .leftJoin('sessions', 'sessions.user_id', 'users.id')
+      .select(({ fn }) => [
+        'users.id',
+        'users.email',
+        'users.name',
+        'users.created_at',
+        fn.count<number>('sessions.id').filterWhere('sessions.revoked_at', 'is', null).as('sessions'),
+        fn.max('sessions.last_used_at').as('last_used_at'),
+      ])
+      .where('users.deleted_at', 'is', null)
+      .groupBy(['users.id', 'users.email', 'users.name', 'users.created_at'])
+      .orderBy('users.created_at', 'desc')
+      .execute()
+    const billing = new BillingService(deps)
+    const rows = []
+    for (const user of users) {
+      const subscription = await billing.latestSubscription(user.id)
+      rows.push({
+        email: user.email,
+        nome: user.name ?? '',
+        criado_em: new Date(user.created_at).toISOString().slice(0, 16).replace('T', ' '),
+        sessoes: Number(user.sessions),
+        ultimo_uso: user.last_used_at
+          ? new Date(user.last_used_at).toISOString().slice(0, 16).replace('T', ' ')
+          : '',
+        plano: await billing.planFor(user.id),
+        assinatura: subscription ? `${subscription.status} (${subscription.cycle})` : '',
+        periodo_ate: subscription?.current_period_end
+          ? new Date(subscription.current_period_end).toISOString().slice(0, 10)
+          : '',
+      })
+    }
+    console.warn(`${rows.length} conta(s)`)
+    const columns = [
+      'email',
+      'nome',
+      'criado_em',
+      'sessoes',
+      'ultimo_uso',
+      'plano',
+      'assinatura',
+      'periodo_ate',
+    ] as const
+    const widths = columns.map((column) =>
+      Math.max(column.length, ...rows.map((row) => String(row[column]).length)),
+    )
+    const line = (values: string[]) => values.map((value, i) => value.padEnd(widths[i]!)).join('  ')
+    console.warn(line([...columns]))
+    for (const row of rows) console.warn(line(columns.map((column) => String(row[column]))))
   } else if (command === 'doctor') {
     const checks = await runDoctor(deps)
     console.warn(formatDoctorReport(checks))
@@ -61,7 +129,9 @@ try {
   } else if (command === 'reconcile') {
     console.warn(JSON.stringify(await new BillingService(deps).reconcile(), null, 2))
   } else {
-    console.warn('Uso: admin grant <email> <dias> | admin user <email> | admin reconcile | admin doctor')
+    console.warn(
+      'Uso: admin grant <email> <dias> | admin user <email> | admin users | admin reconcile | admin doctor',
+    )
     process.exitCode = 1
   }
 } finally {
