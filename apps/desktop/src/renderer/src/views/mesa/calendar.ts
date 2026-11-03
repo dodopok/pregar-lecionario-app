@@ -1,7 +1,7 @@
 import { addDays, dateKey, daysBetween, monthNamePt, nextPreachingDay, parseDateKey } from '@pregar/core/util/dates'
 import type { SermonPreparationState } from '@shared/types'
 
-export const WEEKDAY_INITIALS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
+export const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 export const STATE_TITLES: Record<SermonPreparationState, string> = {
   empty: 'sem rascunho',

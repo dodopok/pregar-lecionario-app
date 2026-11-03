@@ -348,15 +348,15 @@ async function useOtherReference(close: () => void): Promise<void> {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 14px;
-  background: var(--canvas);
+  padding: 0 14px 0 calc(14px + var(--window-controls-mesa-header-inset, 0px));
+  background: var(--sidebar);
   border-bottom: 1px solid var(--line);
   box-shadow: inset 0 2px 0 var(--accent);
   min-width: 0;
 }
 .head--compact {
   gap: 6px;
-  padding: 0 10px;
+  padding: 0 10px 0 calc(10px + var(--window-controls-mesa-header-inset, 0px));
 }
 .date {
   flex: none;
@@ -446,6 +446,7 @@ async function useOtherReference(close: () => void): Promise<void> {
   color: var(--accent-ink);
   font-size: var(--text-sm);
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
 }
 .main:hover {
@@ -458,6 +459,10 @@ async function useOtherReference(close: () => void): Promise<void> {
   font-weight: 500;
 }
 .main__text {
+  display: flex;
+  align-items: center;
+  min-height: 16px;
+  line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
 }

@@ -32,14 +32,17 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
 .segmented__option {
   height: 24px;
   padding: 0 10px;
+  flex: none;
   border: none;
   border-radius: 6px;
   background: none;
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
 }
 .segmented--compact .segmented__option {
   height: 22px;
+  padding: 0 8px;
   font-size: 11px;
 }
 .segmented__option:hover {

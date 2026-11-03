@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<{ align?: 'left' | 'right'; label: string
 })
 const emit = defineEmits<{ open: []; close: [] }>()
 const open = ref(false)
+const opensAbove = ref(false)
 const root = ref<HTMLElement | null>(null)
 const panel = ref<HTMLElement | null>(null)
 
@@ -27,7 +28,20 @@ function toggle(): void {
   }
   open.value = true
   emit('open')
-  void nextTick(() => panel.value?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])')?.focus())
+  void nextTick(() => {
+    updatePlacement()
+    panel.value?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])')?.focus()
+  })
+}
+
+function updatePlacement(): void {
+  const anchor = root.value?.getBoundingClientRect()
+  const menu = panel.value
+  if (!anchor || !menu) return
+  const gap = 6
+  const roomBelow = window.innerHeight - anchor.bottom - gap
+  const roomAbove = anchor.top - gap
+  opensAbove.value = menu.offsetHeight > roomBelow && roomAbove > roomBelow
 }
 
 function onDocumentPointer(event: PointerEvent): void {
@@ -57,10 +71,19 @@ function onMenuClick(event: MouseEvent): void {
 }
 
 watch(open, (value) => {
-  if (value) document.addEventListener('pointerdown', onDocumentPointer, true)
-  else document.removeEventListener('pointerdown', onDocumentPointer, true)
+  if (value) {
+    document.addEventListener('pointerdown', onDocumentPointer, true)
+    window.addEventListener('resize', updatePlacement)
+  } else {
+    document.removeEventListener('pointerdown', onDocumentPointer, true)
+    window.removeEventListener('resize', updatePlacement)
+    opensAbove.value = false
+  }
 })
-onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPointer, true))
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocumentPointer, true)
+  window.removeEventListener('resize', updatePlacement)
+})
 
 defineExpose({ close, toggle })
 </script>
@@ -72,7 +95,7 @@ defineExpose({ close, toggle })
       v-if="open"
       ref="panel"
       class="menu pop__panel"
-      :class="`pop__panel--${props.align}`"
+      :class="[`pop__panel--${props.align}`, { 'pop__panel--above': opensAbove }]"
       role="menu"
       :aria-label="label"
       :style="props.width ? { width: `${props.width}px` } : undefined"
@@ -101,6 +124,10 @@ defineExpose({ close, toggle })
 }
 .pop__panel--right {
   right: 0;
+}
+.pop__panel--above {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 @keyframes pop-rise {
   from {

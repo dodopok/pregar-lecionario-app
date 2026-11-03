@@ -22,7 +22,7 @@ import { useMesaStore } from '@/stores/mesa'
 import { useAppStore } from '@/stores/app'
 import {
   STATE_TITLES,
-  WEEKDAY_INITIALS,
+  WEEKDAY_LABELS,
   monthCells,
   monthTitle,
   shiftDays,
@@ -60,7 +60,11 @@ const upcoming = computed<UpcomingEntry[]>(() => {
   const start = today.value < `${mesa.calendarMonth}-01` ? `${mesa.calendarMonth}-01` : today.value
   const end = shiftDays(`${mesa.calendarMonth}-01`, 45)
   const liturgical: UpcomingEntry[] = Object.values(days.value)
-    .filter((day) => day.date >= start && (day.sundayName || day.celebration || day.isHolyDay))
+    .filter(
+      (day) =>
+        day.date >= start &&
+        (day.sundayName || day.celebration || day.celebrations?.length || day.isHolyDay),
+    )
     .map((day) => ({ key: day.date, date: day.date, name: dayName(day), color: colorOf(day), free: false }))
   const free: UpcomingEntry[] = mesa.freeSermons
     .filter((item) => sermonDateOf(item.dateKey) >= start && sermonDateOf(item.dateKey) <= end)
@@ -137,11 +141,18 @@ function hasFeast(key: string): boolean {
 }
 
 function dayName(day: LiturgicalDay): string {
-  return day.sundayName ?? day.celebration?.name ?? day.season?.name ?? longLabel(day.date)
+  return (
+    day.sundayName ??
+    day.celebration?.name ??
+    day.celebrations?.[0]?.name ??
+    day.season?.name ??
+    longLabel(day.date)
+  )
 }
 
 function colorOf(day: LiturgicalDay): string | null {
-  return normalizeLiturgicalColor(day.color) ?? null
+  const colors = [day.color, day.celebration?.color, ...(day.celebrations ?? []).map((item) => item.color)]
+  return colors.map(normalizeLiturgicalColor).find((color) => color !== null) ?? null
 }
 
 function stateText(key: string): string | null {
@@ -210,7 +221,7 @@ function goNext(): void {
         </header>
         <div class="grid" role="grid" aria-label="Dias do mês" tabindex="0" @keydown="onGridKeydown">
           <span
-            v-for="(label, index) in WEEKDAY_INITIALS"
+            v-for="(label, index) in WEEKDAY_LABELS"
             :key="`w${index}`"
             class="weekday"
             :class="{ 'weekday--preach': weekdays.includes(index) }"
@@ -288,16 +299,22 @@ function goNext(): void {
           @click="select(entry.key)"
         >
           <span class="feast__date">{{ shortLabel(entry.date) }}</span>
-          <span class="feast__swatch" aria-hidden="true" />
-          <span class="feast__name">{{ entry.name }}</span>
           <span
-            v-if="entry.free || stateText(entry.key)"
-            class="feast__state"
-            :class="`feast__state--${mesa.states[entry.key] ?? 'empty'}`"
-          >
-            <span v-if="stateText(entry.key)" class="feast__state-dot" aria-hidden="true" />{{
-              [entry.free ? 'avulsa' : null, stateText(entry.key)].filter(Boolean).join(' · ')
-            }}
+            class="feast__swatch"
+            :class="{ 'feast__swatch--hidden': !entry.color && !entry.free }"
+            aria-hidden="true"
+          />
+          <span class="feast__details">
+            <span class="feast__name">{{ entry.name }}</span>
+            <span
+              v-if="entry.free || stateText(entry.key)"
+              class="feast__state"
+              :class="`feast__state--${mesa.states[entry.key] ?? 'empty'}`"
+            >
+              <span v-if="stateText(entry.key)" class="feast__state-dot" aria-hidden="true" />{{
+                [entry.free ? 'avulsa' : null, stateText(entry.key)].filter(Boolean).join(' · ')
+              }}
+            </span>
           </span>
         </button>
       </section>
@@ -404,6 +421,8 @@ function goNext(): void {
 }
 .weekday {
   height: 16px;
+  display: block;
+  width: 100%;
   font-size: var(--text-xs);
   font-weight: 500;
   text-align: center;
@@ -429,17 +448,6 @@ function goNext(): void {
   color: var(--accent-ink);
   font-weight: 600;
 }
-.cell--feast::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  right: 5px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent);
-  opacity: 0.7;
-}
 .cell--today {
   font-weight: 700;
   color: var(--accent-ink);
@@ -450,9 +458,6 @@ function goNext(): void {
   font-weight: 700;
   color: var(--accent-contrast);
   background: var(--accent);
-}
-.cell--selected::after {
-  background: var(--accent-contrast);
 }
 .cell--free::before {
   content: '';
@@ -526,7 +531,6 @@ function goNext(): void {
 .feast {
   display: grid;
   grid-template-columns: 54px 8px minmax(0, 1fr);
-  grid-template-rows: auto auto;
   column-gap: 7px;
   align-items: center;
   min-height: 34px;
@@ -544,17 +548,18 @@ function goNext(): void {
   background: var(--accent-soft);
 }
 .feast__date {
-  grid-row: 1 / span 2;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--ink-soft);
 }
 .feast__swatch {
-  grid-row: 1 / span 2;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--line-strong);
+}
+.feast__swatch--hidden {
+  visibility: hidden;
 }
 .feast[data-color='green'] .feast__swatch {
   background: rgb(46 122 81);
@@ -582,6 +587,13 @@ function goNext(): void {
   border-radius: 1px;
   transform: rotate(45deg) scale(0.85);
   background: var(--warning);
+}
+.feast__details {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
 }
 .feast__name {
   font-weight: 500;

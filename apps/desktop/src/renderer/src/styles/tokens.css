@@ -137,4 +137,8 @@
   :root[data-liturgical='blue'] { --accent: rgb(122 166 230); }
 }
 
-:root[data-platform='darwin'] { --window-controls-inset: 88px; }
+:root[data-platform='darwin'] {
+  --window-controls-inset: 88px;
+  --window-controls-mesa-inset: 42px;
+  --window-controls-mesa-header-inset: 24px;
+}

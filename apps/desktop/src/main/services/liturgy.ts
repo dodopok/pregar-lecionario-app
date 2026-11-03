@@ -136,7 +136,7 @@ export class LiturgyService {
   }
 
   calendar(from: string, to: string): Promise<LiturgicalDay[]> {
-    return this.cached(`calendar:v2:${this.settingsKey()}:${from}:${to}`, 24 * HOUR, () => this.client().fetchCalendarDays(from, to))
+    return this.cached(`calendar:v3:${this.settingsKey()}:${from}:${to}`, 24 * HOUR, () => this.client().fetchCalendarDays(from, to))
   }
 
   passage(reference: string, bible: string): Promise<BiblePassageText> {

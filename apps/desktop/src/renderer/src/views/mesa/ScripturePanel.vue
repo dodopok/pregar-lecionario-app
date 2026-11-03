@@ -47,7 +47,7 @@ const VIEW_OPTIONS: { value: ReadingsView; label: string; title: string }[] = [
 ]
 
 const view = computed(() => app.settings.panels.readingsView)
-const compact = computed(() => width.value < 330)
+const compact = computed(() => width.value < 380)
 const primaryBible = computed(() => app.settings.liturgy.bible)
 const translations = computed(() => {
   const codes = [

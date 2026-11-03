@@ -157,6 +157,8 @@ function open(kind: WindowKind): void {
 
 <style scoped>
 .rail {
+  position: relative;
+  z-index: 40;
   flex: none;
   width: var(--rail-width);
   height: 100%;
@@ -166,7 +168,28 @@ function open(kind: WindowKind): void {
   gap: 4px;
   padding: calc(12px + var(--window-controls-top, 0px)) 0 10px;
   background: var(--sidebar);
-  border-right: 1px solid var(--line);
+}
+.rail::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.rail::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: var(--mesa-header-height);
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  pointer-events: none;
 }
 .rail--compact {
   width: 48px;
@@ -197,7 +220,7 @@ function open(kind: WindowKind): void {
   font-size: 16px;
 }
 .rail__item {
-  width: 60px;
+  width: 56px;
   height: 50px;
   display: flex;
   flex-direction: column;
@@ -213,7 +236,7 @@ function open(kind: WindowKind): void {
   line-height: 1;
 }
 .rail--compact .rail__item {
-  width: 38px;
+  width: 34px;
   height: 38px;
   border-radius: 9px;
 }

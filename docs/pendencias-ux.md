@@ -11,8 +11,6 @@ Atualizado em 3 de novembro de 2026. Tudo o que não está aqui foi implementado
 ## Estêvão API (outro repositório)
 
 4. **Versos dos salmos.** O recuo pendente da poesia depende de quebras de linha (`\n`) dentro do texto de cada versículo nos salmos. Se a API não devolver quebras, os salmos aparecem como prosa (nada quebra; só perde o desenho em versos).
-5. **Festas na listagem por intervalo.** "Próximas celebrações" no Calendário lê `celebration`, `is_holy_day` e `color` de `GET /api/v2/days?from&to`. Se o intervalo devolver só `sunday_name`, a lista mostra apenas os domingos. Vale conferir se os campos vêm no intervalo como vêm no dia único.
-
 ## Decisões de produto e conteúdo
 
 6. **Fontes em português.** O filtro "Em português" e os chips de idioma existem, mas as fontes favoritas padrão são em inglês. Para um usuário novo ver materiais em português desde o primeiro dia, é preciso curar sites e autores em português em Preferências › Fontes (ou mudar o padrão em `packages/core/src/sources`).

@@ -197,7 +197,7 @@ export class LiturgicalClient {
     })
   }
 
-  /** Nomes dos domingos do intervalo, sem leituras nem coletas (consulta leve do calendário). */
+  /** Domingos, celebrações e cores do intervalo, sem baixar leituras nem coletas completas. */
   fetchCalendarDays(from: Date | string, to: Date | string): Promise<LiturgicalDay[]> {
     const { settings } = this.options
     return this.get<LiturgicalDay[]>('/api/v2/days', {
@@ -205,7 +205,7 @@ export class LiturgicalClient {
       to: typeof to === 'string' ? to : dateKey(to),
       book: settings.prayerBook,
       lang: settings.language,
-      'fields[day]': 'date,sunday_name,is_sunday',
+      'fields[day]': 'date,sunday_name,is_sunday,celebration,is_holy_day,color',
     })
   }
 
