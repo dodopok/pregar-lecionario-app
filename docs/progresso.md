@@ -1,6 +1,11 @@
 # Progresso de implementação
 
-Atualizado em 3 de novembro de 2026.
+Atualizado em 4 de novembro de 2026.
+
+## Calendário recolhido como faixa (4 de novembro de 2026)
+
+- **Uma regra para os três painéis.** Em janelas a partir de 1280 px, recolher o calendário deixa a mesma faixa de 34 px das leituras e dos materiais (`strip`, com "Calendário" na vertical e o ícone de reabrir), em vez de sumir e só voltar pelo botão de data. `mesa-layout.ts` ganhou o estado `strip`; abaixo de 1280 px o calendário continua como popover do botão de data, e o modo Foco esconde as três faixas. Opções estudadas no canvas "Calendário recolhido · opções".
+- **Botão de data pressionado.** Enquanto o calendário está aberto (atracado ou em popover), o botão de data fica com fundo tingido e a seta virada para cima, como um menu aberto; a dica diz "Ocultar" ou "Mostrar o calendário".
 
 ## Marca, ícone e site (3 de novembro de 2026)
 

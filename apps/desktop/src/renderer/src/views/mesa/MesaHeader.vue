@@ -126,9 +126,9 @@ async function useOtherReference(close: () => void): Promise<void> {
       type="button"
       class="date"
       data-tour="date"
-      :aria-pressed="calendarDocked ? undefined : mesa.calendarPopover"
-      :aria-haspopup="calendarDocked ? undefined : 'dialog'"
-      :title="`${calendarDocked ? 'Ocultar o calendário' : 'Abrir o calendário'} · ${dayTitle}, ${relative} (${shortcut('⇧⌥⌘1')})`"
+      :aria-pressed="wide ? calendarDocked : mesa.calendarPopover"
+      :aria-haspopup="wide ? undefined : 'dialog'"
+      :title="`${calendarDocked ? 'Ocultar o calendário' : 'Mostrar o calendário'} · ${dayTitle}, ${relative} (${shortcut('⇧⌥⌘1')})`"
       @click="emit('toggleCalendar')"
     >
       <Calendar :size="16" class="date__icon" aria-hidden="true" />
@@ -375,6 +375,10 @@ async function useOtherReference(close: () => void): Promise<void> {
 .date[aria-pressed='true'] {
   border-color: var(--accent);
 }
+/* Pressionado enquanto o calendário está aberto (atracado ou em popover), como um menu aberto. */
+.date[aria-pressed='true'] {
+  background: var(--accent-softer);
+}
 .date__icon {
   color: var(--accent);
 }
@@ -393,6 +397,10 @@ async function useOtherReference(close: () => void): Promise<void> {
 }
 .date__chevron {
   color: var(--muted);
+  transition: transform 0.14s var(--ease);
+}
+.date[aria-pressed='true'] .date__chevron {
+  transform: rotate(180deg);
 }
 .title {
   display: flex;

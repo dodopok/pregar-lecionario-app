@@ -32,6 +32,17 @@ describe('layoutFor', () => {
     expect(layout.labels).toBe(true)
   })
 
+  it('recolhido, o calendário vira faixa a partir de 1280 px e popover abaixo disso', () => {
+    const wide = layoutFor({ width: 1440, ...open, calendarOpen: false })
+    expect(wide.calendar).toBe('strip')
+    expect(wide.calendarWidth).toBe(0)
+    expect(wide.readings).toBe(360)
+    const narrow = layoutFor({ width: 1279, ...open, calendarOpen: false })
+    expect(narrow.calendar).toBe('popover')
+    const focus = layoutFor({ width: 1440, ...open, calendarOpen: false, focus: true })
+    expect(focus.calendar).toBe('hidden')
+  })
+
   it('a 1024 px o trilho fica compacto e os materiais viram gaveta quando as leituras estão abertas', () => {
     const layout = layoutFor({ width: 1024, ...open })
     expect(layout.rail).toBe('compact')

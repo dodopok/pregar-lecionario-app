@@ -18,7 +18,7 @@ import CalendarSidebar from './CalendarSidebar.vue'
 import MesaHeader from './MesaHeader.vue'
 import ScripturePanel from './ScripturePanel.vue'
 import ManuscriptEditor from './editor/ManuscriptEditor.vue'
-import { PANEL_LIMITS, layoutFor } from './mesa-layout'
+import { BREAKPOINTS, PANEL_LIMITS, layoutFor } from './mesa-layout'
 import { printPulpitSheet } from './pulpit'
 
 const ResourcePanel = defineAsyncComponent(() => import('./panels/ResourcePanel.vue'))
@@ -60,17 +60,10 @@ function togglePanel(panel: 'calendarOpen' | 'readingsOpen' | 'materialsOpen'): 
   void app.updateSettings({ panels: { [panel]: !panels.value[panel] } })
 }
 
-/** O botão de data atraca o calendário quando cabe; senão abre o popover. */
+/** Em janelas largas o botão de data atraca ou recolhe o calendário; em janelas estreitas abre o popover. */
 function toggleCalendar(): void {
   if (mesa.focusMode) mesa.focusMode = false
-  if (
-    layout.value.calendar === 'docked' ||
-    (layout.value.calendar === 'hidden' && windowWidth.value >= 1280)
-  ) {
-    togglePanel('calendarOpen')
-    return
-  }
-  if (windowWidth.value >= 1280 && !panels.value.calendarOpen) {
+  if (windowWidth.value >= BREAKPOINTS.wide) {
     togglePanel('calendarOpen')
     return
   }
@@ -218,7 +211,7 @@ onBeforeUnmount(() => {
     <div ref="mainRegion" class="mesa__main">
       <MesaHeader
         :labels="layout.labels"
-        :wide="windowWidth >= 1280"
+        :wide="windowWidth >= BREAKPOINTS.wide"
         :calendar-docked="calendarDocked"
         @toggle-calendar="toggleCalendar"
         @toggle-readings="togglePanel('readingsOpen')"
@@ -239,6 +232,18 @@ onBeforeUnmount(() => {
             @commit="commitWidth('calendarWidth', $event)"
           />
         </template>
+        <!-- Recolhido em janela larga, o calendário deixa a mesma faixa que as leituras e os materiais. -->
+        <button
+          v-else-if="layout.calendar === 'strip'"
+          type="button"
+          class="strip"
+          data-tour="calendar"
+          :title="`Mostrar o calendário (${shortcut('⇧⌥⌘1')})`"
+          aria-label="Mostrar o calendário"
+          @click="togglePanel('calendarOpen')"
+        >
+          <PanelLeftOpen :size="14" /><span>Calendário</span>
+        </button>
 
         <template v-if="showReadings">
           <div class="mesa__readings" :style="{ width: `${layout.readings}px` }" data-tour="readings">

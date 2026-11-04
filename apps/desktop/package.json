@@ -2,7 +2,7 @@
   "name": "@pregar/desktop",
   "productName": "Proper",
   "desktopName": "proper.desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Proper para Windows, macOS e Linux.",
   "author": "Caminho Anglicano",

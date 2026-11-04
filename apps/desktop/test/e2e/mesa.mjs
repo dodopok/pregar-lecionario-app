@@ -69,6 +69,29 @@ try {
   check(saved?.mainReadingReference === 'Romanos 13:8-14', 'leitura principal não foi salva')
   check(saved?.title === 'Romanos 13:8-14', 'título não acompanhou a leitura principal')
   await window.screenshot({ path: join(shots, 'mesa-claro.png') })
+  // Em janela larga, recolher o calendário deixa a faixa "Calendário" (como as leituras) e solta o botão de data.
+  check(
+    (await window.locator('.head .date[aria-pressed="true"]').count()) === 1,
+    'o botão de data não aparece pressionado com o calendário atracado',
+  )
+  await window.locator('.calendar__collapse').click()
+  await window.waitForSelector('.strip:has-text("Calendário")', { timeout: 5000 })
+  check(
+    (await window.locator('.mesa__calendar').count()) === 0,
+    'o calendário continuou atracado depois de recolher',
+  )
+  check(
+    (await window.locator('.head .date[aria-pressed="true"]').count()) === 0,
+    'o botão de data continuou pressionado com o calendário recolhido',
+  )
+  await window.waitForTimeout(300)
+  await window.screenshot({ path: join(shots, 'mesa-calendario-recolhido.png') })
+  await window.locator('.strip:has-text("Calendário")').click()
+  await window.waitForSelector('.mesa__calendar', { timeout: 5000 })
+  check(
+    (await window.locator('.strip:has-text("Calendário")').count()) === 0,
+    'a faixa do calendário não sumiu ao reabrir',
+  )
   // Leituras em tela cheia e ensaio em tela cheia abrem e fecham com Esc.
   await window.locator('.scripture [aria-label="Ler em tela cheia"]').click()
   await window.waitForSelector('.reading-view', { timeout: 5000 })

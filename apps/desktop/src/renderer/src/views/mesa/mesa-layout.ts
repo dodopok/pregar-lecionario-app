@@ -35,8 +35,11 @@ export interface MesaLayout {
   railWidth: number
   /** Botões do cabeçalho com rótulo de texto. */
   labels: boolean
-  /** Calendário atracado à esquerda, disponível como popover do botão de data, ou escondido (foco). */
-  calendar: 'docked' | 'popover' | 'hidden'
+  /**
+   * Calendário atracado à esquerda; recolhido numa faixa de 34 px (janela larga, como as leituras);
+   * disponível como popover do botão de data (janela estreita, onde não cabe atracado); ou escondido (foco).
+   */
+  calendar: 'docked' | 'strip' | 'popover' | 'hidden'
   calendarWidth: number
   /** Largura das leituras (0 = recolhidas). */
   readings: number
@@ -92,7 +95,13 @@ export function layoutFor(input: LayoutInput): MesaLayout {
     rail,
     railWidth,
     labels: !compact,
-    calendar: focus ? 'hidden' : calendarDocked ? 'docked' : 'popover',
+    calendar: focus
+      ? 'hidden'
+      : calendarDocked
+        ? 'docked'
+        : input.width >= BREAKPOINTS.wide
+          ? 'strip'
+          : 'popover',
     calendarWidth,
     readings,
     readingsMax,
